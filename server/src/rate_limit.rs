@@ -25,7 +25,11 @@ pub async fn rate_limit(
     match state.rate_limiter.check_key(&addr.ip()) {
         Ok(_) => Ok(next.run(req).await),
         Err(_) => {
-            tracing::warn!("rate limit exceeded for {}", addr.ip());
+            tracing::warn!(
+                client_ip = %addr.ip(),
+                path = %req.uri().path(),
+                "Rate limit exceeded"
+            );
             Err(StatusCode::TOO_MANY_REQUESTS)
         }
     }

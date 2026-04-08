@@ -5,15 +5,15 @@ The browser SDK compiles the Rust evaluation core to **WebAssembly** using [wasm
 ## Installation
 
 ```bash
-npm install @sidekick-flags/browser
+npm install @sidekick/browser
 # or
-yarn add @sidekick-flags/browser
+yarn add @sidekick/browser
 ```
 
 ## Quick Start
 
 ```typescript
-import { SidekickBrowserClient } from '@sidekick-flags/browser'
+import { SidekickBrowserClient } from '@sidekick/browser'
 
 const client = new SidekickBrowserClient({
   serverUrl: 'https://flags.yourcompany.com',

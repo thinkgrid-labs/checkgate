@@ -39,7 +39,7 @@ jobs:
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish @sidekick-flags/browser
+      - name: Publish @sidekick/browser
         working-directory: sdks/browser
         run: npm publish --access public
         env:

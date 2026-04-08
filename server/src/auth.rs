@@ -6,6 +6,7 @@ use axum::{
     response::Response,
 };
 use constant_time_eq::constant_time_eq;
+use tracing::warn;
 
 /// Validates the SDK key from either:
 ///   - `Authorization: Bearer <key>` header  (Node.js, Flutter, React Native — preferred)
@@ -53,6 +54,12 @@ pub async fn require_auth(
     {
         return Ok(next.run(req).await);
     }
+
+    warn!(
+        method = %req.method(),
+        path = %req.uri().path(),
+        "Rejected request: missing or invalid SDK key"
+    );
 
     Err(StatusCode::UNAUTHORIZED)
 }

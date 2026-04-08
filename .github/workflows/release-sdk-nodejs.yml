@@ -131,7 +131,7 @@ jobs:
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish @sidekick-flags/node
+      - name: Publish @sidekick/node
         working-directory: sdks/nodejs
         run: npm publish --access public
         env:

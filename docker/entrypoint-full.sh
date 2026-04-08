@@ -8,6 +8,14 @@ PG_USER="${POSTGRES_USER:-sidekick}"
 PG_PASSWORD="${POSTGRES_PASSWORD:-sidekick}"
 PG_DB="${POSTGRES_DB:-sidekick}"
 
+# Locate the versioned PostgreSQL bin dir (e.g. /usr/lib/postgresql/15/bin)
+PG_BIN=$(find /usr/lib/postgresql -name "initdb" -type f 2>/dev/null | head -1 | xargs -r dirname)
+if [ -z "$PG_BIN" ]; then
+  echo "[error] Could not locate PostgreSQL binaries. Is postgresql installed?" >&2
+  exit 1
+fi
+export PATH="$PG_BIN:$PATH"
+
 if [ "${PG_PASSWORD}" = "sidekick" ]; then
   echo "[warn] POSTGRES_PASSWORD is set to the default value 'sidekick'. Set a strong password in production."
 fi
@@ -21,7 +29,11 @@ fi
 # ---------------------------------------------------------------------------
 if [ ! -f "$PG_DATA/PG_VERSION" ]; then
   echo "[init] Initialising PostgreSQL data directory..."
-  su -s /bin/sh postgres -c "initdb -D '$PG_DATA' --username='$PG_USER' --pwfile=<(echo '$PG_PASSWORD') --auth-host=md5 --auth-local=trust"
+  PGPASS_FILE=$(mktemp)
+  printf '%s' "$PG_PASSWORD" > "$PGPASS_FILE"
+  chown postgres:postgres "$PGPASS_FILE"
+  su -s /bin/sh postgres -c "initdb -D '$PG_DATA' --username='$PG_USER' --pwfile='$PGPASS_FILE' --auth-host=md5 --auth-local=trust"
+  rm -f "$PGPASS_FILE"
   echo "[init] PostgreSQL initialised."
 fi
 
@@ -31,8 +43,8 @@ fi
 echo "[init] Starting PostgreSQL..."
 su -s /bin/sh postgres -c "pg_ctl -D '$PG_DATA' -l /var/log/postgresql.log start -w"
 
-# Ensure database exists
-su -s /bin/sh postgres -c "psql -U '$PG_USER' -tc \"SELECT 1 FROM pg_database WHERE datname='$PG_DB'\" | grep -q 1 || psql -U '$PG_USER' -c \"CREATE DATABASE $PG_DB;\""
+# Ensure database exists (connect to 'postgres' which always exists after initdb)
+su -s /bin/sh postgres -c "psql -U '$PG_USER' -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='$PG_DB'\" | grep -q 1 || psql -U '$PG_USER' -d postgres -c \"CREATE DATABASE \\\"$PG_DB\\\";\""
 echo "[init] PostgreSQL ready."
 
 # ---------------------------------------------------------------------------

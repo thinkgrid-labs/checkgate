@@ -5,9 +5,9 @@ The React Native SDK uses **C FFI** to call the Rust evaluation core directly fr
 ## Installation
 
 ```bash
-npm install @sidekick-flags/react-native
+npm install @sidekick/react-native
 # or
-yarn add @sidekick-flags/react-native
+yarn add @sidekick/react-native
 ```
 
 ### iOS
@@ -23,7 +23,7 @@ The native library is linked automatically via CMake. No additional steps requir
 ## Quick Start
 
 ```typescript
-import { SidekickNativeClient } from '@sidekick-flags/react-native'
+import { SidekickNativeClient } from '@sidekick/react-native'
 
 const client = new SidekickNativeClient({
   serverUrl: 'https://flags.yourcompany.com',
@@ -72,7 +72,7 @@ Tears down the SSE connection. Call in your cleanup effect.
 ```typescript
 // App.tsx
 import { NavigationContainer } from '@react-navigation/native'
-import { SidekickNativeClient } from '@sidekick-flags/react-native'
+import { SidekickNativeClient } from '@sidekick/react-native'
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const FlagContext = createContext<SidekickNativeClient | null>(null)
@@ -125,7 +125,7 @@ export function HomeScreen() {
 The SDK is compatible with Expo managed workflow via the **Expo Dev Client**. It is not compatible with Expo Go (which doesn't support native modules).
 
 ```bash
-npx expo install @sidekick-flags/react-native
+npx expo install @sidekick/react-native
 npx expo prebuild
 ```
 

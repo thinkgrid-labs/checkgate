@@ -45,7 +45,14 @@ pub fn evaluate(flag: &Flag, user_context: &UserContext) -> bool {
     for rule in &flag.rules {
         let user_attr = match user_context.attributes.get(&rule.attribute) {
             Some(v) => v,
-            None => continue, // User doesn't have this attribute, skip rule
+            None => {
+                // For NotEquals, a missing attribute is not equal to any listed value → rule matches.
+                // All other operators require the attribute to be present to match.
+                if rule.operator == Operator::NotEquals && !rule.values.is_empty() {
+                    return true;
+                }
+                continue;
+            }
         };
 
         let matches = match rule.operator {
@@ -67,7 +74,7 @@ pub fn evaluate(flag: &Flag, user_context: &UserContext) -> bool {
         if percentage == 0 {
             return false;
         }
-        if percentage == 100 {
+        if percentage >= 100 {
             return true;
         }
 
@@ -133,6 +140,65 @@ mod tests {
         // With 1000 users and 50% rollout via hashing, it should be approximately 50-50
         assert!(trues > 450 && trues < 550);
         assert!(falses > 450 && falses < 550);
+    }
+
+    #[test]
+    fn test_not_equals_missing_attribute_matches() {
+        // A user without the targeted attribute satisfies "not equal to X".
+        let flag = Flag {
+            key: "org_gate".into(),
+            is_enabled: true,
+            rollout_percentage: Some(0), // would block without rule match
+            description: None,
+            rules: vec![TargetingRule {
+                attribute: "org".into(),
+                operator: Operator::NotEquals,
+                values: vec!["evil_corp".into()],
+            }],
+        };
+        let ctx = UserContext {
+            key: "anon".into(),
+            attributes: HashMap::new(), // no "org" attribute
+        };
+        assert!(evaluate(&flag, &ctx));
+    }
+
+    #[test]
+    fn test_not_equals_present_and_matching_value_does_not_match() {
+        let flag = Flag {
+            key: "org_gate".into(),
+            is_enabled: true,
+            rollout_percentage: Some(0),
+            description: None,
+            rules: vec![TargetingRule {
+                attribute: "org".into(),
+                operator: Operator::NotEquals,
+                values: vec!["evil_corp".into()],
+            }],
+        };
+        let mut attrs = HashMap::new();
+        attrs.insert("org".into(), "evil_corp".into());
+        let ctx = UserContext {
+            key: "villain".into(),
+            attributes: attrs,
+        };
+        assert!(!evaluate(&flag, &ctx));
+    }
+
+    #[test]
+    fn test_rollout_percentage_above_100_treated_as_full_rollout() {
+        let flag = Flag {
+            key: "bad_pct".into(),
+            is_enabled: true,
+            rollout_percentage: Some(150),
+            description: None,
+            rules: vec![],
+        };
+        let ctx = UserContext {
+            key: "anyone".into(),
+            attributes: HashMap::new(),
+        };
+        assert!(evaluate(&flag, &ctx));
     }
 
     #[test]

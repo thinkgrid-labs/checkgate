@@ -51,15 +51,15 @@ curl -X POST http://localhost:3000/api/flags \
 ::: code-group
 
 ```bash [Node.js]
-npm install @sidekick-flags/node
+npm install @sidekick/node
 ```
 
 ```bash [Browser]
-npm install @sidekick-flags/browser
+npm install @sidekick/browser
 ```
 
 ```bash [React Native]
-npm install @sidekick-flags/react-native
+npm install @sidekick/react-native
 ```
 
 :::
@@ -67,7 +67,7 @@ npm install @sidekick-flags/react-native
 ## 4. Connect and Evaluate
 
 ```typescript
-import { SidekickClient } from '@sidekick-flags/node'
+import { SidekickClient } from '@sidekick/node'
 
 const client = new SidekickClient({
   serverUrl: 'http://localhost:3000',

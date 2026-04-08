@@ -1,621 +1,102 @@
-# Sidekick — Open-Source Self-Hosted Feature Flag Engine for Node.js, React Native, Flutter & Browser
+# Sidekick — Self-Hosted Feature Flag Engine
 
 [![CI](https://github.com/ThinkGrid-Labs/sidekick/actions/workflows/ci.yml/badge.svg)](https://github.com/ThinkGrid-Labs/sidekick/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![npm @sidekick-flags/node](https://img.shields.io/npm/v/@sidekick-flags/node?label=npm%20node)](https://www.npmjs.com/package/@sidekick-flags/node)
-[![npm @sidekick-flags/browser](https://img.shields.io/npm/v/@sidekick-flags/browser?label=npm%20browser)](https://www.npmjs.com/package/@sidekick-flags/browser)
-[![npm @sidekick-flags/react-native](https://img.shields.io/npm/v/@sidekick-flags/react-native?label=npm%20react-native)](https://www.npmjs.com/package/@sidekick-flags/react-native)
+[![npm @sidekick/node](https://img.shields.io/npm/v/@sidekick/node?label=npm%20node)](https://www.npmjs.com/package/@sidekick/node)
+[![npm @sidekick/browser](https://img.shields.io/npm/v/@sidekick/browser?label=npm%20browser)](https://www.npmjs.com/package/@sidekick/browser)
+[![npm @sidekick/react-native](https://img.shields.io/npm/v/@sidekick/react-native?label=npm%20react-native)](https://www.npmjs.com/package/@sidekick/react-native)
 
-> **⚠ Beta** — Sidekick is under active development. APIs may change between releases. Not recommended for production use without thorough testing.
+**Sidekick is a self-hosted, open-source feature flag system with sub-microsecond local evaluation — no network calls, no polling, no vendor lock-in.** Built in Rust, it ships native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI). A persistent SSE stream propagates flag changes to every connected SDK in under 50 ms.
 
-**Sidekick is a self-hosted, open-source feature flag system with sub-microsecond local evaluation — no network calls, no polling, no vendor lock-in.** Built in Rust, it ships native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI), so `isEnabled()` is always a pure in-process lookup regardless of platform. A persistent SSE stream propagates flag changes from the control plane to every connected SDK in under 50 ms — without polling.
-
-Use Sidekick to ship faster with feature toggles, run percentage-based rollouts, and target specific users by attribute — all without your flag evaluation ever touching a remote server.
+**[Documentation →](https://thinkgrid-labs.github.io/sidekick)**
 
 ---
 
-## Table of Contents
-
-- [Why Sidekick](#why-sidekick)
-- [How It Compares](#how-it-compares)
-- [Architecture](#architecture)
-- [Core Concepts](#core-concepts)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [API Reference](#api-reference)
-- [SDK Usage](#sdk-usage)
-  - [Node.js](#nodejs)
-  - [Browser (WebAssembly)](#browser-webassembly)
-  - [React Native (JSI)](#react-native-jsi)
-  - [Flutter (FFI)](#flutter-ffi)
-- [Deployment](#deployment)
-  - [Docker](#docker)
-  - [AWS](#aws)
-  - [CI/CD](#cicd)
-- [Development](#development)
-- [Repository Structure](#repository-structure)
-- [Dependencies](#dependencies)
-- [License](#license)
-
----
-
-## Why Sidekick
-
-Most feature flag systems make a **network call** every time you check a flag — or they poll a remote server on an interval and accept stale data in between. Both approaches add latency to every guarded code path, create availability dependencies, and don't scale to high-frequency evaluations (e.g. per-request, per-render, per-frame).
-
-Sidekick takes a fundamentally different approach:
-
-| Property | Sidekick | Polling-based systems | Request-time network systems |
-|---|---|---|---|
-| Evaluation latency | **< 1 µs** (in-process) | 1–50 ms (cached) | 10–300 ms (network) |
-| Network dependency at eval | **None** | None | **Hard dependency** |
-| Staleness window | **~0 ms** (SSE push) | Poll interval (30–60 s) | None (always fresh, but slow) |
-| Works offline / on bad network | **Yes** (last-known state) | Yes (until TTL) | **No** |
-| Evaluation cost scales with RPS | **No** (in-memory) | No | **Yes** (network/compute) |
-
-### The key insight
-
-The server is only involved in **propagation**, not in **evaluation**. Flag changes travel from the control plane → Redis pub/sub → SSE → SDK in-memory cache. After that, `isEnabled()` is a pure in-process lookup — no serialization, no I/O, no allocations.
-
----
-
-## How It Compares
-
-### vs. LaunchDarkly
-
-LaunchDarkly's SDKs also cache flags locally, but:
-
-- **Cost**: LaunchDarkly starts at $8.33/seat/month and scales steeply. Sidekick is self-hosted — your only cost is the compute you already run.
-- **Data residency**: LaunchDarkly processes flag evaluations on their infrastructure. Sidekick never sends user data off your servers — evaluation is entirely local.
-- **Vendor lock-in**: Migrating away from LaunchDarkly requires re-implementing targeting logic. Sidekick is open, self-hosted, and the evaluation engine is open source.
-- **SDK performance**: LaunchDarkly's JS SDK evaluates in JavaScript. Sidekick's browser SDK evaluates inside WebAssembly compiled from Rust — lower and more predictable latency.
-- **React Native**: LaunchDarkly's React Native SDK polls via HTTP. Sidekick uses JSI — a synchronous C++ bridge — so `isEnabled()` never crosses the JS↔native async boundary.
-
-### vs. Unleash (open source)
-
-Unleash is a strong open source option but:
-
-- **Evaluation is server-side by default** in many Unleash configurations. The "local evaluation" mode requires the Enterprise plan for some SDK types.
-- **Mobile SDKs poll**: Unleash mobile SDKs typically poll the `/api/client/features` endpoint on a configurable interval (default 15 s). Sidekick uses a persistent SSE stream — updates arrive within milliseconds.
-- **No WASM/JSI**: Unleash has no WebAssembly browser SDK or JSI React Native SDK. Evaluation in these environments happens in JavaScript.
-- **Rust evaluation**: Sidekick's evaluation engine is Rust compiled into each SDK binary. Hash distribution, targeting rule matching, and flag storage are all native-speed.
-
-### vs. Flagsmith (open source)
-
-- **Server-side evaluation**: Flagsmith's free tier evaluates flags server-side (network round-trip per evaluation). Local evaluation requires a paid plan.
-- **No SSE**: Flagsmith uses REST polling, not push. The minimum poll interval is 60 seconds.
-- **No native mobile evaluation**: Flagsmith's React Native and Flutter SDKs call the API for every evaluation or cache locally via REST polling. Sidekick ships a native Rust binary into your app.
-
-### vs. OpenFeature (standard)
-
-OpenFeature is a vendor-neutral SDK specification, not an implementation. You still need a provider (LaunchDarkly, Unleash, Flagsmith, etc.) with all their associated trade-offs. Sidekick is a complete, self-contained implementation — you don't need a separate provider.
-
-### vs. Growthbook (open source)
-
-Growthbook focuses primarily on A/B testing and experimentation analytics. Its SDK does local evaluation, but:
-
-- **No push updates**: Growthbook refreshes features on a configurable interval. There is no SSE push channel.
-- **No React Native JSI**: Growthbook's React Native SDK is a JavaScript wrapper — no native bridge.
-- **Experiment-first**: Growthbook's targeting and rollout model is designed around experiments and metrics. Sidekick's model is simpler and faster for pure flag gating.
-
-### vs. Split.io / Optimizely (commercial)
-
-These platforms are experimentation and analytics suites, not feature flag systems. They carry the cost and complexity of full analytics pipelines, data warehouses, and statistical engines — all of which you pay for whether you need them or not. If you want a flag system, not an experimentation platform, Sidekick is a fraction of the complexity and cost.
-
-### Summary
-
-| Feature | Sidekick | LaunchDarkly | Unleash OSS | Flagsmith OSS | Growthbook OSS |
-|---|---|---|---|---|---|
-| Self-hosted | ✅ | ❌ (SaaS) | ✅ | ✅ | ✅ |
-| Local evaluation (all SDKs) | ✅ | ✅ | Partial | Paid only | ✅ |
-| SSE push (not polling) | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Sub-microsecond eval | ✅ | ❌ | ❌ | ❌ | ❌ |
-| React Native JSI (native bridge) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Browser WebAssembly SDK | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Flutter FFI SDK | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Rust evaluation engine | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Zero user data leaves your infra | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Pricing | Free | $$$$ | Free | Free | Free |
-
----
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────┐
-│                  Control Plane                        │
-│                                                       │
-│  REST API (Axum)          PostgreSQL                  │
-│  POST /api/flags    ───→  flags table (source of truth)│
-│  PATCH /api/flags/:key    (JSONB, indexed by key)     │
-│  DELETE /api/flags/:key                               │
-│                                ↓                      │
-│  Redis pub/sub ←── flag change published on write     │
-│       ↓                                               │
-│  GET /stream (SSE) ←── Redis subscriber per connection│
-└──────────────────────────────────────────────────────┘
-                │ SSE (persistent HTTP connection)
-                │ 1. subscribe to Redis
-                │ 2. send "connected" event
-                │ 3. stream full flag state
-                │ 4. forward live deltas
-     ┌──────────┼────────────────────┐
-     ▼          ▼                    ▼
- Node.js SDK  Browser SDK    React Native SDK    Flutter SDK
- (NAPI/Rust)  (WASM/Rust)    (JSI/C++/Rust)     (FFI/Rust)
-     │              │                │                │
-     └──────────────┴────────────────┴────────────────┘
-                          │
-                     isEnabled(flagKey, userId, attributes)
-                     → in-process lookup (< 1 µs, no network)
-```
-
-### Evaluation Flow
-
-1. SDK opens a persistent SSE connection to `/stream`
-2. Server sends `connected` event — SDK clears its local cache
-3. Server streams all current flags as `UPSERT` events — SDK rebuilds cache
-4. Server forwards live deltas as they arrive from Redis
-5. `isEnabled()` evaluates entirely in local memory:
-   - If `is_enabled = false` → `false` (global kill-switch)
-   - If any targeting rule matches → `true` (bypasses rollout)
-   - Otherwise: `MurmurHash3(flag_key:user_key) % 100 < rollout_percentage`
-
-Rollouts are **deterministic and sticky** — the same user always gets the same result for the same flag, without any server-side session state.
-
-### Race-free bootstrap
-
-The SSE handler subscribes to Redis **before** streaming the current flag state. This means any write that happens between the client connecting and the initial dump is captured in the Redis queue — no update is ever silently dropped.
-
----
-
-## Core Concepts
-
-### Feature Flags
-
-A flag is the fundamental unit. Each flag has:
-
-| Field | Type | Description |
-|---|---|---|
-| `key` | `string` | Unique identifier used in code (`isEnabled('my_flag', ...)`) |
-| `is_enabled` | `bool` | Global kill-switch. `false` short-circuits all evaluation. |
-| `rollout_percentage` | `0–100 \| null` | What percentage of users see this flag. `null` = 100%. |
-| `description` | `string \| null` | Human-readable label for dashboards. |
-| `rules` | `TargetingRule[]` | Targeting rules evaluated before rollout. |
-
-### Targeting Rules
-
-Rules let you enable a flag for specific users regardless of rollout percentage — useful for internal beta testers, specific organizations, or premium plan users.
-
-```json
-{
-  "attribute": "email",
-  "operator": "EndsWith",
-  "values": ["@acme.com", "@beta.acme.com"]
-}
-```
-
-**Available operators:**
-
-| Operator | Matches when |
-|---|---|
-| `Equals` | attribute exactly equals any value in the list |
-| `NotEquals` | attribute does not equal any value in the list |
-| `Contains` | attribute contains any value as a substring |
-| `StartsWith` | attribute starts with any value |
-| `EndsWith` | attribute ends with any value |
-
-Rules are evaluated in order. The **first match** enables the flag for that user — the rollout percentage is ignored.
-
-### Rollout Percentage
-
-When no rule matches, rollout uses `MurmurHash3(flagKey:userKey) % 100`. This gives:
-
-- **Sticky assignments** — same user always gets the same bucket for the same flag
-- **Independent assignments** — a user's bucket for `flag_a` is independent of their bucket for `flag_b`
-- **No server state** — the bucket is computed from the key alone, no database needed
-- **Uniform distribution** — MurmurHash3 distributes uniformly, so 50% rollout gives close to 50/50 across large populations
-
-### Real-Time Propagation
-
-Flag changes propagate in this sequence:
-
-```
-Write API → Postgres (durable) → Redis pub/sub (broadcast)
-                                       ↓
-                          All server instances receive delta
-                                       ↓
-                          Push via SSE to all connected SDKs
-                                       ↓
-                          SDK updates in-memory cache atomically
-```
-
-Propagation latency from API write to SDK cache update is typically **< 50 ms** — bounded by Redis pub/sub latency and TCP, not polling intervals.
-
-### Offline Resilience
-
-If the SSE connection drops (network outage, server restart, mobile background), the SDK **continues evaluating against the last-known flag state**. When the connection is re-established, the server replays the full current state so the cache self-heals to the authoritative truth.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Docker and Docker Compose
-- Rust 1.85+ (for building from source)
-
-### Run Locally
+## Quick Start
 
 ```bash
-# 1. Start Postgres and Redis
-docker compose up -d
-
-# 2. Build and run the server
-cargo run -p server
+# Start Postgres + Redis + Sidekick
+docker compose -f docker-compose.full.yml up -d
 ```
-
-The server starts on `http://localhost:3000`.
-
-Auth is disabled by default in local dev (no `SDK_KEY` set). Set `SDK_KEY` for any environment beyond localhost.
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `postgres://sidekick:password@localhost/sidekick` | PostgreSQL connection string |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
-| `SDK_KEY` | *(unset — auth disabled)* | Bearer token required on all API requests. Set this in production. |
-| `PUBLIC_DIR` | `public` | Path to built dashboard static files |
-
-The `flags` table is auto-created on startup if it does not exist.
-
----
-
-## API Reference
-
-All endpoints require `Authorization: Bearer <SDK_KEY>` when `SDK_KEY` is set.
-
-### Flags
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/flags` | List all flags (served from in-memory cache) |
-| `POST` | `/api/flags` | Create or fully replace a flag |
-| `GET` | `/api/flags/:key` | Get a single flag by key |
-| `PATCH` | `/api/flags/:key` | Partially update a flag (JSON merge) |
-| `DELETE` | `/api/flags/:key` | Delete a flag and broadcast removal |
-| `GET` | `/stream` | SSE stream — initial state + live deltas |
-
-### Flag Schema
-
-```json
-{
-  "key": "dark_mode",
-  "is_enabled": true,
-  "rollout_percentage": 50,
-  "description": "Enable dark mode for 50% of users",
-  "rules": [
-    {
-      "attribute": "email",
-      "operator": "EndsWith",
-      "values": ["@acme.com"]
-    }
-  ]
-}
-```
-
-### PATCH — Partial Update
-
-`PATCH /api/flags/:key` accepts any subset of the flag fields. Only provided fields are overwritten; omitted fields keep their current values.
 
 ```bash
-# Toggle a flag off without touching rules or rollout
-curl -X PATCH https://flags.yourcompany.com/api/flags/dark_mode \
-  -H "Authorization: Bearer sk_prod_abc123" \
-  -H "Content-Type: application/json" \
-  -d '{"is_enabled": false}'
+npm install @sidekick/node
 ```
 
-### SSE Delta Messages
+```typescript
+import { SidekickClient } from '@sidekick/node'
 
-```json
-{ "type": "UPSERT", "flag": { "key": "dark_mode", "is_enabled": true, ... } }
-{ "type": "DELETE", "key": "dark_mode" }
+const client = new SidekickClient({ serverUrl: 'http://localhost:3000' })
+await client.connect()
+
+const enabled = client.isEnabled('my-flag', userId, { plan: 'pro' })
 ```
 
-The stream also emits a `connected` event (data: `"true"`) at the start of every connection, including reconnects. SDKs use this as the signal to clear their local cache before the server replays the full state.
+That's it — `isEnabled()` is a pure in-process lookup. No network, no async, no latency.
 
 ---
 
-## SDK Usage
+## Features
 
-### Node.js
-
-Install the native Node.js SDK (NAPI — evaluation runs in compiled Rust, not JavaScript):
-
-```bash
-npm install @sidekick-flags/node
-```
-
-```javascript
-import { SidekickClient } from '@sidekick-flags/node';
-
-const client = new SidekickClient(
-  'https://flags.yourcompany.com',
-  'sk_prod_abc123'
-);
-
-// Opens SSE — no REST bootstrap call needed.
-// Server streams the full flag state on connect.
-await client.init();
-
-// Sub-microsecond. No network. Works offline.
-const enabled = client.isEnabled('dark_mode', userId, {
-  email: 'user@acme.com',
-  plan: 'pro',
-  country: 'US',
-});
-
-// Shutdown: close the SSE connection
-client.close();
-```
-
-The Node.js SDK uses a **NAPI native module** — the evaluation engine is compiled Rust running inside the Node.js process. There is no JavaScript flag evaluation.
+- **Sub-microsecond evaluation** — flags are evaluated entirely in local memory
+- **Real-time updates** — SSE push, not polling; changes land in < 50 ms
+- **Targeting rules** — match by any user attribute (`email`, `plan`, `region`, …)
+- **Percentage rollouts** — deterministic MurmurHash3 bucketing; sticky and independent per flag
+- **Rust evaluation core** — compiled to NAPI, WASM, JSI, or FFI depending on platform
+- **Self-hosted** — single binary + PostgreSQL + Redis; your data never leaves your infra
 
 ---
 
-### Browser (WebAssembly)
+## Documentation
 
-Install the browser SDK (evaluation runs in WebAssembly compiled from Rust):
-
-```bash
-npm install @sidekick-flags/browser
-```
-
-```javascript
-import { SidekickBrowserClient } from '@sidekick-flags/browser';
-
-const client = new SidekickBrowserClient(
-  'https://flags.yourcompany.com',
-  'sk_prod_abc123'
-);
-
-// Initialises the Wasm module and opens SSE.
-await client.init();
-
-const enabled = client.isEnabled('dark_mode', userId, { country: 'US' });
-```
-
-The browser SDK evaluates inside **WebAssembly** compiled from the same Rust core as all other SDKs. Auth is sent via `?sdk_key=` query parameter because the browser `EventSource` API does not support custom headers.
+| Topic | Link |
+|-------|------|
+| Why Sidekick / comparisons | [What is Sidekick?](docs/guide/what-is-sidekick.md) |
+| System architecture | [Architecture](docs/guide/architecture.md) |
+| Flags, rules, rollout concepts | [Core Concepts](docs/guide/concepts.md) |
+| Step-by-step setup | [Getting Started](docs/guide/getting-started.md) |
+| REST API + SSE stream reference | [API Reference](docs/api-reference.md) |
+| Node.js SDK | [SDK: Node.js](docs/sdks/nodejs.md) |
+| Browser (WASM) SDK | [SDK: Browser](docs/sdks/browser.md) |
+| React Native (JSI) SDK | [SDK: React Native](docs/sdks/react-native.md) |
+| Flutter (FFI) SDK | [SDK: Flutter](docs/sdks/flutter.md) |
+| Docker, AWS, env vars | [Self-Hosting](docs/self-hosting.md) |
 
 ---
 
-### React Native (JSI)
+## Repository Structure
 
-Install the React Native SDK (synchronous JSI bridge — no async boundary):
-
-```bash
-npm install @sidekick-flags/react-native
-cd ios && pod install
 ```
-
-**Native setup (once, per project):**
-
-`ios/YourApp/SidekickModule.mm`:
-```objc
-#import <React/RCTBridgeModule.h>
-#import "SidekickJSI.h"
-
-@implementation SidekickModule
-RCT_EXPORT_MODULE()
-- (void)setBridge:(RCTBridge *)bridge {
-  auto jsiRuntime = (facebook::jsi::Runtime *)bridge.runtime;
-  sidekick::installSidekickJSI(*jsiRuntime);
-}
-@end
+core/               Rust evaluation engine (shared across all SDKs)
+server/             Axum HTTP server (REST API + SSE stream)
+sdks/
+  nodejs/           NAPI native addon
+  browser/          wasm-bindgen / wasm-pack
+  react-native/     JSI C++ bridge
+  flutter/          dart:ffi binding
+dashboard/          Next.js control-plane UI
+docs/               VitePress documentation
 ```
-
-`android/app/CMakeLists.txt`:
-```cmake
-add_library(sidekick_rn SHARED IMPORTED)
-set_target_properties(sidekick_rn PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/jni/${ANDROID_ABI}/libsidekick_rn.so")
-add_library(sidekick SHARED cpp/SidekickJSI.cpp)
-target_link_libraries(sidekick sidekick_rn jsi)
-```
-
-**Usage:**
-```javascript
-import { SidekickMobileClient } from '@sidekick-flags/react-native';
-
-const client = new SidekickMobileClient(
-  'https://flags.yourcompany.com',
-  'sk_prod_abc123'
-);
-
-await client.init();
-
-// Crosses JS → C++ JSI → Rust synchronously.
-// No async, no bridge overhead, no network.
-const enabled = client.isEnabled('new_checkout', userId, {
-  plan: 'pro',
-  country: 'US',
-});
-```
-
-`isEnabled()` is a **synchronous** call that crosses the JSI bridge directly into the Rust binary — no promise, no async/await, no `NativeModules` overhead.
 
 ---
 
-### Flutter (FFI)
-
-Add to `pubspec.yaml`:
-```yaml
-dependencies:
-  sidekick_flutter:
-    path: path/to/sidekick/sdks/flutter/dart
-```
-
-```dart
-import 'package:sidekick_flutter/sidekick_flutter.dart';
-
-final client = SidekickFlutterClient(
-  serverUrl: 'https://flags.yourcompany.com',
-  sdkKey: 'sk_prod_abc123',
-);
-
-await client.init();
-
-final enabled = client.isEnabled(
-  'dark_mode',
-  userId,
-  {'plan': 'pro', 'country': 'US'},
-);
-
-// Cleanup
-client.close();
-```
-
-The Flutter SDK uses `dart:ffi` to call directly into the compiled Rust library (`libsidekick_flutter.so` on Android, statically linked on iOS). The SSE stream is implemented as a chunked HTTP stream parsed in Dart — no third-party SSE package needed.
-
----
-
-## Deployment
-
-### Docker
-
-**Server-only image** (bring your own PostgreSQL and Redis):
-
-```bash
-docker build -f Dockerfile.server -t sidekick:server .
-
-docker run -p 3000:3000 \
-  -e DATABASE_URL=postgres://user:pass@your-db/sidekick \
-  -e REDIS_URL=redis://your-redis:6379 \
-  -e SDK_KEY=sk_prod_abc123 \
-  sidekick:server
-```
-
-**All-in-one image** (PostgreSQL + Redis + dashboard bundled — ideal for demos):
-
-```bash
-docker build -f Dockerfile.full -t sidekick:full .
-
-SDK_KEY=sk_prod_abc123 docker compose -f docker-compose.full.yml up -d
-# Dashboard → http://localhost:3000
-```
-
-Both images are multi-arch (`linux/amd64` + `linux/arm64`) and published to Docker Hub on every release tag.
-
----
-
-### AWS
-
-A reference production setup on AWS:
-
-```
-Route 53
-    ↓ HTTPS
-Application Load Balancer
-    ↓
-ECS Fargate (sidekick:server)    ←→   ElastiCache Redis (pub/sub)
-    ↓                                        ↑
-RDS Postgres (flags table)       ←── writes ─┘
-```
-
-**Critical ALB setting:** Set the ALB idle timeout to at least **300 seconds**. The default 60 s will terminate SSE connections before the 15 s keep-alive fires enough times. Sidekick SDKs reconnect automatically, but frequent disconnects increase bootstrap traffic.
-
-```bash
-aws elbv2 modify-load-balancer-attributes \
-  --load-balancer-arn arn:aws:elasticloadbalancing:... \
-  --attributes Key=idle_timeout.timeout_seconds,Value=300
-```
-
-**Horizontal scaling:** Multiple server instances work automatically. Each instance subscribes to the same Redis pub/sub channel, so a write to any instance propagates to all SDKs connected to any instance.
-
-**Security group:** Expose port 3000 only to the ALB security group. The `SDK_KEY` env var gates all API and SSE access.
-
----
-
-### CI/CD
+## CI/CD
 
 | Workflow | Trigger | Action |
-|---|---|---|
-| `ci.yml` | Push / PR to `main` or `dev` | Rust tests, clippy, fmt check, dashboard build |
+|----------|---------|--------|
+| `ci.yml` | Push / PR to `main` or `dev` | Rust tests, clippy, fmt, dashboard build |
 | `release-docker.yml` | Tag `v*.*.*` | Build multi-arch `sidekick:server` + `sidekick:full` → Docker Hub |
-| `release-sdk-nodejs.yml` | Tag `v*.*.*` | Cross-compile 7 platforms → publish `@sidekick-flags/node` to npm |
-| `release-sdk-browser.yml` | Tag `v*.*.*` | wasm-pack build → publish `@sidekick-flags/browser` to npm |
-| `release-sdk-react-native.yml` | Tag `v*.*.*` | Publish `@sidekick-flags/react-native` to npm |
+| `release-sdk-nodejs.yml` | Tag `v*.*.*` | Cross-compile 7 platforms → publish `@sidekick/node` to npm |
+| `release-sdk-browser.yml` | Tag `v*.*.*` | wasm-pack build → publish `@sidekick/browser` to npm |
+| `release-sdk-react-native.yml` | Tag `v*.*.*` | Publish `@sidekick/react-native` to npm |
 | `release-sdk-flutter.yml` | Tag `v*.*.*` | Publish `sidekick_flutter` to pub.dev |
 
-Release all SDKs and images at once:
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
 ---
 
-## Development
+## Contributing
 
-### Running Tests
-
-```bash
-cargo test --workspace
-```
-
-Tests cover:
-- `test_flag_disabled` — global kill-switch returns false regardless of rules
-- `test_flag_rollout` — 50% rollout distributes within ±5% across 1000 users
-- `test_flag_rules_match` — rule match bypasses 0% rollout
-- `test_murmurhash3_x86_32` — hash consistency with known test vectors
-
-### Building the Node.js SDK
-
-```bash
-cd sdks/nodejs
-npm install
-npm run build   # runs napi build --release
-```
-
-### Building the Browser SDK (WASM)
-
-```bash
-cd sdks/browser
-wasm-pack build --target web
-```
-
-Output is written to `dist/`. Import `dist/sidekick.js` in the browser SDK's `index.js`.
-
-### Building the React Native FFI Library
-
-```bash
-# Android (cross-compile per ABI)
-cargo build -p react-native --target aarch64-linux-android --release
-cargo build -p react-native --target x86_64-linux-android --release
-
-# iOS
-cargo build -p react-native --target aarch64-apple-ios --release
-cargo build -p react-native --target x86_64-apple-ios --release  # simulator
-```
-
-### Building the Flutter FFI Library
-
-```bash
-# Android
-cargo build -p flutter --target aarch64-linux-android --release
-
-# iOS (static lib)
-cargo build -p flutter --target aarch64-apple-ios --release
-```
-
-Copy the output `.so` / `.a` into your Flutter project's native directories and reference them from `CMakeLists.txt` (Android) or your Xcode project (iOS).
-
----
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

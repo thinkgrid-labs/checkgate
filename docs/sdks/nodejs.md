@@ -5,11 +5,11 @@ The Node.js SDK uses [NAPI-RS](https://napi.rs/) to compile the Rust evaluation 
 ## Installation
 
 ```bash
-npm install @sidekick-flags/node
+npm install @sidekick/node
 # or
-yarn add @sidekick-flags/node
+yarn add @sidekick/node
 # or
-pnpm add @sidekick-flags/node
+pnpm add @sidekick/node
 ```
 
 Pre-built binaries are included for:
@@ -24,7 +24,7 @@ Pre-built binaries are included for:
 ## Quick Start
 
 ```typescript
-import { SidekickClient } from '@sidekick-flags/node'
+import { SidekickClient } from '@sidekick/node'
 
 const client = new SidekickClient({
   serverUrl: 'https://flags.yourcompany.com',
@@ -77,7 +77,7 @@ Closes the SSE connection and cleans up resources. Call on graceful shutdown.
 
 ```typescript
 import express from 'express'
-import { SidekickClient } from '@sidekick-flags/node'
+import { SidekickClient } from '@sidekick/node'
 
 const flags = new SidekickClient({
   serverUrl: process.env.SIDEKICK_URL!,
@@ -105,7 +105,7 @@ process.on('SIGTERM', () => flags.disconnect())
 
 ```typescript
 // lib/flags.ts
-import { SidekickClient } from '@sidekick-flags/node'
+import { SidekickClient } from '@sidekick/node'
 
 declare global {
   var sidekick: SidekickClient | undefined
