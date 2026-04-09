@@ -79,18 +79,18 @@ jobs:
 
       - name: Install @napi-rs/cli
         working-directory: sdks/nodejs
-        run: npm install -g @napi-rs/cli
+        run: npm install -g @napi-rs/cli@latest
 
       - name: Build
         working-directory: sdks/nodejs
         shell: bash
         run: |
           if [ "${{ matrix.zig }}" = "true" ]; then
-            napi build --platform --release --target ${{ matrix.target }} --zig
+            npx @napi-rs/cli build --platform --release --target ${{ matrix.target }} --zig
           elif [ "${{ matrix.cross }}" = "true" ]; then
-            napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
+            npx @napi-rs/cli build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
-            napi build --platform --release --target ${{ matrix.target }}
+            npx @napi-rs/cli build --platform --release --target ${{ matrix.target }}
           fi
 
       - name: Upload artifact
