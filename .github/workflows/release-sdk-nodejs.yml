@@ -75,24 +75,11 @@ jobs:
         working-directory: sdks/nodejs
         run: npm install -g @napi-rs/cli
 
-      - name: Install Zig (musl aarch64 only)
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
-
-      - name: Install cargo-zigbuild (musl aarch64 only)
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        run: cargo install cargo-zigbuild
-
       - name: Build
         working-directory: sdks/nodejs
+        shell: bash
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
-            # Manual zigbuild to bypass NAPI CLI linker detection
-            cargo zigbuild --target aarch64-unknown-linux-musl --release
-            mv ../../target/aarch64-unknown-linux-musl/release/libnodejs.so checkgate.linux-arm64-musl.node
-          elif [ "${{ matrix.cross }}" = "true" ]; then
+          if [ "${{ matrix.cross }}" = "true" ]; then
             napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
             napi build --platform --release --target ${{ matrix.target }}
