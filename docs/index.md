@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "Checkgate"
   text: "Open-Source Feature Flags, Built for Speed."
-  tagline: "Sub-microsecond local evaluation. Zero network latency. Complete data privacy. The ultimate self-hosted alternative for feature toggles."
+  tagline: "Sub-microsecond local evaluation. Zero evaluation latency. Complete data privacy. The ultimate self-hosted alternative for feature toggles."
   actions:
     - theme: brand
       text: Get Started
