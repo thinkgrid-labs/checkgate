@@ -33,12 +33,6 @@ jobs:
             artifact: checkgate.linux-x64-musl.node
             cross: true
 
-          # Linux arm64 (musl — Alpine) — zig linker required, no musl aarch64 gcc in napi-cross
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            artifact: checkgate.linux-arm64-musl.node
-            zig: true
-
           # macOS x64 — cross-compile natively from arm64 runner
           - os: macos-latest
             target: x86_64-apple-darwin
@@ -126,8 +120,8 @@ jobs:
         run: |
           COUNT=$(ls *.node | wc -l)
           echo "Found $COUNT native binaries."
-          if [ "$COUNT" -ne 7 ]; then
-            echo "Error: Expected 7 native binaries, found $COUNT."
+          if [ "$COUNT" -ne 6 ]; then
+            echo "Error: Expected 6 native binaries, found $COUNT."
             ls -l *.node
             exit 1
           fi
