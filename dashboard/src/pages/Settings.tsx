@@ -1,91 +1,96 @@
-import { useState, useEffect } from 'react'
+import { Globe, LogOut, Shield, Info } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
-export default function Settings() {
-  const [sdkKey, setSdkKey] = useState('')
-  const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    setSdkKey(localStorage.getItem('sidekick_sdk_key') ?? '')
-  }, [])
-
-  function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (sdkKey.trim()) {
-      localStorage.setItem('sidekick_sdk_key', sdkKey.trim())
-    } else {
-      localStorage.removeItem('sidekick_sdk_key')
-    }
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  function handleClear() {
-    setSdkKey('')
-    localStorage.removeItem('sidekick_sdk_key')
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
+function SectionCard({ icon: Icon, title, description, children }: {
+  icon: React.ElementType
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
   return (
-    <div className="max-w-lg">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Settings</h1>
-
-      <div className="bg-white shadow rounded-lg p-6 space-y-6">
-        <div>
-          <h2 className="text-base font-medium text-gray-900 mb-1">Authentication</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Your SDK key is sent as{' '}
-            <code className="bg-gray-100 px-1 rounded text-xs font-mono">Authorization: Bearer &lt;key&gt;</code>{' '}
-            on every API request. It is stored in <code className="bg-gray-100 px-1 rounded text-xs font-mono">localStorage</code> and never sent elsewhere.
-          </p>
-
-          <form onSubmit={e => void handleSave(e)} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">SDK Key</label>
-              <input
-                type="password"
-                value={sdkKey}
-                onChange={e => { setSdkKey(e.target.value); setSaved(false) }}
-                placeholder="sk-..."
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900"
-              >
-                Clear
-              </button>
-              {saved && (
-                <span className="text-sm text-green-600 font-medium">Saved.</span>
-              )}
-            </div>
-          </form>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="flex items-start gap-4 px-5 py-4 border-b border-zinc-800">
+        <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
+          <Icon className="w-4 h-4 text-zinc-400" />
         </div>
-
-        <hr />
-
         <div>
-          <h2 className="text-base font-medium text-gray-900 mb-1">API</h2>
-          <p className="text-sm text-gray-500">
-            The dashboard talks directly to the Sidekick server at{' '}
-            <code className="bg-gray-100 px-1 rounded text-xs font-mono">
-              {import.meta.env.VITE_API_URL || window.location.origin}
-            </code>
-            . Set <code className="bg-gray-100 px-1 rounded text-xs font-mono">VITE_API_URL</code> at
-            build time to point at a different server.
-          </p>
+          <h2 className="text-zinc-100 font-medium text-sm">{title}</h2>
+          <p className="text-zinc-500 text-xs mt-0.5">{description}</p>
         </div>
       </div>
+      <div className="p-5">{children}</div>
+    </div>
+  )
+}
+
+export default function Settings() {
+  const { logout, session } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleLogout() {
+    await logout()
+    navigate('/login')
+  }
+
+  const apiOrigin = import.meta.env.VITE_API_URL || window.location.origin
+
+  return (
+    <div className="max-w-xl space-y-5">
+      {/* Auth info */}
+      <SectionCard
+        icon={Shield}
+        title="Authentication"
+        description="Sessions use HttpOnly encrypted cookies — the SDK key is never exposed to JavaScript."
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
+            <Info className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Your SDK key is validated server-side at login. After that, a short-lived
+              encrypted cookie keeps you authenticated. The key is never stored in your browser.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="p-3 rounded-lg bg-zinc-800 border border-zinc-700">
+              <p className="text-zinc-500 mb-0.5">Cookie flags</p>
+              <p className="text-zinc-200 font-mono">HttpOnly · SameSite=Strict</p>
+            </div>
+            <div className="p-3 rounded-lg bg-zinc-800 border border-zinc-700">
+              <p className="text-zinc-500 mb-0.5">Session TTL</p>
+              <p className="text-zinc-200 font-mono">7 days</p>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* API endpoint */}
+      <SectionCard
+        icon={Globe}
+        title="API endpoint"
+        description="The dashboard communicates with the Sidekick server at this origin."
+      >
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-800 border border-zinc-700">
+          <code className="text-violet-400 text-sm flex-1 truncate">{apiOrigin}</code>
+        </div>
+        <p className="mt-2 text-xs text-zinc-600">
+          Set <code className="text-zinc-500">VITE_API_URL</code> at build time to point at a different server.
+        </p>
+      </SectionCard>
+
+      {/* Account */}
+      <SectionCard
+        icon={LogOut}
+        title="Account"
+        description={`Signed in as ${session?.user.email ?? '—'} · ${session?.user.role ?? ''}`}
+      >
+        <button
+          onClick={() => void handleLogout()}
+          className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium rounded-lg transition-colors border border-zinc-700"
+        >
+          <LogOut className="w-3.5 h-3.5" /> Sign out
+        </button>
+      </SectionCard>
     </div>
   )
 }

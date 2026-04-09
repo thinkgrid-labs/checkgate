@@ -2,16 +2,16 @@
 layout: home
 
 hero:
-  name: "Sidekick"
-  text: "Self-Hosted Feature Flag Engine"
-  tagline: Sub-microsecond local evaluation. No network round-trips. No vendor lock-in. Native SDKs for Node.js, React Native, Flutter, and browsers.
+  name: "Checkgate"
+  text: "Open-Source Feature Flags, Built for Speed."
+  tagline: "Sub-microsecond local evaluation. Zero network latency. Complete data privacy. The ultimate self-hosted alternative for feature toggles."
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ThinkGrid-Labs/sidekick
+      link: https://github.com/ThinkGrid-Labs/checkgate
 
 features:
   - icon: ⚡

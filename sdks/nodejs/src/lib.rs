@@ -3,24 +3,24 @@
 #[macro_use]
 extern crate napi_derive;
 
-use sidekick_core::evaluator::{Flag, TargetingRule, UserContext, evaluate};
-use sidekick_core::store::FlagStore;
+use checkgate_core::evaluator::{Flag, TargetingRule, UserContext, evaluate};
+use checkgate_core::store::FlagStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 #[napi]
-pub struct SidekickCore {
+pub struct CheckgateCore {
     store: Arc<FlagStore>,
 }
 
-impl Default for SidekickCore {
+impl Default for CheckgateCore {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[napi]
-impl SidekickCore {
+impl CheckgateCore {
     #[napi(constructor)]
     pub fn new() -> Self {
         Self {

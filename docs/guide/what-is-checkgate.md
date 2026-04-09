@@ -1,6 +1,6 @@
-# What is Sidekick?
+# What is Checkgate?
 
-Sidekick is a **self-hosted, open-source feature flag engine** built for teams that need fast, reliable flag evaluation without sending data to a third-party SaaS vendor.
+Checkgate is a **self-hosted, open-source feature flag engine** built for teams that need fast, reliable flag evaluation without sending data to a third-party SaaS vendor.
 
 ## The Problem
 
@@ -11,11 +11,11 @@ Most feature flag services evaluate flags on their servers — meaning every `is
 - **Vendor lock-in** — migrating away is painful and expensive
 - **Data privacy concerns** — user attributes are sent to an external service
 
-## The Sidekick Approach
+## The Checkgate Approach
 
-Sidekick takes a different approach: **local evaluation**.
+Checkgate takes a different approach: **local evaluation**.
 
-1. Your server runs the Sidekick control plane (a single Rust binary)
+1. Your server runs the Checkgate control plane (a single Rust binary)
 2. Each SDK connects once via SSE and receives the full flag set
 3. All evaluation happens **in-process, in memory** — no network calls
 4. When flags change, the server pushes deltas via SSE instantly
@@ -24,7 +24,7 @@ The result: **sub-microsecond flag evaluation** with real-time updates and zero 
 
 ## How It Compares
 
-| Feature | Sidekick | LaunchDarkly / Statsig |
+| Feature | Checkgate | LaunchDarkly / Statsig |
 |---|---|---|
 | Evaluation location | In-process (local) | Remote HTTP |
 | Evaluation latency | ~100ns | ~5–50ms |
@@ -33,11 +33,11 @@ The result: **sub-microsecond flag evaluation** with real-time updates and zero 
 | Vendor lock-in | None | High |
 | Pricing | Free | Usage-based |
 
-## What Sidekick Is Not
+## What Checkgate Is Not
 
-- **Not a A/B testing platform** — Sidekick focuses on feature flags and rollouts, not experiment analysis
+- **Not a A/B testing platform** — Checkgate focuses on feature flags and rollouts, not experiment analysis
 - **Not a managed service** — you operate the server yourself
-- **Not a data warehouse** — Sidekick does not store analytics or events (that is your job)
+- **Not a data warehouse** — Checkgate does not store analytics or events (that is your job)
 
 ## Who Is It For?
 

@@ -1,6 +1,6 @@
 # docker-compose.full.yml — all-in-one single-container variant
 #
-# Spins up one container that runs PostgreSQL + Redis + Sidekick server +
+# Spins up one container that runs PostgreSQL + Redis + Checkgate server +
 # the React dashboard. Ideal for demos, CI smoke tests, or single-node
 # self-hosted deployments where you don't want to manage external services.
 #
@@ -11,24 +11,26 @@
 # Set SDK_KEY before running in any non-demo environment.
 
 services:
-  sidekick:
+  checkgate:
     build:
       context: .
       dockerfile: Dockerfile.full
-    image: sidekick:full
-    container_name: sidekick-full
+    image: checkgate:full
+    container_name: checkgate-full
     ports:
       - "3000:3000"
     environment:
-      POSTGRES_USER: sidekick
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sidekick}
-      POSTGRES_DB: sidekick
+      POSTGRES_USER: checkgate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-checkgate}
+      POSTGRES_DB: checkgate
       SDK_KEY: ${SDK_KEY:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:
-      - sidekick_full_pgdata:/var/lib/postgresql/data
-      - sidekick_full_redis:/var/lib/redis
+      - checkgate_full_pgdata:/var/lib/postgresql/data
+      - checkgate_full_redis:/var/lib/redis
     restart: unless-stopped
 
 volumes:
-  sidekick_full_pgdata:
-  sidekick_full_redis:
+  checkgate_full_pgdata:
+  checkgate_full_redis:

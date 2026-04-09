@@ -1,7 +1,7 @@
-name: sidekick_flutter
-description: Sidekick feature-flag SDK for Flutter — local evaluation via Rust FFI.
+name: checkgate_flutter
+description: Checkgate feature-flag SDK for Flutter — local evaluation via Rust FFI.
 version: 0.1.0
-homepage: https://github.com/your-org/sidekick
+homepage: https://github.com/your-org/checkgate
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

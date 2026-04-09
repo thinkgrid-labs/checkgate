@@ -1,7 +1,7 @@
 {
-  "name": "@sidekick-flags/react-native",
+  "name": "@checkgate/react-native",
   "version": "0.1.0",
-  "description": "Sidekick feature-flag SDK for React Native \u2014 local evaluation via Rust JSI.",
+  "description": "Checkgate feature-flag SDK for React Native — local evaluation via Rust JSI.",
   "main": "index.js",
   "license": "MIT",
   "files": [

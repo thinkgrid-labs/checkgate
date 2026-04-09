@@ -1,22 +1,22 @@
-use sidekick_core::evaluator::{Flag, UserContext, evaluate};
-use sidekick_core::store::FlagStore;
+use checkgate_core::evaluator::{Flag, UserContext, evaluate};
+use checkgate_core::store::FlagStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub struct SidekickCoreWasm {
+pub struct CheckgateCoreWasm {
     store: Arc<FlagStore>,
 }
 
-impl Default for SidekickCoreWasm {
+impl Default for CheckgateCoreWasm {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[wasm_bindgen]
-impl SidekickCoreWasm {
+impl CheckgateCoreWasm {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         console_error_panic_hook::set_once();

@@ -5,32 +5,49 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
+use checkgate_core::evaluator::Flag;
 use redis::AsyncCommands;
 use serde_json::json;
-use sidekick_core::evaluator::Flag;
 use sqlx::Row;
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, info, instrument, warn};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/flags", get(list_flags).post(create_flag))
         .route(
-            "/flags/:key",
+            "/flags/{key}",
             get(get_flag).delete(delete_flag).patch(patch_flag),
         )
 }
 
+#[instrument(skip(state))]
 async fn list_flags(State(state): State<AppState>) -> Json<Vec<Arc<Flag>>> {
-    Json(state.store.list_flags())
+    let flags = state.store.list_flags();
+    info!(count = flags.len(), "Listed flags");
+    Json(flags)
 }
 
+#[instrument(skip(state, payload), fields(flag_key = %payload.key))]
 async fn create_flag(
     State(state): State<AppState>,
     Json(payload): Json<Flag>,
 ) -> Result<Json<Flag>, StatusCode> {
+    if payload.key.trim().is_empty() {
+        warn!("Rejected create_flag: key is empty");
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    if payload.rollout_percentage.is_some_and(|p| p > 100) {
+        warn!(
+            rollout_percentage = ?payload.rollout_percentage,
+            "Rejected create_flag: rollout_percentage out of range"
+        );
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
     let data = serde_json::to_value(&payload).map_err(|e| {
-        error!("POST /flags: failed to serialize flag: {e}");
+        error!(error = %e, "Failed to serialize flag for DB write");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -42,49 +59,37 @@ async fn create_flag(
     .execute(&state.db)
     .await
     .map_err(|e| {
-        error!("POST /flags: DB write failed for key '{}': {e}", payload.key);
+        error!(error = %e, "PostgreSQL write failed");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     state.store.upsert_flag(payload.clone());
 
-    let mut redis_conn = state
-        .redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            error!("POST /flags: failed to get Redis connection: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
     let msg = json!({"type": "UPSERT", "flag": payload}).to_string();
-    if let Err(e) = redis_conn
-        .publish::<_, _, ()>("sidekick_updates", &msg)
-        .await
-    {
-        // DB write succeeded; log the Redis failure but do not fail the request.
-        // Other server instances will be stale until their next restart or reconnect.
-        error!(
-            "POST /flags: DB write succeeded but Redis publish failed for key '{}': {e}. \
-             Other instances may serve stale data until restarted.",
-            payload.key
-        );
-    }
+    publish_update(&state, &msg, "create_flag").await;
 
+    info!("Flag created/replaced");
     Ok(Json(payload))
 }
 
+#[instrument(skip(state), fields(flag_key = %key))]
 async fn get_flag(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<Json<Arc<Flag>>, StatusCode> {
-    state
-        .store
-        .get_flag(&key)
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
+    match state.store.get_flag(&key) {
+        Some(flag) => {
+            info!("Flag retrieved");
+            Ok(Json(flag))
+        }
+        None => {
+            info!("Flag not found");
+            Err(StatusCode::NOT_FOUND)
+        }
+    }
 }
 
+#[instrument(skip(state), fields(flag_key = %key))]
 async fn delete_flag(
     State(state): State<AppState>,
     Path(key): Path<String>,
@@ -94,56 +99,38 @@ async fn delete_flag(
         .execute(&state.db)
         .await
         .map_err(|e| {
-            error!("DELETE /flags/{key}: DB delete failed: {e}");
+            error!(error = %e, "PostgreSQL delete failed");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     state.store.delete_flag(&key);
 
-    let mut redis_conn = state
-        .redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            error!("DELETE /flags/{key}: failed to get Redis connection: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
     let msg = json!({"type": "DELETE", "key": key}).to_string();
-    if let Err(e) = redis_conn
-        .publish::<_, _, ()>("sidekick_updates", &msg)
-        .await
-    {
-        error!(
-            "DELETE /flags/{key}: DB delete succeeded but Redis publish failed: {e}. \
-             Other instances may serve stale data until restarted."
-        );
-    }
+    publish_update(&state, &msg, "delete_flag").await;
 
+    info!("Flag deleted");
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// PATCH /api/flags/:key — partial update via JSON merge.
 ///
 /// Only provided fields are changed; omitted fields retain their current values.
-/// The `key` field is explicitly excluded from the patch to prevent key aliasing,
-/// and the read-modify-write is wrapped in a serializable transaction to prevent
+/// The `key` field is excluded from the patch to prevent key aliasing.
+/// The read-modify-write is wrapped in a transaction with FOR UPDATE to prevent
 /// concurrent-patch races.
+#[instrument(skip(state, patch), fields(flag_key = %key))]
 async fn patch_flag(
     State(state): State<AppState>,
     Path(key): Path<String>,
     Json(mut patch): Json<serde_json::Value>,
 ) -> Result<Json<Flag>, StatusCode> {
     // Prevent the key from being mutated through a PATCH body.
-    // Allowing this creates a split-brain between the DB row key column and the
-    // stored JSONB, causing the flag to be indexed under the wrong key after reload.
     if let serde_json::Value::Object(ref mut m) = patch {
         m.remove("key");
     }
 
-    // Serializable transaction + SELECT FOR UPDATE prevents concurrent PATCH races.
     let mut db_tx = state.db.begin().await.map_err(|e| {
-        error!("PATCH /flags/{key}: failed to begin transaction: {e}");
+        error!(error = %e, "Failed to begin transaction");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -152,13 +139,16 @@ async fn patch_flag(
         .fetch_optional(&mut *db_tx)
         .await
         .map_err(|e| {
-            error!("PATCH /flags/{key}: DB read failed: {e}");
+            error!(error = %e, "PostgreSQL read failed");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            info!("Flag not found for PATCH");
+            StatusCode::NOT_FOUND
+        })?;
 
     let mut flag_val: serde_json::Value = rec.try_get("data").map_err(|e| {
-        error!("PATCH /flags/{key}: failed to deserialize stored data: {e}");
+        error!(error = %e, "Failed to deserialize stored flag data");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -171,9 +161,17 @@ async fn patch_flag(
     }
 
     let flag: Flag = serde_json::from_value(flag_val.clone()).map_err(|e| {
-        error!("PATCH /flags/{key}: merged result is not a valid Flag: {e}");
+        error!(error = %e, "Merged flag is not a valid Flag — patch rejected");
         StatusCode::UNPROCESSABLE_ENTITY
     })?;
+
+    if flag.rollout_percentage.is_some_and(|p| p > 100) {
+        warn!(
+            rollout_percentage = ?flag.rollout_percentage,
+            "Rejected patch_flag: rollout_percentage out of range"
+        );
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
 
     sqlx::query("UPDATE flags SET data = $1 WHERE key = $2")
         .bind(&flag_val)
@@ -181,36 +179,45 @@ async fn patch_flag(
         .execute(&mut *db_tx)
         .await
         .map_err(|e| {
-            error!("PATCH /flags/{key}: DB update failed: {e}");
+            error!(error = %e, "PostgreSQL update failed");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     db_tx.commit().await.map_err(|e| {
-        error!("PATCH /flags/{key}: transaction commit failed: {e}");
+        error!(error = %e, "Transaction commit failed");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     state.store.upsert_flag(flag.clone());
 
-    let mut redis_conn = state
-        .redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            error!("PATCH /flags/{key}: failed to get Redis connection: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
     let msg = json!({"type": "UPSERT", "flag": flag}).to_string();
-    if let Err(e) = redis_conn
-        .publish::<_, _, ()>("sidekick_updates", &msg)
-        .await
-    {
-        error!(
-            "PATCH /flags/{key}: DB update succeeded but Redis publish failed: {e}. \
-             Other instances may serve stale data until restarted."
-        );
-    }
+    publish_update(&state, &msg, "patch_flag").await;
 
+    info!("Flag patched");
     Ok(Json(flag))
+}
+
+/// Publish a flag change event to Redis pub/sub.
+/// Logs a warning if Redis is unavailable — the DB write already succeeded so
+/// the request is not failed, but other instances may serve stale data until
+/// their next restart or SSE reconnect.
+async fn publish_update(state: &AppState, msg: &str, op: &str) {
+    match state.redis_client.get_multiplexed_async_connection().await {
+        Err(e) => {
+            warn!(
+                error = %e,
+                operation = op,
+                "Redis unavailable — update not broadcast; other instances may be stale"
+            );
+        }
+        Ok(mut conn) => {
+            if let Err(e) = conn.publish::<_, _, ()>("checkgate_updates", msg).await {
+                warn!(
+                    error = %e,
+                    operation = op,
+                    "Redis publish failed — other instances may be stale"
+                );
+            }
+        }
+    }
 }

@@ -5,11 +5,11 @@ The Node.js SDK uses [NAPI-RS](https://napi.rs/) to compile the Rust evaluation 
 ## Installation
 
 ```bash
-npm install @sidekick-flags/node
+npm install @checkgate/node
 # or
-yarn add @sidekick-flags/node
+yarn add @checkgate/node
 # or
-pnpm add @sidekick-flags/node
+pnpm add @checkgate/node
 ```
 
 Pre-built binaries are included for:
@@ -24,11 +24,11 @@ Pre-built binaries are included for:
 ## Quick Start
 
 ```typescript
-import { SidekickClient } from '@sidekick-flags/node'
+import { CheckgateClient } from '@checkgate/node'
 
-const client = new SidekickClient({
+const client = new CheckgateClient({
   serverUrl: 'https://flags.yourcompany.com',
-  sdkKey: process.env.SIDEKICK_SDK_KEY,
+  sdkKey: process.env.CHECKGATE_SDK_KEY,
 })
 
 // Connect and download flags (call once at startup)
@@ -43,11 +43,11 @@ const enabled = client.isEnabled('new-checkout-flow', userId, {
 
 ## API Reference
 
-### `new SidekickClient(options)`
+### `new CheckgateClient(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Sidekick server |
+| `serverUrl` | `string` | Yes | Base URL of your Checkgate server |
 | `sdkKey` | `string` | No | SDK key for authentication |
 | `reconnectDelayMs` | `number` | No | SSE reconnect delay in ms (default: 3000) |
 
@@ -77,11 +77,11 @@ Closes the SSE connection and cleans up resources. Call on graceful shutdown.
 
 ```typescript
 import express from 'express'
-import { SidekickClient } from '@sidekick-flags/node'
+import { CheckgateClient } from '@checkgate/node'
 
-const flags = new SidekickClient({
-  serverUrl: process.env.SIDEKICK_URL!,
-  sdkKey: process.env.SIDEKICK_SDK_KEY,
+const flags = new CheckgateClient({
+  serverUrl: process.env.CHECKGATE_URL!,
+  sdkKey: process.env.CHECKGATE_SDK_KEY,
 })
 
 await flags.connect()
@@ -105,21 +105,21 @@ process.on('SIGTERM', () => flags.disconnect())
 
 ```typescript
 // lib/flags.ts
-import { SidekickClient } from '@sidekick-flags/node'
+import { CheckgateClient } from '@checkgate/node'
 
 declare global {
-  var sidekick: SidekickClient | undefined
+  var checkgate: CheckgateClient | undefined
 }
 
-export async function getFlags(): Promise<SidekickClient> {
-  if (!global.sidekick) {
-    global.sidekick = new SidekickClient({
-      serverUrl: process.env.SIDEKICK_URL!,
-      sdkKey: process.env.SIDEKICK_SDK_KEY,
+export async function getFlags(): Promise<CheckgateClient> {
+  if (!global.checkgate) {
+    global.checkgate = new CheckgateClient({
+      serverUrl: process.env.CHECKGATE_URL!,
+      sdkKey: process.env.CHECKGATE_SDK_KEY,
     })
-    await global.sidekick.connect()
+    await global.checkgate.connect()
   }
-  return global.sidekick
+  return global.checkgate
 }
 ```
 

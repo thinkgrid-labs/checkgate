@@ -5,19 +5,24 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use axum_extra::extract::cookie::PrivateCookieJar;
 use constant_time_eq::constant_time_eq;
+use tracing::warn;
 
-/// Validates the SDK key from either:
-///   - `Authorization: Bearer <key>` header  (Node.js, Flutter, React Native — preferred)
-///   - `?sdk_key=<key>` query parameter       (Browser EventSource — cannot set custom headers)
+/// Validates a request using **either** of two mechanisms:
 ///
-/// SECURITY: The `?sdk_key=` fallback exposes the key in URLs recorded by proxies and
-/// access logs. In production, suppress `/stream?sdk_key=*` from log pipelines and
-/// rotate the key regularly. Prefer the Authorization header wherever possible.
+/// 1. **Session cookie** (`lg_session`) — set by `POST /api/auth/login`.
+///    Used by the dashboard SPA. The cookie is HttpOnly + encrypted, so the SDK
+///    key is never exposed to JavaScript.
 ///
-/// Key comparison uses constant-time equality to prevent timing-based brute-force.
+/// 2. **Bearer token** (`Authorization: Bearer <key>`) — for SDK clients
+///    (Node.js, Flutter, React Native, …) that cannot use cookies.
 ///
-/// If `SDK_KEY` is not set, auth is skipped (local dev only — always set in production).
+/// 3. **`?sdk_key=` query param** — fallback for browser `EventSource` which
+///    cannot set custom headers. Exposes the key in access logs; prefer cookies
+///    for dashboard usage.
+///
+/// If `SDK_KEY` is not set, auth is skipped (local dev only).
 pub async fn require_auth(
     State(state): State<AppState>,
     req: Request<axum::body::Body>,
@@ -29,7 +34,17 @@ pub async fn require_auth(
 
     let expected_bytes = expected.as_bytes();
 
-    // Preferred: Authorization header (key not recorded in access logs)
+    // ── 1. HttpOnly session cookie (dashboard) ────────────────────────────────
+    //
+    // `PrivateCookieJar::from_headers` decrypts and authenticates the cookie using
+    // the server-side session key. A valid decrypted cookie is proof of a prior
+    // successful login with the correct SDK key.
+    let jar = PrivateCookieJar::from_headers(req.headers(), state.session_key.clone());
+    if jar.get("lg_session").is_some() {
+        return Ok(next.run(req).await);
+    }
+
+    // ── 2. Authorization: Bearer <key> (SDK clients) ──────────────────────────
     let header_key = req
         .headers()
         .get("Authorization")
@@ -42,7 +57,7 @@ pub async fn require_auth(
         return Ok(next.run(req).await);
     }
 
-    // Fallback: ?sdk_key= query param for browser EventSource (key appears in access logs)
+    // ── 3. ?sdk_key= query param (browser EventSource fallback) ──────────────
     let query = req.uri().query().unwrap_or("");
     let query_key = query
         .split('&')
@@ -53,6 +68,12 @@ pub async fn require_auth(
     {
         return Ok(next.run(req).await);
     }
+
+    warn!(
+        method = %req.method(),
+        path = %req.uri().path(),
+        "Rejected request: missing or invalid credentials"
+    );
 
     Err(StatusCode::UNAUTHORIZED)
 }

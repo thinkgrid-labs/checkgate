@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide walks you through running Sidekick locally and evaluating your first feature flag.
+This guide walks you through running Checkgate locally and evaluating your first feature flag.
 
 ## Prerequisites
 
@@ -12,13 +12,13 @@ This guide walks you through running Sidekick locally and evaluating your first 
 Clone the repository and start the full stack with Docker Compose:
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/sidekick.git
-cd sidekick
+git clone https://github.com/ThinkGrid-Labs/checkgate.git
+cd checkgate
 docker compose -f docker-compose.full.yml up -d
 ```
 
 This starts:
-- **Sidekick server** on port `3000`
+- **Checkgate server** on port `3000`
 - **PostgreSQL** on port `5432`
 - **Redis** on port `6379`
 
@@ -51,15 +51,15 @@ curl -X POST http://localhost:3000/api/flags \
 ::: code-group
 
 ```bash [Node.js]
-npm install @sidekick-flags/node
+npm install @checkgate/node
 ```
 
-```bash [Browser]
-npm install @sidekick-flags/browser
+```bash [Web]
+npm install @checkgate/web
 ```
 
 ```bash [React Native]
-npm install @sidekick-flags/react-native
+npm install @checkgate/react-native
 ```
 
 :::
@@ -67,9 +67,9 @@ npm install @sidekick-flags/react-native
 ## 4. Connect and Evaluate
 
 ```typescript
-import { SidekickClient } from '@sidekick-flags/node'
+import { CheckgateClient } from '@checkgate/node'
 
-const client = new SidekickClient({
+const client = new CheckgateClient({
   serverUrl: 'http://localhost:3000',
   sdkKey: 'your-sdk-key', // set SDK_KEY env var on server to enable auth
 })
@@ -98,7 +98,7 @@ SDK_KEY=your-secret-key docker compose up -d
 Pass the same key when initializing SDKs:
 
 ```typescript
-const client = new SidekickClient({
+const client = new CheckgateClient({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-secret-key',
 })

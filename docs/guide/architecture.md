@@ -1,12 +1,12 @@
 # Architecture
 
-Sidekick has three main layers: the **control plane** (server), the **evaluation core** (Rust library), and the **SDK clients**.
+Checkgate has three main layers: the **control plane** (server), the **evaluation core** (Rust library), and the **SDK clients**.
 
 ## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Sidekick Server                       │
+│                    Checkgate Server                       │
 │                                                          │
 │  ┌──────────────┐   ┌──────────┐   ┌─────────────────┐  │
 │  │  REST API    │   │ In-Memory│   │   SSE Stream    │  │
@@ -47,18 +47,18 @@ When a flag is created or updated:
 
 1. The REST API handler writes the flag to PostgreSQL
 2. It immediately updates the local in-memory `FlagStore`
-3. It publishes a `UPSERT` event to the `sidekick_updates` Redis channel
+3. It publishes a `UPSERT` event to the `checkgate_updates` Redis channel
 4. All connected SSE clients (SDK instances) receive the event and update their local cache
 
 ### Multi-Instance Deployments
 
-When running multiple Sidekick server instances behind a load balancer:
+When running multiple Checkgate server instances behind a load balancer:
 
 - Each instance subscribes to Redis pub/sub on startup
 - A write to any instance propagates to all others via Redis
 - All instances stay in sync without direct inter-node communication
 
-## Evaluation Core (`sidekick-core`)
+## Evaluation Core (`checkgate-core`)
 
 The core is a Rust library (`core/`) compiled into each SDK:
 

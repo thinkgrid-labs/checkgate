@@ -1,5 +1,7 @@
 use crate::rate_limit::IpRateLimiter;
-use sidekick_core::store::FlagStore;
+use axum::extract::FromRef;
+use axum_extra::extract::cookie::Key;
+use checkgate_core::store::FlagStore;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -16,4 +18,13 @@ pub struct AppState {
     pub sdk_key: Option<String>,
     /// Per-IP rate limiter applied to all API routes.
     pub rate_limiter: IpRateLimiter,
+    /// Encryption key for `PrivateCookieJar`. Derived from `SESSION_SECRET` env var.
+    pub session_key: Key,
+}
+
+/// Allows `PrivateCookieJar` extractors to pull the key out of `AppState` automatically.
+impl FromRef<AppState> for Key {
+    fn from_ref(state: &AppState) -> Self {
+        state.session_key.clone()
+    }
 }

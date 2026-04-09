@@ -4,17 +4,14 @@ function baseUrl(): string {
   return import.meta.env.VITE_API_URL ?? ''
 }
 
-function authHeaders(): Record<string, string> {
-  const key = localStorage.getItem('sidekick_sdk_key')
-  return key ? { Authorization: `Bearer ${key}` } : {}
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
+    // `same-origin` ensures the HttpOnly session cookie is sent automatically.
+    // Never `include` (would send cookies cross-origin) or `omit` (would break auth).
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(),
       ...init?.headers,
     },
   })

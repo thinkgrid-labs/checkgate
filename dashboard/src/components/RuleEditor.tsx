@@ -1,3 +1,4 @@
+import { Trash2, Plus } from 'lucide-react'
 import type { TargetingRule, Operator } from '../types'
 
 const OPERATORS: { value: Operator; label: string }[] = [
@@ -7,6 +8,12 @@ const OPERATORS: { value: Operator; label: string }[] = [
   { value: 'starts_with', label: 'starts with' },
   { value: 'ends_with', label: 'ends with' },
 ]
+
+const inputClass =
+  'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-200 placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow'
+
+const selectClass =
+  'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow appearance-none'
 
 interface RuleEditorProps {
   rules: TargetingRule[]
@@ -27,7 +34,6 @@ export default function RuleEditor({ rules, onChange }: RuleEditorProps) {
   }
 
   function updateValues(i: number, raw: string) {
-    // Comma-separated list of values
     const values = raw.split(',').map(v => v.trim()).filter(Boolean)
     updateRule(i, { values: values.length ? values : [''] })
   }
@@ -35,24 +41,27 @@ export default function RuleEditor({ rules, onChange }: RuleEditorProps) {
   return (
     <div className="space-y-3">
       {rules.map((rule, i) => (
-        <div key={i} className="flex flex-wrap gap-2 items-start p-3 bg-gray-50 rounded-md border border-gray-200">
+        <div
+          key={i}
+          className="flex flex-wrap gap-3 items-end p-4 bg-zinc-800/60 rounded-lg border border-zinc-700/60"
+        >
           <div className="flex-1 min-w-32">
-            <label className="block text-xs text-gray-500 mb-1">Attribute</label>
+            <label className="block text-xs font-medium text-zinc-500 mb-1.5">Attribute</label>
             <input
               type="text"
               value={rule.attribute}
               onChange={e => updateRule(i, { attribute: e.target.value })}
               placeholder="e.g. email"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={inputClass}
             />
           </div>
 
-          <div className="w-40">
-            <label className="block text-xs text-gray-500 mb-1">Operator</label>
+          <div className="w-44">
+            <label className="block text-xs font-medium text-zinc-500 mb-1.5">Operator</label>
             <select
               value={rule.operator}
               onChange={e => updateRule(i, { operator: e.target.value as Operator })}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={selectClass}
             >
               {OPERATORS.map(op => (
                 <option key={op.value} value={op.value}>{op.label}</option>
@@ -61,35 +70,35 @@ export default function RuleEditor({ rules, onChange }: RuleEditorProps) {
           </div>
 
           <div className="flex-1 min-w-40">
-            <label className="block text-xs text-gray-500 mb-1">Values (comma-separated)</label>
+            <label className="block text-xs font-medium text-zinc-500 mb-1.5">
+              Values <span className="text-zinc-700">(comma-separated)</span>
+            </label>
             <input
               type="text"
               value={rule.values.join(', ')}
               onChange={e => updateValues(i, e.target.value)}
               placeholder="e.g. @acme.com, @example.com"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={inputClass}
             />
           </div>
 
-          <div className="pt-5">
-            <button
-              type="button"
-              onClick={() => removeRule(i)}
-              className="text-red-500 hover:text-red-700 text-sm px-2 py-1.5"
-              aria-label="Remove rule"
-            >
-              Remove
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => removeRule(i)}
+            className="mb-0.5 p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+            aria-label="Remove rule"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       ))}
 
       <button
         type="button"
         onClick={addRule}
-        className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+        className="flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 font-medium transition-colors"
       >
-        + Add rule
+        <Plus className="w-4 h-4" /> Add rule
       </button>
     </div>
   )

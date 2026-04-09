@@ -19,40 +19,40 @@ jobs:
           # Linux x64 (glibc)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: sidekick.linux-x64-gnu.node
+            artifact: checkgate.linux-x64-gnu.node
 
           # Linux arm64 (glibc) — cross-compile on x64 runner
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: sidekick.linux-arm64-gnu.node
+            artifact: checkgate.linux-arm64-gnu.node
             cross: true
 
           # Linux x64 (musl — Alpine)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            artifact: sidekick.linux-x64-musl.node
+            artifact: checkgate.linux-x64-musl.node
             cross: true
 
           # Linux arm64 (musl — Alpine)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            artifact: sidekick.linux-arm64-musl.node
+            artifact: checkgate.linux-arm64-musl.node
             cross: true
 
           # macOS x64
           - os: macos-13
             target: x86_64-apple-darwin
-            artifact: sidekick.darwin-x64.node
+            artifact: checkgate.darwin-x64.node
 
           # macOS arm64 (Apple Silicon)
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: sidekick.darwin-arm64.node
+            artifact: checkgate.darwin-arm64.node
 
           # Windows x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: sidekick.win32-x64-msvc.node
+            artifact: checkgate.win32-x64-msvc.node
 
     steps:
       - uses: actions/checkout@v4
@@ -131,7 +131,7 @@ jobs:
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish @sidekick-flags/node
+      - name: Publish @checkgate/node
         working-directory: sdks/nodejs
         run: npm publish --access public
         env:
