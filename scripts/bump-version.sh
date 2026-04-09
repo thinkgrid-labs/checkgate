@@ -36,6 +36,13 @@ done
 sed -i "s/^version: .*/version: $VERSION/" "$ROOT/sdks/flutter/dart/pubspec.yaml"
 echo "  updated sdks/flutter/dart/pubspec.yaml"
 
+# --- Flutter CHANGELOG (prepend new entry) ---
+CHANGELOG="$ROOT/sdks/flutter/dart/CHANGELOG.md"
+TODAY="$(date +%Y-%m-%d)"
+ENTRY="## $VERSION\n\n- Release $VERSION.\n"
+sed -i "0,/^## /s//\n$ENTRY\n## /" "$CHANGELOG" 2>/dev/null || true
+echo "  prepended $VERSION entry to sdks/flutter/dart/CHANGELOG.md (edit manually to add details)"
+
 echo "Done. All packages are now at $VERSION"
 echo ""
 echo "Next steps:"

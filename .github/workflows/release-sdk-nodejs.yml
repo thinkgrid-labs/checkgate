@@ -21,26 +21,26 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact: checkgate.linux-x64-gnu.node
 
-          # Linux arm64 (glibc) — cross-compile on x64 runner
+          # Linux arm64 (glibc) — cross-compile via Zig linker
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact: checkgate.linux-arm64-gnu.node
-            cross: true
+            zig: true
 
-          # Linux x64 (musl — Alpine)
+          # Linux x64 (musl — Alpine) — cross-compile via Zig linker
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact: checkgate.linux-x64-musl.node
-            cross: true
+            zig: true
 
-          # Linux arm64 (musl — Alpine)
+          # Linux arm64 (musl — Alpine) — cross-compile via Zig linker
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             artifact: checkgate.linux-arm64-musl.node
-            cross: true
+            zig: true
 
-          # macOS x64
-          - os: macos-13
+          # macOS x64 — cross-compile natively from arm64 runner
+          - os: macos-latest
             target: x86_64-apple-darwin
             artifact: checkgate.darwin-x64.node
 
@@ -67,9 +67,11 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install cross (for cross-compilation targets)
-        if: matrix.cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Install Zig (for cross-compilation targets)
+        if: matrix.zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
 
       - uses: actions/setup-node@v4
         with:
@@ -79,17 +81,15 @@ jobs:
         working-directory: sdks/nodejs
         run: npm install -g @napi-rs/cli
 
-      - name: Build native binary (native target)
-        if: ${{ !matrix.cross }}
+      - name: Build native binary
         working-directory: sdks/nodejs
-        run: napi build --platform --release --target ${{ matrix.target }}
-
-      - name: Build native binary (cross target)
-        if: matrix.cross
-        working-directory: sdks/nodejs
-        run: napi build --platform --release --target ${{ matrix.target }} --cross-compile
-        env:
-          CROSS_CONTAINER_OPTS: "--platform linux/amd64"
+        run: |
+          if [ "${{ matrix.zig }}" = "true" ]; then
+            napi build --platform --release --target ${{ matrix.target }} --zig
+          else
+            napi build --platform --release --target ${{ matrix.target }}
+          fi
+        shell: bash
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
