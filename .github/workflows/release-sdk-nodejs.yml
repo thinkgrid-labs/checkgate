@@ -110,7 +110,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish:
     name: Publish to npm
-    needs: build
+    needs: build-native
     runs-on: ubuntu-latest
     permissions:
       contents: read
