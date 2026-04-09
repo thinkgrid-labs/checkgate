@@ -11,15 +11,15 @@ const TITLES: Record<string, string> = {
 function getTitle(pathname: string): string {
   if (TITLES[pathname]) return TITLES[pathname]
   if (pathname.startsWith('/flags/') && pathname.endsWith('/edit')) return 'Edit Flag'
-  return 'Sidekick'
+  return 'Checkgate'
 }
 
 export default function TopBar() {
   const { pathname } = useLocation()
 
   return (
-    <header className="h-14 shrink-0 flex items-center px-6 border-b border-zinc-800 bg-zinc-950">
-      <h1 className="text-zinc-100 font-semibold text-base">{getTitle(pathname)}</h1>
+    <header className="h-16 shrink-0 flex items-center px-8 border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-30">
+      <h1 className="text-gray-900 font-display font-bold text-lg tracking-tight">{getTitle(pathname)}</h1>
     </header>
   )
 }

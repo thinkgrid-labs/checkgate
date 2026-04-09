@@ -1,31 +1,93 @@
 use crate::state::AppState;
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
 };
 use checkgate_core::evaluator::Flag;
 use redis::AsyncCommands;
+use serde::Deserialize;
 use serde_json::json;
 use sqlx::Row;
 use std::sync::Arc;
 use tracing::{error, info, instrument, warn};
 
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/flags", get(list_flags).post(create_flag))
-        .route(
-            "/flags/{key}",
-            get(get_flag).delete(delete_flag).patch(patch_flag),
-        )
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+/// Flag keys must be non-empty, at most 100 characters, and contain only
+/// ASCII alphanumerics, underscores, or hyphens. This prevents ambiguous
+/// routing, log pollution, and surprises in SDK consumers that use the key
+/// as a cache key or filename.
+fn is_valid_flag_key(key: &str) -> bool {
+    !key.is_empty()
+        && key.len() <= 100
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+// ---------------------------------------------------------------------------
+// Routers
+// ---------------------------------------------------------------------------
+
+/// Read-only routes — available to any authenticated user (admin or viewer).
+pub fn read_router() -> Router<AppState> {
+    Router::new()
+        .route("/flags", get(list_flags))
+        .route("/flags/{key}", get(get_flag))
+}
+
+/// Write routes — require admin role (enforced by the layer added in main.rs).
+pub fn write_router() -> Router<AppState> {
+    Router::new().route("/flags", post(create_flag)).route(
+        "/flags/{key}",
+        axum::routing::delete(delete_flag).patch(patch_flag),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Pagination
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct Pagination {
+    #[serde(default = "default_limit")]
+    limit: usize,
+    #[serde(default)]
+    offset: usize,
+}
+
+fn default_limit() -> usize {
+    200
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
 #[instrument(skip(state))]
-async fn list_flags(State(state): State<AppState>) -> Json<Vec<Arc<Flag>>> {
-    let flags = state.store.list_flags();
-    info!(count = flags.len(), "Listed flags");
-    Json(flags)
+async fn list_flags(
+    State(state): State<AppState>,
+    Query(page): Query<Pagination>,
+) -> Json<Vec<Arc<Flag>>> {
+    let mut flags = state.store.list_flags();
+    // Stable sort by key so pagination is deterministic.
+    flags.sort_by(|a, b| a.key.cmp(&b.key));
+    let page_flags: Vec<Arc<Flag>> = flags
+        .into_iter()
+        .skip(page.offset)
+        .take(page.limit)
+        .collect();
+    info!(
+        count = page_flags.len(),
+        offset = page.offset,
+        limit = page.limit,
+        "Listed flags"
+    );
+    Json(page_flags)
 }
 
 #[instrument(skip(state, payload), fields(flag_key = %payload.key))]
@@ -33,8 +95,8 @@ async fn create_flag(
     State(state): State<AppState>,
     Json(payload): Json<Flag>,
 ) -> Result<Json<Flag>, StatusCode> {
-    if payload.key.trim().is_empty() {
-        warn!("Rejected create_flag: key is empty");
+    if !is_valid_flag_key(&payload.key) {
+        warn!(key = %payload.key, "Rejected create_flag: invalid key");
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
@@ -94,7 +156,7 @@ async fn delete_flag(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    sqlx::query("DELETE FROM flags WHERE key = $1")
+    let result = sqlx::query("DELETE FROM flags WHERE key = $1")
         .bind(&key)
         .execute(&state.db)
         .await
@@ -103,8 +165,13 @@ async fn delete_flag(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
     state.store.delete_flag(&key);
 
+    // Only broadcast when a row was actually deleted to avoid spurious SSE events.
     let msg = json!({"type": "DELETE", "key": key}).to_string();
     publish_update(&state, &msg, "delete_flag").await;
 
@@ -197,27 +264,22 @@ async fn patch_flag(
     Ok(Json(flag))
 }
 
-/// Publish a flag change event to Redis pub/sub.
-/// Logs a warning if Redis is unavailable — the DB write already succeeded so
-/// the request is not failed, but other instances may serve stale data until
-/// their next restart or SSE reconnect.
+// ---------------------------------------------------------------------------
+// Redis helpers
+// ---------------------------------------------------------------------------
+
+/// Publish a flag change event using the shared multiplexed connection from
+/// AppState. This avoids opening a new connection per write (the previous
+/// approach). If Redis is unavailable the DB write already succeeded so the
+/// request is not failed, but other instances may serve stale data until their
+/// next SSE reconnect.
 async fn publish_update(state: &AppState, msg: &str, op: &str) {
-    match state.redis_client.get_multiplexed_async_connection().await {
-        Err(e) => {
-            warn!(
-                error = %e,
-                operation = op,
-                "Redis unavailable — update not broadcast; other instances may be stale"
-            );
-        }
-        Ok(mut conn) => {
-            if let Err(e) = conn.publish::<_, _, ()>("checkgate_updates", msg).await {
-                warn!(
-                    error = %e,
-                    operation = op,
-                    "Redis publish failed — other instances may be stale"
-                );
-            }
-        }
+    let mut conn = state.redis_conn.clone();
+    if let Err(e) = conn.publish::<_, _, ()>("checkgate_updates", msg).await {
+        warn!(
+            error = %e,
+            operation = op,
+            "Redis publish failed — other instances may be stale"
+        );
     }
 }

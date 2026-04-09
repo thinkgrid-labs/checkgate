@@ -1,5 +1,7 @@
 pub mod flags;
+pub mod keys;
 pub mod session;
+pub mod users;
 
 use crate::state::AppState;
 use axum::{
@@ -8,16 +10,22 @@ use axum::{
     http::{Method, Request, StatusCode},
     middleware::Next,
     response::Response,
-    routing::get,
-    routing::post,
+    routing::{get, post},
 };
 use tracing::warn;
 
-/// CSRF protection middleware for SPAs.
+/// CSRF defence-in-depth for the dashboard SPA.
 ///
-/// It rejects ANY mutating request (POST, PUT, PATCH, DELETE) that does not
-/// carry the `X-Checkgate-Request` header. Since cross-site requests cannot
-/// set custom headers without a CORS preflight, this effectively blocks CSRF.
+/// Rejects mutating requests (POST, PUT, PATCH, DELETE) that lack the
+/// `X-Checkgate-Request` header.
+///
+/// **How this actually works**: the primary CSRF protection is `SameSite=Strict`
+/// on the session cookie — browsers will not include it on cross-origin requests.
+/// The custom-header check adds a second layer: because CORS only allows
+/// `Authorization` and `Content-Type` for cross-origin requests (see main.rs),
+/// external sites cannot include `X-Checkgate-Request` without a preflight that
+/// the server would reject. The header is therefore unforgeable from a third-party
+/// origin, blocking CSRF even for SDK-key-authenticated cross-origin clients.
 pub async fn csrf_protection(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
     let method = req.method();
     let is_mutating = matches!(
@@ -29,7 +37,7 @@ pub async fn csrf_protection(req: Request<Body>, next: Next) -> Result<Response,
         warn!(
             method = %method,
             path = %req.uri().path(),
-            "Rejected mutating request: missing X-Checkgate-Request header (CSRF protection)"
+            "Rejected mutating request: missing X-Checkgate-Request header"
         );
         return Err(StatusCode::FORBIDDEN);
     }
@@ -37,8 +45,19 @@ pub async fn csrf_protection(req: Request<Body>, next: Next) -> Result<Response,
     Ok(next.run(req).await)
 }
 
-/// Protected flag management routes — mounted under `/api` with auth middleware.
-pub use flags::router;
+/// Read-only API routes — any authenticated user (admin or viewer).
+pub fn read_router() -> Router<AppState> {
+    flags::read_router()
+        .merge(keys::read_router())
+        .merge(users::read_router())
+}
+
+/// Write API routes — require admin role (layer added in main.rs).
+pub fn write_router() -> Router<AppState> {
+    flags::write_router()
+        .merge(keys::write_router())
+        .merge(users::write_router())
+}
 
 /// Public auth routes — mounted under `/api/auth` WITHOUT auth middleware.
 pub fn auth_router() -> Router<AppState> {
@@ -46,4 +65,9 @@ pub fn auth_router() -> Router<AppState> {
         .route("/login", post(session::login))
         .route("/logout", post(session::logout))
         .route("/me", get(session::me))
+}
+
+/// Public setup routes — mounted under `/api` WITHOUT auth middleware.
+pub fn setup_router() -> Router<AppState> {
+    keys::setup_router().merge(session::setup_router())
 }

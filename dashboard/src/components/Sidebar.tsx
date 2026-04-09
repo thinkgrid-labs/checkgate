@@ -1,12 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  Flag,
   LayoutDashboard,
   ToggleLeft,
   Users,
   Settings,
   LogOut,
-  ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -27,35 +25,40 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col h-screen bg-zinc-900 border-r border-zinc-800">
+    <aside className="w-64 shrink-0 flex flex-col h-screen bg-white border-r border-gray-100 shadow-premium">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 h-14 border-b border-zinc-800">
-        <div className="w-7 h-7 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
-          <Flag className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-3 px-6 h-16 mb-2">
+        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-50 overflow-hidden">
+          <img
+            src="/checkgate_logo.png"
+            alt=""
+            className="h-8 w-8 object-contain"
+          />
         </div>
-        <span className="text-white font-semibold text-base tracking-tight">Checkgate</span>
+        <span className="text-gray-900 font-display font-bold text-xl tracking-tight">Checkgate</span>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+    <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
         {NAV.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                 isActive
-                  ? 'bg-violet-600/15 text-violet-300'
-                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+                  ? 'bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100/50'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-violet-400' : ''}`} />
+                <div className={`p-1 rounded-lg transition-colors ${isActive ? 'bg-white shadow-sm' : 'group-hover:bg-white/50'}`}>
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                </div>
                 <span className="flex-1">{label}</span>
-                {isActive && <ChevronRight className="w-3.5 h-3.5 text-violet-500" />}
               </>
             )}
           </NavLink>
@@ -63,24 +66,24 @@ export default function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="px-3 py-3 border-t border-zinc-800">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-lg mb-1">
-          <div className="w-7 h-7 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center shrink-0">
-            <span className="text-violet-400 text-xs font-semibold">
+      <div className="px-4 py-4 border-t border-gray-100 bg-gray-50/50">
+        <div className="flex items-center gap-3 px-2 py-2 mb-2">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-md shadow-emerald-200 flex items-center justify-center shrink-0">
+            <span className="text-white text-sm font-bold">
               {session?.user.name.charAt(0).toUpperCase() ?? '?'}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-zinc-200 text-xs font-medium truncate">{session?.user.name}</p>
-            <p className="text-zinc-600 text-xs truncate">{session?.user.role}</p>
+            <p className="text-gray-900 text-xs font-bold truncate">{session?.user.name}</p>
+            <p className="text-gray-500 text-[10px] tracking-wider uppercase font-semibold">{session?.user.role}</p>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-500 hover:text-rose-600 hover:bg-rose-50 transition-all duration-200 group"
         >
-          <LogOut className="w-4 h-4" />
-          Sign out
+          <LogOut className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+          <span className="font-semibold">Sign out</span>
         </button>
       </div>
     </aside>

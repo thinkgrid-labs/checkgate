@@ -9,11 +9,12 @@ import {
 import type { User } from '../types'
 
 // ---------------------------------------------------------------------------
-// Storage keys — only NON-SENSITIVE display data lives here.
-// The SDK key and session token are NEVER stored in the browser.
+// Storage keys
 // ---------------------------------------------------------------------------
+// Only the setup-complete flag is stored locally — it's a client-side UX hint
+// to avoid showing the setup wizard after first login. The authoritative state
+// is in the server's `settings` table; the server will reject a second setup.
 const KEY_SETUP = 'lg_setup_complete'
-const KEY_USERS = 'lg_users'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,34 +39,20 @@ interface AuthContextValue {
     email: string,
     sdkKey: string,
   ) => Promise<{ ok: boolean; error?: string }>
-  getUsers: () => User[]
-  addUser: (user: Omit<User, 'id' | 'createdAt'>) => User
-  removeUser: (id: string) => void
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function loadUsers(): User[] {
-  try {
-    return JSON.parse(localStorage.getItem(KEY_USERS) ?? '[]') as User[]
-  } catch {
-    return []
-  }
-}
 
-function saveUsers(users: User[]) {
-  localStorage.setItem(KEY_USERS, JSON.stringify(users))
-}
-
-/** Map `/api/auth/me` response → Session */
+/** Map `/api/auth/me` (or login) response → Session */
 function parseSession(body: { email: string; name: string; role: string }): Session {
   const user: User = {
-    id: body.email, // stable identifier — email is unique per user
+    id: body.email,
     email: body.email,
     name: body.name,
     role: body.role as User['role'],
-    createdAt: '', // not persisted server-side
+    createdAt: '',
   }
   return { user }
 }
@@ -76,7 +63,7 @@ function parseSession(body: { email: string; name: string; role: string }): Sess
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Session lives in React state ONLY — never written to localStorage/sessionStorage.
+  // Session lives in React state ONLY — never written to localStorage.
   // The HttpOnly cookie is managed entirely by the browser/server.
   const [session, setSession] = useState<Session | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
@@ -84,8 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(KEY_SETUP) === 'true',
   )
 
-  // On mount: check if there's a live session cookie via GET /api/auth/me.
-  // This restores the session after a page refresh without re-entering credentials.
+  // On mount: restore session from the HttpOnly cookie via GET /api/auth/me.
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(res => {
@@ -100,28 +86,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, sdkKey: string) => {
-    // Look up user profile from browser-local store (name + role are display data).
-    const users = loadUsers()
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase())
-    if (!user) {
-      return { ok: false, error: 'No account found with that email.' }
-    }
-
+    // Name and role are looked up server-side from the users table —
+    // the client only sends email + SDK key.
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          sdk_key: sdkKey,
-          name: user.name,
-          role: user.role,
-        }),
+        headers: { 'Content-Type': 'application/json', 'X-Checkgate-Request': 'true' },
+        body: JSON.stringify({ email: email.trim(), sdk_key: sdkKey.trim() }),
       })
 
       if (res.status === 401) {
-        return { ok: false, error: 'Invalid SDK key.' }
+        return { ok: false, error: 'Invalid SDK key or email not found.' }
       }
       if (!res.ok) {
         return { ok: false, error: `Server returned ${res.status}.` }
@@ -140,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'same-origin',
+        headers: { 'X-Checkgate-Request': 'true' },
       })
     } catch {
       // Best-effort — clear local state regardless.
@@ -149,35 +126,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const completeSetup = useCallback(
     async (name: string, email: string, sdkKey: string) => {
-      // Create the first admin user in local storage (display data, not a secret).
-      const admin: User = {
-        id: email,
-        name,
-        email,
-        role: 'admin',
-        createdAt: new Date().toISOString(),
-      }
-      saveUsers([admin])
-      localStorage.setItem(KEY_SETUP, 'true')
-      setIsSetupComplete(true)
-
-      // Issue the session cookie server-side.
+      // POST to the dedicated setup endpoint which atomically:
+      //   1. Validates the SDK key
+      //   2. Creates the admin user in the DB
+      //   3. Marks setup_complete = true
+      //   4. Issues the session cookie
+      //
+      // Local state is only updated AFTER the server confirms success, so a
+      // network failure never leaves the client in an inconsistent state.
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch('/api/setup/complete', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, sdk_key: sdkKey, name, role: 'admin' }),
+          headers: { 'Content-Type': 'application/json', 'X-Checkgate-Request': 'true' },
+          body: JSON.stringify({ name: name.trim(), email: email.trim(), sdk_key: sdkKey }),
         })
 
         if (res.status === 401) {
           return { ok: false, error: 'SDK key rejected by server.' }
+        }
+        if (res.status === 404) {
+          return { ok: false, error: 'Setup already complete. Please log in.' }
         }
         if (!res.ok) {
           return { ok: false, error: `Server returned ${res.status}.` }
         }
 
         const body = await res.json() as { email: string; name: string; role: string }
+
+        // Server confirmed — now update local state.
+        localStorage.setItem(KEY_SETUP, 'true')
+        setIsSetupComplete(true)
         setSession(parseSession(body))
         return { ok: true }
       } catch {
@@ -186,22 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
-
-  const getUsers = useCallback(() => loadUsers(), [])
-
-  const addUser = useCallback((partial: Omit<User, 'id' | 'createdAt'>) => {
-    const user: User = {
-      ...partial,
-      id: partial.email,
-      createdAt: new Date().toISOString(),
-    }
-    saveUsers([...loadUsers(), user])
-    return user
-  }, [])
-
-  const removeUser = useCallback((id: string) => {
-    saveUsers(loadUsers().filter(u => u.id !== id))
-  }, [])
 
   return (
     <AuthContext.Provider
@@ -212,9 +175,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         completeSetup,
-        getUsers,
-        addUser,
-        removeUser,
       }}
     >
       {children}

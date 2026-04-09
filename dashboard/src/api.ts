@@ -1,5 +1,13 @@
 import type { Flag, FlagPatch } from './types'
 
+export interface ApiUser {
+  id: number
+  email: string
+  name: string
+  role: string
+  created_at: string
+}
+
 function baseUrl(): string {
   return import.meta.env.VITE_API_URL ?? ''
 }
@@ -12,8 +20,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
-      // CSRF protection header — cross-site requests cannot set custom headers
-      // without explicit CORS permission, which we do not grant to anyone.
+      // CSRF defence-in-depth header. Cross-origin requests cannot include this
+      // header because CORS only allows Authorization and Content-Type — so the
+      // server's CSRF middleware effectively blocks cross-origin mutations.
       'X-Checkgate-Request': 'true',
       ...init?.headers,
     },
@@ -53,5 +62,22 @@ export const api = {
     return request(`/api/flags/${encodeURIComponent(key)}`, {
       method: 'DELETE',
     })
+  },
+}
+
+export const userApi = {
+  list(): Promise<ApiUser[]> {
+    return request('/api/users')
+  },
+
+  create(data: { name: string; email: string; role: string }): Promise<ApiUser> {
+    return request('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  remove(id: number): Promise<void> {
+    return request(`/api/users/${id}`, { method: 'DELETE' })
   },
 }

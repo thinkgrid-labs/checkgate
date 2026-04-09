@@ -8,14 +8,14 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
   return (
     <button
       onClick={onToggle}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
-        enabled ? 'bg-violet-600' : 'bg-zinc-700'
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/20 ${
+        enabled ? 'bg-emerald-600' : 'bg-gray-200'
       }`}
       aria-label={enabled ? 'Disable flag' : 'Enable flag'}
     >
       <span
         className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-          enabled ? 'translate-x-4.5' : 'translate-x-0.5'
+          enabled ? 'translate-x-4' : 'translate-x-0.5'
         }`}
       />
     </button>
@@ -68,56 +68,52 @@ export default function FlagList() {
     : flags
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="w-full space-y-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 pointer-events-none" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none transition-colors group-focus-within:text-emerald-500" />
           <input
             type="search"
             placeholder="Search flags…"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/40 shadow-premium transition-all"
           />
         </div>
         <div className="flex-1" />
         {error && (
           <button
             onClick={() => { setLoading(true); void load() }}
-            className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Retry
           </button>
         )}
         <Link
           to="/flags/new"
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5"
         >
           <Plus className="w-4 h-4" /> New flag
         </Link>
       </div>
 
       {/* Table card */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="premium-card shadow-premium-lg border-none bg-white">
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">
-            Loading…
-          </div>
+          <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Loading…</div>
         ) : error ? (
-          <div className="flex items-center justify-center h-40 text-rose-400 text-sm">
-            {error}
-          </div>
+          <div className="flex items-center justify-center h-40 text-red-500 text-sm">{error}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-3">
             {query ? (
-              <p className="text-zinc-600 text-sm">No flags match "<span className="text-zinc-400">{query}</span>"</p>
+              <p className="text-gray-400 text-sm">No flags match "<span className="text-gray-700">{query}</span>"</p>
             ) : (
               <>
-                <p className="text-zinc-600 text-sm">No flags yet.</p>
+                <p className="text-gray-400 text-sm">No flags yet.</p>
                 <Link
                   to="/flags/new"
-                  className="flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 font-medium transition-colors"
+                  className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" /> Create your first flag
                 </Link>
@@ -125,70 +121,71 @@ export default function FlagList() {
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="text-left px-5 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wider">Key</th>
-                <th className="text-left px-5 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wider hidden md:table-cell">Description</th>
-                <th className="text-left px-5 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wider">Rollout</th>
-                <th className="text-left px-5 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wider hidden sm:table-cell">Rules</th>
-                <th className="text-left px-5 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wider">Enabled</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800">
-              {filtered.map(flag => (
-                <tr key={flag.key} className="group hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <span className="font-mono text-violet-400 text-sm">{flag.key}</span>
-                  </td>
-                  <td className="px-5 py-3.5 hidden md:table-cell">
-                    <span className="text-zinc-400 truncate max-w-xs block">
-                      {flag.description ?? <span className="text-zinc-700">—</span>}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-zinc-300">
-                    {flag.rollout_percentage != null ? `${flag.rollout_percentage}%` : '100%'}
-                  </td>
-                  <td className="px-5 py-3.5 hidden sm:table-cell">
-                    {flag.rules.length > 0 ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        {flag.rules.length} rule{flag.rules.length !== 1 ? 's' : ''}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-700">—</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Toggle enabled={flag.is_enabled} onToggle={() => void toggleEnabled(flag)} />
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Link
-                        to={`/flags/${encodeURIComponent(flag.key)}/edit`}
-                        className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
-                        aria-label="Edit flag"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Link>
-                      <button
-                        onClick={() => void handleDelete(flag.key)}
-                        className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                        aria-label="Delete flag"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-50 bg-gray-50/50">
+                  <th className="text-left px-8 py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest">Key</th>
+                  <th className="text-left px-8 py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest hidden md:table-cell">Description</th>
+                  <th className="text-left px-8 py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest">Rollout</th>
+                  <th className="text-left px-8 py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest hidden sm:table-cell">Rules</th>
+                  <th className="text-left px-8 py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest">Status</th>
+                  <th className="px-8 py-4" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50/50">
+                {filtered.map(flag => (
+                  <tr key={flag.key} className="group hover:bg-emerald-50/20 transition-all">
+                    <td className="px-8 py-5">
+                      <span className="font-mono text-emerald-600 font-semibold text-sm">{flag.key}</span>
+                    </td>
+                    <td className="px-8 py-5 hidden md:table-cell">
+                      <span className="text-gray-500 truncate max-w-xs block text-xs">
+                        {flag.description ?? <span className="text-gray-300 italic">—</span>}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5 text-gray-900 font-medium font-mono text-xs">
+                      {flag.rollout_percentage != null ? `${flag.rollout_percentage}%` : '100%'}
+                    </td>
+                    <td className="px-8 py-5 hidden sm:table-cell">
+                      {flag.rules.length > 0 ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+                          {flag.rules.length} rule{flag.rules.length !== 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-8 py-5">
+                      <Toggle enabled={flag.is_enabled} onToggle={() => void toggleEnabled(flag)} />
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-all">
+                        <Link
+                          to={`/flags/${encodeURIComponent(flag.key)}/edit`}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                          aria-label="Edit flag"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Link>
+                        <button
+                          onClick={() => void handleDelete(flag.key)}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          aria-label="Delete flag"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        {/* Footer */}
         {!loading && !error && filtered.length > 0 && (
-          <div className="px-5 py-3 border-t border-zinc-800 text-xs text-zinc-600">
+          <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400 bg-gray-50">
             {filtered.length} flag{filtered.length !== 1 ? 's' : ''}
             {query && ` matching "${query}"`}
           </div>

@@ -46,8 +46,14 @@ pub fn evaluate(flag: &Flag, user_context: &UserContext) -> bool {
         let user_attr = match user_context.attributes.get(&rule.attribute) {
             Some(v) => v,
             None => {
-                // For NotEquals, a missing attribute is not equal to any listed value → rule matches.
-                // All other operators require the attribute to be present to match.
+                // A missing attribute satisfies NotEquals ("the user is definitely not X")
+                // but fails all other operators which require the value to be present.
+                //
+                // NOTE: This means users without a targeted attribute will pass a NotEquals
+                // rule, which can be surprising. For example, a rule "org not_equals evil_corp"
+                // will admit anonymous users who have no "org" attribute at all. Add a
+                // separate Equals rule for the expected attribute values if you want to
+                // restrict access to known-good values only.
                 if rule.operator == Operator::NotEquals && !rule.values.is_empty() {
                     return true;
                 }

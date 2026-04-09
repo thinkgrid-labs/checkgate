@@ -14,6 +14,8 @@ jobs:
   publish:
     name: Publish to pub.dev
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -30,13 +32,6 @@ jobs:
       - name: Validate pub.dev score (dry run)
         working-directory: sdks/flutter/dart
         run: dart pub publish --dry-run
-
-      - name: Set up pub.dev credentials
-        # PUB_CREDENTIALS is the JSON content of ~/.pub-cache/credentials.json
-        # obtained by running `dart pub login` locally and copying the file.
-        run: |
-          mkdir -p ~/.pub-cache
-          echo '${{ secrets.PUB_CREDENTIALS }}' > ~/.pub-cache/credentials.json
 
       - name: Publish to pub.dev
         working-directory: sdks/flutter/dart

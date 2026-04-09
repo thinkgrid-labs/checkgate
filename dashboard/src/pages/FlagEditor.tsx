@@ -15,11 +15,11 @@ const EMPTY_FLAG: Flag = {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-zinc-800">
-        <h2 className="text-zinc-200 font-medium text-sm">{title}</h2>
+    <div className="premium-card shadow-premium-lg border-none">
+      <div className="px-6 py-4 border-b border-gray-50 bg-white">
+        <h2 className="text-gray-900 font-display font-bold text-sm tracking-tight">{title}</h2>
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-6">{children}</div>
     </div>
   )
 }
@@ -29,14 +29,14 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
     <button
       type="button"
       onClick={onToggle}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
-        enabled ? 'bg-violet-600' : 'bg-zinc-700'
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/20 ${
+        enabled ? 'bg-emerald-600 shadow-md shadow-emerald-200' : 'bg-gray-200'
       }`}
       aria-label={enabled ? 'Disable flag' : 'Enable flag'}
     >
       <span
-        className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform ${
-          enabled ? 'translate-x-5.5' : 'translate-x-0.5'
+        className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
+          enabled ? 'translate-x-6' : 'translate-x-0.5'
         }`}
       />
     </button>
@@ -44,7 +44,7 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 }
 
 const inputClass =
-  'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow disabled:opacity-50 disabled:cursor-not-allowed'
+  'w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium disabled:opacity-50 disabled:cursor-not-allowed'
 
 export default function FlagEditor() {
   const { key } = useParams<{ key?: string }>()
@@ -107,24 +107,24 @@ export default function FlagEditor() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">
+      <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
         Loading…
       </div>
     )
   }
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="w-full max-w-2xl space-y-5">
       {/* Back link */}
       <Link
         to="/flags"
-        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-200 transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Back to flags
       </Link>
 
       {error && (
-        <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+        <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
           {error}
         </div>
       )}
@@ -133,7 +133,7 @@ export default function FlagEditor() {
         <SectionCard title="Basic info">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Key <span className="text-rose-400">*</span>
               </label>
               <input
@@ -146,14 +146,14 @@ export default function FlagEditor() {
                 className={`${inputClass} font-mono`}
               />
               {!isEdit && (
-                <p className="mt-1.5 text-xs text-zinc-600">
-                  Immutable after creation. Use <code className="text-zinc-500">snake_case</code>.
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Immutable after creation. Use <code className="text-gray-600">snake_case</code>.
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Description</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
               <input
                 type="text"
                 value={flag.description ?? ''}
@@ -169,16 +169,16 @@ export default function FlagEditor() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-zinc-300">Enabled</p>
-                <p className="text-xs text-zinc-600 mt-0.5">
-                  When disabled, the flag always evaluates to <code className="text-zinc-500">false</code>.
+                <p className="text-sm font-medium text-gray-700">Enabled</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  When disabled, the flag always evaluates to <code className="text-gray-600">false</code>.
                 </p>
               </div>
               <Toggle enabled={flag.is_enabled} onToggle={() => setField('is_enabled', !flag.is_enabled)} />
             </div>
 
-            <div className="border-t border-zinc-800 pt-4">
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Rollout percentage</label>
+            <div className="border-t border-gray-100 pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Rollout percentage</label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -187,11 +187,11 @@ export default function FlagEditor() {
                   value={rolloutInput}
                   onChange={e => setRolloutInput(e.target.value)}
                   placeholder="100"
-                  className="w-28 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  className="w-28 bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
                 />
-                <span className="text-zinc-500 text-sm">%</span>
+                <span className="text-gray-400 text-sm">%</span>
               </div>
-              <p className="mt-1.5 text-xs text-zinc-600">
+              <p className="mt-1.5 text-xs text-gray-400">
                 Leave empty for 100%. Users are bucketed deterministically by their key.
               </p>
             </div>
@@ -199,7 +199,7 @@ export default function FlagEditor() {
         </SectionCard>
 
         <SectionCard title="Targeting rules">
-          <p className="text-xs text-zinc-600 mb-4">
+          <p className="text-xs text-gray-400 mb-4">
             Users matching any rule always see the flag as enabled, bypassing the rollout cap.
           </p>
           <RuleEditor
@@ -213,7 +213,7 @@ export default function FlagEditor() {
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5"
           >
             {saving ? (
               <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -224,7 +224,7 @@ export default function FlagEditor() {
           </button>
           <Link
             to="/flags"
-            className="px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors"
           >
             Cancel
           </Link>

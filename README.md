@@ -43,6 +43,7 @@ It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), brows
 | React Native (JSI) SDK | [SDK: React Native](docs/sdks/react-native.md) |
 | Flutter (FFI) SDK | [SDK: Flutter](docs/sdks/flutter.md) |
 | Docker, AWS, env vars | [Self-Hosting](docs/self-hosting.md) |
+| Enterprise Setup & Migration | [Enterprise Setup & Migration](docs/enterprise-setup.md) |
 
 ---
 

@@ -4,17 +4,25 @@ mod rate_limit;
 mod state;
 mod stream;
 
-use axum::{Router, extract::DefaultBodyLimit, http::Method, middleware, routing::get};
+use axum::{
+    Router,
+    extract::DefaultBodyLimit,
+    http::{Method, header},
+    middleware,
+    routing::get,
+};
 use axum_extra::extract::cookie::Key;
 use checkgate_core::evaluator::Flag;
 use checkgate_core::store::FlagStore;
+use rand::RngCore;
 use rate_limit::new_rate_limiter;
 use sqlx::{Row, postgres::PgPoolOptions};
+use state::SdkKeyEntry;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::{RwLock, broadcast};
 use tokio_stream::StreamExt;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, DefaultOnResponse, TraceLayer};
 use tracing::{Level, error, info, warn};
@@ -22,9 +30,6 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // JSON structured logging — parseable by Docker log drivers, CloudWatch, Loki, Datadog, etc.
-    // Control verbosity with RUST_LOG env var (default: info).
-    // Example: RUST_LOG=checkgate=debug,tower_http=debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
@@ -85,7 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         e
     })?;
 
-    redis_client
+    // Shared multiplexed connection used for pub/sub publishes from handlers.
+    // MultiplexedConnection is Clone — each handler clones it cheaply.
+    let redis_conn = redis_client
         .get_multiplexed_async_connection()
         .await
         .map_err(|e| {
@@ -95,27 +102,68 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Redis connection established");
 
-    // ── SDK key ───────────────────────────────────────────────────────────────
+    // ── SDK keys (DB-backed) ──────────────────────────────────────────────────
 
-    let sdk_key = match std::env::var("SDK_KEY") {
-        Ok(k) if !k.is_empty() => {
-            info!("SDK_KEY configured — authentication enabled");
-            Some(k)
+    let rows = sqlx::query("SELECT id, name, value FROM sdk_keys ORDER BY id ASC")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "Failed to load SDK keys");
+            e
+        })?;
+
+    let mut sdk_keys_data: Vec<SdkKeyEntry> = rows
+        .iter()
+        .map(|r| SdkKeyEntry {
+            id: r.get("id"),
+            name: r.get("name"),
+            value: r.get("value"),
+        })
+        .collect();
+
+    if sdk_keys_data.is_empty() {
+        let mut bytes = [0u8; 16];
+        rand::thread_rng().fill_bytes(&mut bytes);
+        let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        let key_value = format!("sk_live_{hex}");
+
+        let row = sqlx::query(
+            "INSERT INTO sdk_keys (name, value) VALUES ('Default', $1) RETURNING id, name, value",
+        )
+        .bind(&key_value)
+        .fetch_one(&db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "Failed to insert initial SDK key");
+            e
+        })?;
+
+        info!("Generated initial SDK key — open the dashboard to complete setup");
+        sdk_keys_data.push(SdkKeyEntry {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+        });
+    } else {
+        info!(count = sdk_keys_data.len(), "SDK keys loaded from database");
+    }
+
+    // Legacy: SDK_KEY env var accepted as an extra in-memory key.
+    if let Ok(env_key) = std::env::var("SDK_KEY")
+        && !env_key.is_empty() && !sdk_keys_data.iter().any(|e| e.value == env_key) {
+            warn!(
+                "SDK_KEY env var detected — accepting it as a valid key. Consider migrating to DB-managed keys via the Settings page."
+            );
+            sdk_keys_data.push(SdkKeyEntry {
+                id: -1,
+                name: "env:SDK_KEY".into(),
+                value: env_key,
+            });
         }
-        _ => {
-            warn!("SDK_KEY not set — authentication disabled; do not use in production");
-            None
-        }
-    };
+
+    let sdk_keys = Arc::new(RwLock::new(sdk_keys_data));
 
     // ── Session key ───────────────────────────────────────────────────────────
-    //
-    // Used to encrypt/authenticate `sk_session` HttpOnly cookies via
-    // `axum_extra::extract::cookie::PrivateCookieJar`.
-    //
-    // Set `SESSION_SECRET` to a random string of ≥ 32 characters in production.
-    // Without it, a hard-coded dev key is used — sessions survive restarts but
-    // are predictable; **never** ship without setting this in production.
 
     const DEV_SESSION_KEY: &str = "INSECURE_DEFAULT_DEV_KEY_CHANGE_IN_PRODUCTION_SIDEKICK";
 
@@ -141,8 +189,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Broadcast channel ─────────────────────────────────────────────────────
 
-    // A single Redis subscriber pushes payloads here; SSE handlers subscribe
-    // instead of each opening their own Redis connection.
     let (flag_tx, _) = broadcast::channel::<String>(256);
 
     // ── Bootstrap flag store from Postgres ────────────────────────────────────
@@ -222,8 +268,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
 
-                    // Apply the change to the local store so this instance stays
-                    // in sync with writes made by peer instances.
                     match serde_json::from_str::<serde_json::Value>(&payload) {
                         Err(e) => {
                             warn!(error = %e, "Redis subscriber: received non-JSON payload");
@@ -260,7 +304,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                     }
 
-                    // Forward raw payload to all connected SSE handlers.
                     if tx.receiver_count() > 0
                         && let Err(e) = tx.send(payload)
                     {
@@ -278,15 +321,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = state::AppState {
         db,
         redis_client,
+        redis_conn,
         store,
         flag_tx,
-        sdk_key,
+        sdk_keys,
         rate_limiter: new_rate_limiter(),
         session_key,
     };
 
     // ── Middleware stack ───────────────────────────────────────────────────────
 
+    // CORS: restrict allowed request headers to what SDK clients actually need.
+    // By NOT listing X-Checkgate-Request here, cross-origin requests cannot include
+    // it (the browser will block the preflight), making the CSRF header check
+    // effective against third-party origins.
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -295,11 +343,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers(Any)
-        .allow_origin(Any);
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+        .allow_origin(tower_http::cors::Any);
 
-    // TraceLayer emits a structured JSON log line for every request:
-    // method, URI, status code, and latency — readable by any Docker log driver.
     let trace_layer = TraceLayer::new_for_http()
         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
         .on_response(DefaultOnResponse::new().level(Level::INFO))
@@ -311,18 +357,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Routing ───────────────────────────────────────────────────────────────
     //
-    // Auth routes (/api/auth/*) are public — no auth middleware, no body limit.
-    // All other API routes and the SSE stream are protected by require_auth.
+    // Public: /api/auth/* and /api/setup/* — no auth middleware.
+    // Protected read: any valid auth (session or SDK key).
+    // Protected write: additionally requires admin role.
     //
-    // Layer order (innermost → outermost): trace → rate_limit → auth/public → cors
-    // Requests are processed outermost first.
+    // Layer execution order for a write request (outermost → innermost):
+    //   cors → rate_limit → csrf → require_auth → require_admin → handler
 
-    // Public: login / logout / me — must not require auth to reach them.
     let auth_routes = api::auth_router();
+    let setup_routes = api::setup_router();
 
-    // Protected: flag management + SSE stream.
+    // Write routes wrapped with require_admin (runs after require_auth).
+    let write_api = api::write_router().layer(middleware::from_fn_with_state(
+        app_state.clone(),
+        auth::require_admin,
+    ));
+
+    // All API routes: reads + writes, body limit applied to both.
+    let api_routes = api::read_router()
+        .merge(write_api)
+        .layer(DefaultBodyLimit::max(65_536));
+
     let protected = Router::new()
-        .nest("/api", api::router().layer(DefaultBodyLimit::max(65_536)))
+        .nest("/api", api_routes)
         .route("/stream", get(stream::sse_handler))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
@@ -331,6 +388,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .nest("/api/auth", auth_routes)
+        .nest("/api", setup_routes)
         .merge(protected)
         .layer(trace_layer)
         .layer(middleware::from_fn(api::csrf_protection))

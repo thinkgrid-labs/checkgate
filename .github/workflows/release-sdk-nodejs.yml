@@ -21,23 +21,23 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact: checkgate.linux-x64-gnu.node
 
-          # Linux arm64 (glibc) — cross-compile via Zig linker
+          # Linux arm64 (glibc) — cross-compile via napi-rs cross toolchain
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact: checkgate.linux-arm64-gnu.node
-            zig: true
+            cross: true
 
-          # Linux x64 (musl — Alpine) — cross-compile via Zig linker
+          # Linux x64 (musl — Alpine) — cross-compile via napi-rs cross toolchain
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact: checkgate.linux-x64-musl.node
-            zig: true
+            cross: true
 
-          # Linux arm64 (musl — Alpine) — cross-compile via Zig linker
+          # Linux arm64 (musl — Alpine) — cross-compile via napi-rs cross toolchain
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             artifact: checkgate.linux-arm64-musl.node
-            zig: true
+            cross: true
 
           # macOS x64 — cross-compile natively from arm64 runner
           - os: macos-latest
@@ -67,12 +67,6 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install Zig (for cross-compilation targets)
-        if: matrix.zig
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -84,8 +78,8 @@ jobs:
       - name: Build native binary
         working-directory: sdks/nodejs
         run: |
-          if [ "${{ matrix.zig }}" = "true" ]; then
-            napi build --platform --release --target ${{ matrix.target }} --zig
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
             napi build --platform --release --target ${{ matrix.target }}
           fi
