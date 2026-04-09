@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const rootDir = path.resolve(__dirname, '../../..');
+const rootDir = path.resolve(__dirname, '../../../../');
 const sdkDir = path.resolve(__dirname, '..');
 const coreDir = path.join(rootDir, 'core');
 const destDir = path.join(sdkDir, 'rust-core');
