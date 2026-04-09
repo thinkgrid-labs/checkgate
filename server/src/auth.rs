@@ -63,9 +63,9 @@ pub async fn require_auth(
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-        {
-            return Ok(next.run(req).await);
-        }
+    {
+        return Ok(next.run(req).await);
+    }
 
     // ── 3. ?sdk_key= query param (browser EventSource fallback) ──────────────
     let query = req.uri().query().unwrap_or("");
@@ -77,9 +77,9 @@ pub async fn require_auth(
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-        {
-            return Ok(next.run(req).await);
-        }
+    {
+        return Ok(next.run(req).await);
+    }
 
     warn!(
         method = %req.method(),
@@ -120,9 +120,9 @@ pub async fn require_admin(
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-        {
-            return Ok(next.run(req).await);
-        }
+    {
+        return Ok(next.run(req).await);
+    }
 
     // SDK key via query param → admin.
     let query = req.uri().query().unwrap_or("");
@@ -130,25 +130,26 @@ pub async fn require_admin(
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-        {
-            return Ok(next.run(req).await);
-        }
+    {
+        return Ok(next.run(req).await);
+    }
 
     // Session cookie: must carry role=admin (set from DB on login).
     let jar = PrivateCookieJar::from_headers(req.headers(), state.session_key.clone());
     if let Some(cookie) = jar.get("lg_session")
-        && let Ok(claims) = serde_json::from_str::<SessionClaims>(cookie.value()) {
-            if claims.role == "admin" {
-                return Ok(next.run(req).await);
-            }
-            warn!(
-                method = %req.method(),
-                path = %req.uri().path(),
-                role = %claims.role,
-                "Forbidden: admin role required"
-            );
-            return Err(StatusCode::FORBIDDEN);
+        && let Ok(claims) = serde_json::from_str::<SessionClaims>(cookie.value())
+    {
+        if claims.role == "admin" {
+            return Ok(next.run(req).await);
         }
+        warn!(
+            method = %req.method(),
+            path = %req.uri().path(),
+            role = %claims.role,
+            "Forbidden: admin role required"
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     // Reached only if require_auth somehow didn't run first.
     Err(StatusCode::UNAUTHORIZED)

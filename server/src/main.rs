@@ -150,16 +150,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Legacy: SDK_KEY env var accepted as an extra in-memory key.
     if let Ok(env_key) = std::env::var("SDK_KEY")
-        && !env_key.is_empty() && !sdk_keys_data.iter().any(|e| e.value == env_key) {
-            warn!(
-                "SDK_KEY env var detected — accepting it as a valid key. Consider migrating to DB-managed keys via the Settings page."
-            );
-            sdk_keys_data.push(SdkKeyEntry {
-                id: -1,
-                name: "env:SDK_KEY".into(),
-                value: env_key,
-            });
-        }
+        && !env_key.is_empty()
+        && !sdk_keys_data.iter().any(|e| e.value == env_key)
+    {
+        warn!(
+            "SDK_KEY env var detected — accepting it as a valid key. Consider migrating to DB-managed keys via the Settings page."
+        );
+        sdk_keys_data.push(SdkKeyEntry {
+            id: -1,
+            name: "env:SDK_KEY".into(),
+            value: env_key,
+        });
+    }
 
     let sdk_keys = Arc::new(RwLock::new(sdk_keys_data));
 
