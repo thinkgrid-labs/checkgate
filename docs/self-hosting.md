@@ -1,6 +1,6 @@
 ---
-title: Self-Hosting Checkgate — Docker, AWS EC2 & ECS Deployment Guide
-description: Deploy Checkgate on your own infrastructure using Docker Compose, AWS EC2, or ECS Fargate. Includes environment variable reference, load balancing tips, and upgrade instructions.
+title: "Self-Hosting Checkgate — Docker, AWS EC2 & ECS Deployment Guide"
+description: "Deploy Checkgate on your own infrastructure using Docker Compose, AWS EC2, or ECS Fargate. Includes environment variable reference, load balancing tips, and upgrade instructions."
 ---
 
 # Self-Hosting

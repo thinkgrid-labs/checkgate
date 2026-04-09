@@ -1,6 +1,6 @@
 ---
-title: Enterprise Setup — Migrating from LaunchDarkly to Checkgate
-description: A production-ready guide for engineering teams migrating from LaunchDarkly to self-hosted Checkgate. Covers infrastructure provisioning, AWS deployment, dashboard onboarding, and SDK integration.
+title: "Enterprise Setup — Migrating from LaunchDarkly to Checkgate"
+description: "A production-ready guide for engineering teams migrating from LaunchDarkly to self-hosted Checkgate. Covers infrastructure provisioning, AWS deployment, dashboard onboarding, and SDK integration."
 ---
 
 # Enterprise Setup Guide: Migrating from LaunchDarkly

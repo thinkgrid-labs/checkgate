@@ -1,6 +1,6 @@
 ---
-title: Core Concepts — Flags, Targeting Rules, Rollouts & SSE Stream
-description: Understand Checkgate's core building blocks: feature flag schema, targeting rule operators, deterministic rollout hashing, user context, and the SSE update stream.
+title: "Core Concepts — Flags, Targeting Rules, Rollouts & SSE Stream"
+description: "Understand Checkgate's core building blocks: feature flag schema, targeting rule operators, deterministic rollout hashing, user context, and the SSE update stream."
 ---
 
 # Core Concepts

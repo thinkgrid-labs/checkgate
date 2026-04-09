@@ -1,6 +1,6 @@
 ---
-title: Checkgate Architecture — Control Plane, Evaluation Core & SDK Design
-description: Deep dive into Checkgate's three-layer architecture: the Axum-based control plane, the Rust evaluation core, and cross-platform SDK clients connected via SSE.
+title: "Checkgate Architecture — Control Plane, Evaluation Core & SDK Design"
+description: "Deep dive into Checkgate's three-layer architecture: the Axum-based control plane, the Rust evaluation core, and cross-platform SDK clients connected via SSE."
 ---
 
 # Architecture

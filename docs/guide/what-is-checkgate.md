@@ -1,6 +1,6 @@
 ---
-title: What is Checkgate? — Open-Source Self-Hosted Feature Flag Engine
-description: Learn what Checkgate is, how local evaluation delivers sub-microsecond feature flag decisions, and how it compares to LaunchDarkly and Statsig.
+title: "What is Checkgate? — Open-Source Self-Hosted Feature Flag Engine"
+description: "Learn what Checkgate is, how local evaluation delivers sub-microsecond feature flag decisions, and how it compares to LaunchDarkly and Statsig."
 ---
 
 # What is Checkgate?

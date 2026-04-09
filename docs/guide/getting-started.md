@@ -1,6 +1,6 @@
 ---
-title: Getting Started with Checkgate — Feature Flags in Minutes
-description: Step-by-step guide to running Checkgate locally, creating your first feature flag, and evaluating it with zero network latency using the Node.js SDK.
+title: "Getting Started with Checkgate — Feature Flags in Minutes"
+description: "Step-by-step guide to running Checkgate locally, creating your first feature flag, and evaluating it with zero network latency using the Node.js SDK."
 ---
 
 # Getting Started
