@@ -73,6 +73,10 @@ jobs:
         with:
           version: 0.11.0
 
+      - name: Install cargo-zigbuild
+        if: ${{ matrix.zig }}
+        run: cargo install cargo-zigbuild
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -86,7 +90,8 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.zig }}" = "true" ]; then
-            npm run build:zig -- --target ${{ matrix.target }}
+            cargo zigbuild --target ${{ matrix.target }} --release
+            mv ../../target/${{ matrix.target }}/release/libnodejs.so ${{ matrix.artifact }}
           elif [ "${{ matrix.cross }}" = "true" ]; then
             npm run build:cross -- --target ${{ matrix.target }}
           else
