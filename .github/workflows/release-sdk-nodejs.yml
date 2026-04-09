@@ -118,10 +118,10 @@ jobs:
       - name: Validate native binaries count
         working-directory: sdks/nodejs
         run: |
-          COUNT=$(ls *.node | wc -l)
-          echo "Found $COUNT native binaries."
+          COUNT=$(ls checkgate.*.node | wc -l)
+          echo "Found $COUNT labeled native binaries."
           if [ "$COUNT" -ne 6 ]; then
-            echo "Error: Expected 6 native binaries, found $COUNT."
+            echo "Error: Expected 6 labeled native binaries, found $COUNT."
             ls -l *.node
             exit 1
           fi
