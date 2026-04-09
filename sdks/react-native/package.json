@@ -4,11 +4,18 @@
   "description": "Checkgate feature-flag SDK for React Native — local evaluation via Rust JSI.",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "prepublishOnly": "node scripts/bundle-rust.js"
+  },
   "files": [
     "index.js",
     "cpp/",
     "src/",
-    "Cargo.toml"
+    "ios/",
+    "android/",
+    "rust-core/",
+    "Cargo.toml",
+    "Checkgate.podspec"
   ],
   "peerDependencies": {
     "react": ">=18.0.0",
