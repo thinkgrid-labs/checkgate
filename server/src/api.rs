@@ -47,4 +47,3 @@ pub fn auth_router() -> Router<AppState> {
         .route("/logout", post(session::logout))
         .route("/me", get(session::me))
 }
-

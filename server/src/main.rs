@@ -66,13 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("PostgreSQL connection established");
 
-    sqlx::migrate!()
-        .run(&db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to run database migrations");
-            e
-        })?;
+    sqlx::migrate!().run(&db).await.map_err(|e| {
+        error!(error = %e, "Failed to run database migrations");
+        e
+    })?;
 
     info!("Migrations complete — schema ready");
 
