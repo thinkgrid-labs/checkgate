@@ -38,6 +38,14 @@ jobs:
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
+          
+      - name: Bundle Rust Core
+        working-directory: sdks/web
+        run: node scripts/bundle-rust.js
+
+      - name: Remove wasm-pack ignore file
+        working-directory: sdks/web
+        run: rm -f dist/.gitignore
 
       - name: Validate WASM package integrity
         working-directory: sdks/web
