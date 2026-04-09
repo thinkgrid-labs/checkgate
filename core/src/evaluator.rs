@@ -211,12 +211,12 @@ mod tests {
             rules: vec![TargetingRule {
                 attribute: "email".into(),
                 operator: Operator::EndsWith,
-                values: vec!["@launchgate.com".into()],
+                values: vec!["@checkgate.com".into()],
             }],
         };
 
         let mut attrs = HashMap::new();
-        attrs.insert("email".into(), "test@launchgate.com".into());
+        attrs.insert("email".into(), "test@checkgate.com".into());
         let ctx = UserContext {
             key: "employee".into(),
             attributes: attrs,

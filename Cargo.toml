@@ -3,7 +3,7 @@ members = [
     "core",
     "server",
     "sdks/nodejs",
-    "sdks/browser",
+    "sdks/web",
     "sdks/flutter",
     "sdks/react-native",
 ]

@@ -82,8 +82,8 @@ pub async fn login(
         role: req.role.clone(),
     };
 
-    let cookie_value = serde_json::to_string(&session)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let cookie_value =
+        serde_json::to_string(&session).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     info!(email = %req.email, role = %req.role, "Session created");
 

@@ -1,22 +1,22 @@
-use launchgate_core::evaluator::{Flag, UserContext, evaluate};
-use launchgate_core::store::FlagStore;
+use checkgate_core::evaluator::{Flag, UserContext, evaluate};
+use checkgate_core::store::FlagStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub struct LaunchgateCoreWasm {
+pub struct CheckgateCoreWasm {
     store: Arc<FlagStore>,
 }
 
-impl Default for LaunchgateCoreWasm {
+impl Default for CheckgateCoreWasm {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[wasm_bindgen]
-impl LaunchgateCoreWasm {
+impl CheckgateCoreWasm {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         console_error_panic_hook::set_once();

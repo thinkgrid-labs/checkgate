@@ -6,9 +6,9 @@ mod stream;
 
 use axum::{Router, extract::DefaultBodyLimit, http::Method, middleware, routing::get};
 use axum_extra::extract::cookie::Key;
+use checkgate_core::evaluator::Flag;
+use checkgate_core::store::FlagStore;
 use rate_limit::new_rate_limiter;
-use launchgate_core::evaluator::Flag;
-use launchgate_core::store::FlagStore;
 use sqlx::{Row, postgres::PgPoolOptions};
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,7 +24,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // JSON structured logging — parseable by Docker log drivers, CloudWatch, Loki, Datadog, etc.
     // Control verbosity with RUST_LOG env var (default: info).
-    // Example: RUST_LOG=launchgate=debug,tower_http=debug
+    // Example: RUST_LOG=checkgate=debug,tower_http=debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
@@ -40,13 +40,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(
         version = env!("CARGO_PKG_VERSION"),
-        "Starting Launchgate Control Plane"
+        "Starting Checkgate Control Plane"
     );
 
     // ── PostgreSQL ────────────────────────────────────────────────────────────
 
     let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://launchgate:password@localhost/launchgate".to_string());
+        .unwrap_or_else(|_| "postgres://checkgate:password@localhost/checkgate".to_string());
 
     let max_conns = std::env::var("DB_MAX_CONNECTIONS")
         .ok()
@@ -135,7 +135,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Key::derive_from(s.as_bytes())
         }
         Ok(ref s) if !s.is_empty() => {
-            warn!("SESSION_SECRET is shorter than 32 chars; consider a longer secret for production");
+            warn!(
+                "SESSION_SECRET is shorter than 32 chars; consider a longer secret for production"
+            );
             Key::derive_from(s.as_bytes())
         }
         _ => {
@@ -211,13 +213,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                if let Err(e) = con.subscribe("launchgate_updates").await {
+                if let Err(e) = con.subscribe("checkgate_updates").await {
                     error!(error = %e, "Redis subscriber: subscribe failed — retrying in 2s");
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     continue;
                 }
 
-                info!("Redis subscriber: listening on channel 'launchgate_updates'");
+                info!("Redis subscriber: listening on channel 'checkgate_updates'");
 
                 let mut msg_stream = con.into_on_message();
 
@@ -269,7 +271,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     // Forward raw payload to all connected SSE handlers.
-                    if tx.receiver_count() > 0 && let Err(e) = tx.send(payload) {
+                    if tx.receiver_count() > 0
+                        && let Err(e) = tx.send(payload)
+                    {
                         warn!(error = %e, "Broadcast send failed — no active SSE receivers");
                     }
                 }

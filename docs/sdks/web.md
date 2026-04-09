@@ -1,21 +1,21 @@
-# Browser SDK (WebAssembly)
+# Web SDK (WebAssembly)
 
-The browser SDK compiles the Rust evaluation core to **WebAssembly** using [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen). Flag evaluation runs at near-native speed entirely in the browser — no evaluation round-trips to your server.
+The web SDK compiles the Rust evaluation core to **WebAssembly** using [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen). Flag evaluation runs at near-native speed entirely in the browser — no evaluation round-trips to your server.
 
 ## Installation
 
 ```bash
-npm install @launchgate/browser
+npm install @checkgate/web
 # or
-yarn add @launchgate/browser
+yarn add @checkgate/web
 ```
 
 ## Quick Start
 
 ```typescript
-import { LaunchgateBrowserClient } from '@launchgate/browser'
+import { CheckgateBrowserClient } from '@checkgate/web'
 
-const client = new LaunchgateBrowserClient({
+const client = new CheckgateBrowserClient({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-sdk-key',
 })
@@ -32,11 +32,11 @@ const enabled = client.isEnabled('dark-mode', currentUserId, {
 
 ## API Reference
 
-### `new LaunchgateBrowserClient(options)`
+### `new CheckgateBrowserClient(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Launchgate server |
+| `serverUrl` | `string` | Yes | Base URL of your Checkgate server |
 | `sdkKey` | `string` | No | SDK key (sent as `Authorization: Bearer`) |
 | `reconnectDelayMs` | `number` | No | Reconnect delay on SSE disconnect (default: 3000) |
 

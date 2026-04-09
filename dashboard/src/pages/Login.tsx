@@ -33,7 +33,7 @@ export default function Login() {
           <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
             <Flag className="w-4 h-4 text-white" />
           </div>
-          <span className="text-white font-semibold text-lg">Launchgate</span>
+          <span className="text-white font-semibold text-lg">Checkgate</span>
         </div>
 
         <div>
@@ -55,7 +55,7 @@ export default function Login() {
           <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
             <Flag className="w-4 h-4 text-white" />
           </div>
-          <span className="text-white font-semibold text-lg">Launchgate</span>
+          <span className="text-white font-semibold text-lg">Checkgate</span>
         </div>
 
         <div className="w-full max-w-sm">

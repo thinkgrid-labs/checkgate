@@ -1,0 +1,16 @@
+{
+  "name": "@checkgate/web",
+  "version": "0.1.0",
+  "description": "Checkgate feature-flag SDK for the web — local evaluation via WebAssembly.",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "dist/checkgate.d.ts",
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "dist/"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target web --out-name checkgate --out-dir dist"
+  }
+}

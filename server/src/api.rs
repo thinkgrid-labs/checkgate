@@ -1,8 +1,8 @@
 pub mod flags;
 pub mod session;
 
-use axum::{Router, routing::get, routing::post};
 use crate::state::AppState;
+use axum::{Router, routing::get, routing::post};
 
 /// Protected flag management routes — mounted under `/api` with auth middleware.
 pub use flags::router;

@@ -1,4 +1,4 @@
-# Contributing to Launchgate
+# Contributing to Checkgate
 
 Thanks for your interest in contributing. This document covers how to get set up, the project conventions, and the process for submitting changes.
 
@@ -13,8 +13,8 @@ Thanks for your interest in contributing. This document covers how to get set up
 ## Getting started
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/launchgate.git
-cd launchgate
+git clone https://github.com/ThinkGrid-Labs/checkgate.git
+cd checkgate
 docker compose up -d       # start Postgres + Redis
 cargo build --workspace    # verify everything compiles
 cargo test --workspace     # run all tests

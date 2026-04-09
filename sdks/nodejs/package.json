@@ -1,7 +1,7 @@
 {
-  "name": "@launchgate/node",
+  "name": "@checkgate/node",
   "version": "0.1.0",
-  "description": "Launchgate feature-flag SDK for Node.js — local evaluation via Rust NAPI.",
+  "description": "Checkgate feature-flag SDK for Node.js — local evaluation via Rust NAPI.",
   "main": "index.js",
   "types": "index.d.ts",
   "license": "MIT",
@@ -11,7 +11,7 @@
     "*.node"
   ],
   "napi": {
-    "name": "launchgate",
+    "name": "checkgate",
     "triples": {
       "defaults": true,
       "additional": [

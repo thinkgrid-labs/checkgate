@@ -1,4 +1,4 @@
-//! Flutter FFI layer for Launchgate.
+//! Flutter FFI layer for Checkgate.
 //!
 //! Exposes a C ABI so Dart can call these functions via `dart:ffi` with no
 //! code-generation step.  A process-global `FlagStore` is used because C FFI
@@ -10,16 +10,16 @@
 //! API to parse user attributes **once** and reuse the handle across calls:
 //!
 //! ```c
-//! LaunchgateContext* ctx = launchgate_make_context("user-123", "{\"plan\":\"pro\"}");
-//! int flag_a = launchgate_is_enabled_ctx("feature-a", ctx);
-//! int flag_b = launchgate_is_enabled_ctx("feature-b", ctx);
-//! launchgate_free_context(ctx);
+//! CheckgateContext* ctx = checkgate_make_context("user-123", "{\"plan\":\"pro\"}");
+//! int flag_a = checkgate_is_enabled_ctx("feature-a", ctx);
+//! int flag_b = checkgate_is_enabled_ctx("feature-b", ctx);
+//! checkgate_free_context(ctx);
 //! ```
 //!
 //! Compile as `staticlib` (iOS) or `cdylib` (Android / desktop).
 
-use launchgate_core::evaluator::{Flag, TargetingRule, UserContext, evaluate};
-use launchgate_core::store::FlagStore;
+use checkgate_core::evaluator::{Flag, TargetingRule, UserContext, evaluate};
+use checkgate_core::store::FlagStore;
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char};
 use std::sync::LazyLock;
@@ -27,8 +27,8 @@ use std::sync::LazyLock;
 static STORE: LazyLock<FlagStore> = LazyLock::new(FlagStore::new);
 
 /// Opaque handle holding a pre-parsed user context.
-/// Obtain via `launchgate_make_context`, release via `launchgate_free_context`.
-pub struct LaunchgateContext {
+/// Obtain via `checkgate_make_context`, release via `checkgate_free_context`.
+pub struct CheckgateContext {
     inner: UserContext,
 }
 
@@ -44,7 +44,7 @@ pub struct LaunchgateContext {
 /// # Safety
 /// All pointer arguments must be valid, non-dangling, null-terminated C strings.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn launchgate_upsert_flag(
+pub unsafe extern "C" fn checkgate_upsert_flag(
     key: *const c_char,
     is_enabled: bool,
     rollout_percentage: i32,
@@ -81,14 +81,14 @@ pub unsafe extern "C" fn launchgate_upsert_flag(
 /// # Safety
 /// `key` must be a valid, non-dangling, null-terminated C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn launchgate_delete_flag(key: *const c_char) {
+pub unsafe extern "C" fn checkgate_delete_flag(key: *const c_char) {
     let key = unsafe { CStr::from_ptr(key) }.to_string_lossy();
     STORE.delete_flag(&key);
 }
 
 /// Clear the entire cache (call before re-bootstrapping on SSE reconnect).
 #[unsafe(no_mangle)]
-pub extern "C" fn launchgate_clear_store() {
+pub extern "C" fn checkgate_clear_store() {
     STORE.clear();
 }
 
@@ -99,15 +99,15 @@ pub extern "C" fn launchgate_clear_store() {
 /// Parse a user key and attributes JSON into an opaque context handle.
 ///
 /// Returns a heap-allocated pointer the caller owns.
-/// Must be released with `launchgate_free_context`.
+/// Must be released with `checkgate_free_context`.
 ///
 /// # Safety
 /// All pointer arguments must be valid, non-dangling, null-terminated C strings.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn launchgate_make_context(
+pub unsafe extern "C" fn checkgate_make_context(
     user_key: *const c_char,
     attributes_json: *const c_char,
-) -> *mut LaunchgateContext {
+) -> *mut CheckgateContext {
     let user_key = unsafe { CStr::from_ptr(user_key) }
         .to_string_lossy()
         .into_owned();
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn launchgate_make_context(
         HashMap::new()
     };
 
-    Box::into_raw(Box::new(LaunchgateContext {
+    Box::into_raw(Box::new(CheckgateContext {
         inner: UserContext {
             key: user_key,
             attributes,
@@ -131,11 +131,11 @@ pub unsafe extern "C" fn launchgate_make_context(
 ///
 /// # Safety
 /// - `flag_key` must be a valid, non-dangling, null-terminated C string.
-/// - `ctx` must be a non-null pointer from `launchgate_make_context` that has not been freed.
+/// - `ctx` must be a non-null pointer from `checkgate_make_context` that has not been freed.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn launchgate_is_enabled_ctx(
+pub unsafe extern "C" fn checkgate_is_enabled_ctx(
     flag_key: *const c_char,
-    ctx: *const LaunchgateContext,
+    ctx: *const CheckgateContext,
 ) -> i32 {
     let flag_key = unsafe { CStr::from_ptr(flag_key) }.to_string_lossy();
     let flag = match STORE.get_flag(&flag_key) {
@@ -153,9 +153,9 @@ pub unsafe extern "C" fn launchgate_is_enabled_ctx(
 /// Release a context handle. Passing NULL is safe and is a no-op.
 ///
 /// # Safety
-/// `ctx` must be a pointer from `launchgate_make_context` that has not already been freed.
+/// `ctx` must be a pointer from `checkgate_make_context` that has not already been freed.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn launchgate_free_context(ctx: *mut LaunchgateContext) {
+pub unsafe extern "C" fn checkgate_free_context(ctx: *mut CheckgateContext) {
     if !ctx.is_null() {
         drop(unsafe { Box::from_raw(ctx) });
     }
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn launchgate_free_context(ctx: *mut LaunchgateContext) {
 
 /// Evaluate a flag for a given user. Parses `attributes_json` on every call.
 ///
-/// Prefer `launchgate_make_context` + `launchgate_is_enabled_ctx` when evaluating
+/// Prefer `checkgate_make_context` + `checkgate_is_enabled_ctx` when evaluating
 /// multiple flags for the same user.
 ///
 /// # Returns `1` if enabled, `0` otherwise.
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn launchgate_free_context(ctx: *mut LaunchgateContext) {
 /// # Safety
 /// All pointer arguments must be valid, non-dangling, null-terminated C strings.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn launchgate_is_enabled(
+pub unsafe extern "C" fn checkgate_is_enabled(
     flag_key: *const c_char,
     user_key: *const c_char,
     attributes_json: *const c_char,

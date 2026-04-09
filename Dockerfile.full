@@ -5,9 +5,9 @@
 # Perfect for demos, staging, or single-node self-hosted deployments.
 #
 # Optional env vars (all have sensible defaults):
-#   POSTGRES_USER      launchgate
-#   POSTGRES_PASSWORD  launchgate
-#   POSTGRES_DB        launchgate
+#   POSTGRES_USER      checkgate
+#   POSTGRES_PASSWORD  checkgate
+#   POSTGRES_DB        checkgate
 #   SDK_KEY            (empty = auth disabled — set this in production)
 #   PORT               3000
 # =============================================================================
@@ -80,7 +80,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY --from=server-builder /app/target/release/server /usr/local/bin/launchgate-server
+COPY --from=server-builder /app/target/release/server /usr/local/bin/checkgate-server
 COPY --from=dashboard-builder /app/server/public ./public
 COPY docker/entrypoint-full.sh /entrypoint.sh
 
@@ -94,8 +94,8 @@ EXPOSE 3000
 
 ENV PUBLIC_DIR=/app/public \
     PGDATA=/var/lib/postgresql/data \
-    POSTGRES_USER=launchgate \
-    POSTGRES_PASSWORD=launchgate \
-    POSTGRES_DB=launchgate
+    POSTGRES_USER=checkgate \
+    POSTGRES_PASSWORD=checkgate \
+    POSTGRES_DB=checkgate
 
 ENTRYPOINT ["/entrypoint.sh"]

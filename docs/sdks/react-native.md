@@ -5,9 +5,9 @@ The React Native SDK uses **C FFI** to call the Rust evaluation core directly fr
 ## Installation
 
 ```bash
-npm install @launchgate/react-native
+npm install @checkgate/react-native
 # or
-yarn add @launchgate/react-native
+yarn add @checkgate/react-native
 ```
 
 ### iOS
@@ -23,9 +23,9 @@ The native library is linked automatically via CMake. No additional steps requir
 ## Quick Start
 
 ```typescript
-import { LaunchgateNativeClient } from '@launchgate/react-native'
+import { CheckgateNativeClient } from '@checkgate/react-native'
 
-const client = new LaunchgateNativeClient({
+const client = new CheckgateNativeClient({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-sdk-key',
 })
@@ -45,11 +45,11 @@ const enabled = client.isEnabled('new-onboarding', userId, {
 
 ## API Reference
 
-### `new LaunchgateNativeClient(options)`
+### `new CheckgateNativeClient(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Launchgate server |
+| `serverUrl` | `string` | Yes | Base URL of your Checkgate server |
 | `sdkKey` | `string` | No | SDK key for authentication |
 | `reconnectDelayMs` | `number` | No | SSE reconnect delay in ms (default: 5000) |
 
@@ -72,18 +72,18 @@ Tears down the SSE connection. Call in your cleanup effect.
 ```typescript
 // App.tsx
 import { NavigationContainer } from '@react-navigation/native'
-import { LaunchgateNativeClient } from '@launchgate/react-native'
+import { CheckgateNativeClient } from '@checkgate/react-native'
 import { createContext, useContext, useEffect, useState } from 'react'
 
-const FlagContext = createContext<LaunchgateNativeClient | null>(null)
+const FlagContext = createContext<CheckgateNativeClient | null>(null)
 
 export function useFlags() {
   return useContext(FlagContext)!
 }
 
-const flagClient = new LaunchgateNativeClient({
-  serverUrl: process.env.EXPO_PUBLIC_LAUNCHGATE_URL!,
-  sdkKey: process.env.EXPO_PUBLIC_LAUNCHGATE_KEY,
+const flagClient = new CheckgateNativeClient({
+  serverUrl: process.env.EXPO_PUBLIC_CHECKGATE_URL!,
+  sdkKey: process.env.EXPO_PUBLIC_CHECKGATE_KEY,
 })
 
 export default function App() {
@@ -125,7 +125,7 @@ export function HomeScreen() {
 The SDK is compatible with Expo managed workflow via the **Expo Dev Client**. It is not compatible with Expo Go (which doesn't support native modules).
 
 ```bash
-npx expo install @launchgate/react-native
+npx expo install @checkgate/react-native
 npx expo prebuild
 ```
 

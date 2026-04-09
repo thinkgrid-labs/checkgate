@@ -2,7 +2,7 @@
 
 ## Flags
 
-A feature flag is the central object in Launchgate. Every flag has:
+A feature flag is the central object in Checkgate. Every flag has:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -69,7 +69,7 @@ Result:
 
 ## Rollout Percentage
 
-The rollout percentage enables gradual feature releases. Launchgate uses **deterministic consistent hashing** (MurmurHash3) to assign users to buckets:
+The rollout percentage enables gradual feature releases. Checkgate uses **deterministic consistent hashing** (MurmurHash3) to assign users to buckets:
 
 - The same user always gets the same result for the same flag
 - Buckets are stable across restarts and server instances

@@ -1,6 +1,6 @@
 # docker-compose.full.yml — all-in-one single-container variant
 #
-# Spins up one container that runs PostgreSQL + Redis + Launchgate server +
+# Spins up one container that runs PostgreSQL + Redis + Checkgate server +
 # the React dashboard. Ideal for demos, CI smoke tests, or single-node
 # self-hosted deployments where you don't want to manage external services.
 #
@@ -11,26 +11,26 @@
 # Set SDK_KEY before running in any non-demo environment.
 
 services:
-  launchgate:
+  checkgate:
     build:
       context: .
       dockerfile: Dockerfile.full
-    image: launchgate:full
-    container_name: launchgate-full
+    image: checkgate:full
+    container_name: checkgate-full
     ports:
       - "3000:3000"
     environment:
-      POSTGRES_USER: launchgate
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-launchgate}
-      POSTGRES_DB: launchgate
+      POSTGRES_USER: checkgate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-checkgate}
+      POSTGRES_DB: checkgate
       SDK_KEY: ${SDK_KEY:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:
-      - launchgate_full_pgdata:/var/lib/postgresql/data
-      - launchgate_full_redis:/var/lib/redis
+      - checkgate_full_pgdata:/var/lib/postgresql/data
+      - checkgate_full_redis:/var/lib/redis
     restart: unless-stopped
 
 volumes:
-  launchgate_full_pgdata:
-  launchgate_full_redis:
+  checkgate_full_pgdata:
+  checkgate_full_redis:

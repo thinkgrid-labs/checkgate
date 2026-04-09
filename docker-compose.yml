@@ -1,6 +1,6 @@
 # docker-compose.yml — server-only variant
 #
-# Runs the Launchgate server image alongside managed PostgreSQL and Redis
+# Runs the Checkgate server image alongside managed PostgreSQL and Redis
 # containers. Use this when you want Compose to own the dependencies but
 # still keep each service in its own container (12-factor style).
 #
@@ -13,28 +13,28 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: launchgate-postgres
+    container_name: checkgate-postgres
     environment:
-      POSTGRES_USER: launchgate
-      POSTGRES_PASSWORD: launchgate
-      POSTGRES_DB: launchgate
+      POSTGRES_USER: checkgate
+      POSTGRES_PASSWORD: checkgate
+      POSTGRES_DB: checkgate
     ports:
       - "5432:5432"
     volumes:
-      - launchgate_pg_data:/var/lib/postgresql/data
+      - checkgate_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U launchgate -d launchgate"]
+      test: ["CMD-SHELL", "pg_isready -U checkgate -d checkgate"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: launchgate-redis
+    container_name: checkgate-redis
     ports:
       - "6379:6379"
     volumes:
-      - launchgate_redis_data:/data
+      - checkgate_redis_data:/data
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -42,16 +42,16 @@ services:
       timeout: 3s
       retries: 10
 
-  launchgate:
+  checkgate:
     build:
       context: .
       dockerfile: Dockerfile.server
-    image: launchgate:server
-    container_name: launchgate-server
+    image: checkgate:server
+    container_name: checkgate-server
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://launchgate:launchgate@postgres/launchgate
+      DATABASE_URL: postgres://checkgate:checkgate@postgres/checkgate
       REDIS_URL: redis://redis:6379
       SDK_KEY: ${SDK_KEY:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
@@ -64,5 +64,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  launchgate_pg_data:
-  launchgate_redis_data:
+  checkgate_pg_data:
+  checkgate_redis_data:

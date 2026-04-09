@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide walks you through running Launchgate locally and evaluating your first feature flag.
+This guide walks you through running Checkgate locally and evaluating your first feature flag.
 
 ## Prerequisites
 
@@ -12,13 +12,13 @@ This guide walks you through running Launchgate locally and evaluating your firs
 Clone the repository and start the full stack with Docker Compose:
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/launchgate.git
-cd launchgate
+git clone https://github.com/ThinkGrid-Labs/checkgate.git
+cd checkgate
 docker compose -f docker-compose.full.yml up -d
 ```
 
 This starts:
-- **Launchgate server** on port `3000`
+- **Checkgate server** on port `3000`
 - **PostgreSQL** on port `5432`
 - **Redis** on port `6379`
 
@@ -51,15 +51,15 @@ curl -X POST http://localhost:3000/api/flags \
 ::: code-group
 
 ```bash [Node.js]
-npm install @launchgate/node
+npm install @checkgate/node
 ```
 
-```bash [Browser]
-npm install @launchgate/browser
+```bash [Web]
+npm install @checkgate/web
 ```
 
 ```bash [React Native]
-npm install @launchgate/react-native
+npm install @checkgate/react-native
 ```
 
 :::
@@ -67,9 +67,9 @@ npm install @launchgate/react-native
 ## 4. Connect and Evaluate
 
 ```typescript
-import { LaunchgateClient } from '@launchgate/node'
+import { CheckgateClient } from '@checkgate/node'
 
-const client = new LaunchgateClient({
+const client = new CheckgateClient({
   serverUrl: 'http://localhost:3000',
   sdkKey: 'your-sdk-key', // set SDK_KEY env var on server to enable auth
 })
@@ -98,7 +98,7 @@ SDK_KEY=your-secret-key docker compose up -d
 Pass the same key when initializing SDKs:
 
 ```typescript
-const client = new LaunchgateClient({
+const client = new CheckgateClient({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-secret-key',
 })

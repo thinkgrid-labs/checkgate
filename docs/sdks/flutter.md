@@ -8,7 +8,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  launchgate_flutter: ^0.1.0
+  checkgate_flutter: ^0.1.0
 ```
 
 Then run:
@@ -20,12 +20,12 @@ flutter pub get
 ## Quick Start
 
 ```dart
-import 'package:launchgate_flutter/launchgate_flutter.dart';
+import 'package:checkgate_flutter/checkgate_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final flags = LaunchgateClient(
+  final flags = CheckgateClient(
     serverUrl: 'https://flags.yourcompany.com',
     sdkKey: 'your-sdk-key',
   );
@@ -33,18 +33,18 @@ void main() async {
   await flags.connect();
 
   runApp(
-    LaunchgateProvider(client: flags, child: const MyApp()),
+    CheckgateProvider(client: flags, child: const MyApp()),
   );
 }
 ```
 
 ## API Reference
 
-### `LaunchgateClient`
+### `CheckgateClient`
 
 ```dart
-final client = LaunchgateClient(
-  serverUrl: String,     // required — base URL of your Launchgate server
+final client = CheckgateClient(
+  serverUrl: String,     // required — base URL of your Checkgate server
   sdkKey: String?,       // optional — for authenticated servers
   reconnectDelay: Duration(seconds: 3), // optional
 );
@@ -76,19 +76,19 @@ Closes the SSE connection and releases native resources.
 // main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:launchgate_flutter/launchgate_flutter.dart';
+import 'package:checkgate_flutter/checkgate_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final flags = LaunchgateClient(
-    serverUrl: const String.fromEnvironment('LAUNCHGATE_URL'),
-    sdkKey: const String.fromEnvironment('LAUNCHGATE_KEY'),
+  final flags = CheckgateClient(
+    serverUrl: const String.fromEnvironment('CHECKGATE_URL'),
+    sdkKey: const String.fromEnvironment('CHECKGATE_KEY'),
   );
   await flags.connect();
 
   runApp(
-    Provider<LaunchgateClient>.value(
+    Provider<CheckgateClient>.value(
       value: flags,
       child: const MyApp(),
     ),
@@ -99,7 +99,7 @@ void main() async {
 ```dart
 // feature_screen.dart
 import 'package:provider/provider.dart';
-import 'package:launchgate_flutter/launchgate_flutter.dart';
+import 'package:checkgate_flutter/checkgate_flutter.dart';
 
 class FeatureScreen extends StatelessWidget {
   const FeatureScreen({super.key, required this.user});
@@ -107,7 +107,7 @@ class FeatureScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final flags = context.read<LaunchgateClient>();
+    final flags = context.read<CheckgateClient>();
     final showNewUI = flags.isEnabled(
       'new-feature-screen',
       user.id,
@@ -124,9 +124,9 @@ class FeatureScreen extends StatelessWidget {
 ```dart
 // providers.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:launchgate_flutter/launchgate_flutter.dart';
+import 'package:checkgate_flutter/checkgate_flutter.dart';
 
-final launchgateProvider = Provider<LaunchgateClient>((ref) {
+final checkgateProvider = Provider<CheckgateClient>((ref) {
   throw UnimplementedError('Override in ProviderScope');
 });
 
@@ -134,13 +134,13 @@ final launchgateProvider = Provider<LaunchgateClient>((ref) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final flags = LaunchgateClient(serverUrl: '...');
+  final flags = CheckgateClient(serverUrl: '...');
   await flags.connect();
 
   runApp(
     ProviderScope(
       overrides: [
-        launchgateProvider.overrideWithValue(flags),
+        checkgateProvider.overrideWithValue(flags),
       ],
       child: const MyApp(),
     ),
@@ -148,7 +148,7 @@ void main() async {
 }
 
 // In a widget
-final flags = ref.read(launchgateProvider);
+final flags = ref.read(checkgateProvider);
 final enabled = flags.isEnabled('my-flag', userId, {});
 ```
 

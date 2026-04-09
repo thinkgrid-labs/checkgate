@@ -1,4 +1,4 @@
-name: Release Browser SDK
+name: Release Web SDK
 
 # Triggered by version tags: v1.2.3
 on:
@@ -29,18 +29,18 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Build WASM (web target)
-        working-directory: sdks/browser
-        run: wasm-pack build --target web --out-name launchgate --out-dir dist --release
+        working-directory: sdks/web
+        run: wasm-pack build --target web --out-name checkgate --out-dir dist --release
 
       - name: Set version from tag
-        working-directory: sdks/browser
+        working-directory: sdks/web
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish @launchgate/browser
-        working-directory: sdks/browser
+      - name: Publish @checkgate/web
+        working-directory: sdks/web
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

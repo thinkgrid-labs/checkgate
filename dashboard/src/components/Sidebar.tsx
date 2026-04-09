@@ -33,7 +33,7 @@ export default function Sidebar() {
         <div className="w-7 h-7 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
           <Flag className="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="text-white font-semibold text-base tracking-tight">Launchgate</span>
+        <span className="text-white font-semibold text-base tracking-tight">Checkgate</span>
       </div>
 
       {/* Nav */}

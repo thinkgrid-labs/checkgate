@@ -1,7 +1,7 @@
 use crate::rate_limit::IpRateLimiter;
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
-use launchgate_core::store::FlagStore;
+use checkgate_core::store::FlagStore;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::broadcast;

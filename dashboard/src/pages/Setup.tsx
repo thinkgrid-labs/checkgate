@@ -42,7 +42,7 @@ export default function Setup() {
           <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
             <Flag className="w-4 h-4 text-white" />
           </div>
-          <span className="text-white font-semibold text-lg">Launchgate</span>
+          <span className="text-white font-semibold text-lg">Checkgate</span>
         </div>
 
         <div>
@@ -97,7 +97,7 @@ export default function Setup() {
               <div className="w-14 h-14 rounded-2xl bg-violet-600/10 border border-violet-600/20 flex items-center justify-center mx-auto mb-6">
                 <Flag className="w-7 h-7 text-violet-400" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Welcome to Launchgate</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">Welcome to Checkgate</h2>
               <p className="text-zinc-400 mb-8">
                 Let's set up your control plane in under a minute. You'll create an admin account and configure access to your server.
               </p>

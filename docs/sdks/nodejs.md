@@ -5,11 +5,11 @@ The Node.js SDK uses [NAPI-RS](https://napi.rs/) to compile the Rust evaluation 
 ## Installation
 
 ```bash
-npm install @launchgate/node
+npm install @checkgate/node
 # or
-yarn add @launchgate/node
+yarn add @checkgate/node
 # or
-pnpm add @launchgate/node
+pnpm add @checkgate/node
 ```
 
 Pre-built binaries are included for:
@@ -24,11 +24,11 @@ Pre-built binaries are included for:
 ## Quick Start
 
 ```typescript
-import { LaunchgateClient } from '@launchgate/node'
+import { CheckgateClient } from '@checkgate/node'
 
-const client = new LaunchgateClient({
+const client = new CheckgateClient({
   serverUrl: 'https://flags.yourcompany.com',
-  sdkKey: process.env.LAUNCHGATE_SDK_KEY,
+  sdkKey: process.env.CHECKGATE_SDK_KEY,
 })
 
 // Connect and download flags (call once at startup)
@@ -43,11 +43,11 @@ const enabled = client.isEnabled('new-checkout-flow', userId, {
 
 ## API Reference
 
-### `new LaunchgateClient(options)`
+### `new CheckgateClient(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Launchgate server |
+| `serverUrl` | `string` | Yes | Base URL of your Checkgate server |
 | `sdkKey` | `string` | No | SDK key for authentication |
 | `reconnectDelayMs` | `number` | No | SSE reconnect delay in ms (default: 3000) |
 
@@ -77,11 +77,11 @@ Closes the SSE connection and cleans up resources. Call on graceful shutdown.
 
 ```typescript
 import express from 'express'
-import { LaunchgateClient } from '@launchgate/node'
+import { CheckgateClient } from '@checkgate/node'
 
-const flags = new LaunchgateClient({
-  serverUrl: process.env.LAUNCHGATE_URL!,
-  sdkKey: process.env.LAUNCHGATE_SDK_KEY,
+const flags = new CheckgateClient({
+  serverUrl: process.env.CHECKGATE_URL!,
+  sdkKey: process.env.CHECKGATE_SDK_KEY,
 })
 
 await flags.connect()
@@ -105,21 +105,21 @@ process.on('SIGTERM', () => flags.disconnect())
 
 ```typescript
 // lib/flags.ts
-import { LaunchgateClient } from '@launchgate/node'
+import { CheckgateClient } from '@checkgate/node'
 
 declare global {
-  var launchgate: LaunchgateClient | undefined
+  var checkgate: CheckgateClient | undefined
 }
 
-export async function getFlags(): Promise<LaunchgateClient> {
-  if (!global.launchgate) {
-    global.launchgate = new LaunchgateClient({
-      serverUrl: process.env.LAUNCHGATE_URL!,
-      sdkKey: process.env.LAUNCHGATE_SDK_KEY,
+export async function getFlags(): Promise<CheckgateClient> {
+  if (!global.checkgate) {
+    global.checkgate = new CheckgateClient({
+      serverUrl: process.env.CHECKGATE_URL!,
+      sdkKey: process.env.CHECKGATE_SDK_KEY,
     })
-    await global.launchgate.connect()
+    await global.checkgate.connect()
   }
-  return global.launchgate
+  return global.checkgate
 }
 ```
 
