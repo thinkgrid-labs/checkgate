@@ -86,11 +86,11 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.zig }}" = "true" ]; then
-            npx napi build --platform --release --target ${{ matrix.target }} --zig
+            npm run build:zig -- --target ${{ matrix.target }}
           elif [ "${{ matrix.cross }}" = "true" ]; then
-            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
+            npm run build:cross -- --target ${{ matrix.target }}
           else
-            npx napi build --platform --release --target ${{ matrix.target }}
+            npm run build -- --target ${{ matrix.target }}
           fi
 
       - name: Upload artifact

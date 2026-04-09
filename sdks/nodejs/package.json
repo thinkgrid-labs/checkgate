@@ -1,6 +1,6 @@
 {
   "name": "@checkgate/node",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Checkgate feature-flag SDK for Node.js — local evaluation via Rust NAPI.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -24,6 +24,8 @@
   },
   "scripts": {
     "build": "napi build --platform --release",
+    "build:zig": "napi build --platform --release --zig",
+    "build:cross": "napi build --platform --release --use-napi-cross",
     "build:debug": "napi build --platform"
   },
   "dependencies": {
