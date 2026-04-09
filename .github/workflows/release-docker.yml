@@ -40,10 +40,10 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # sidekick:server — slim image (user provides PG + Redis)
+  # launchgate:server — slim image (user provides PG + Redis)
   # ---------------------------------------------------------------------------
   docker-server:
-    name: Push sidekick:server
+    name: Push launchgate:server
     needs: build-dashboard
     runs-on: ubuntu-latest
     permissions:
@@ -74,14 +74,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/sidekick-server
+          images: ${{ secrets.DOCKER_USERNAME }}/launchgate-server
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest
 
-      - name: Build and push sidekick:server
+      - name: Build and push launchgate:server
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -94,10 +94,10 @@ jobs:
           cache-to: type=gha,scope=server,mode=max
 
   # ---------------------------------------------------------------------------
-  # sidekick:full — all-in-one image (PG + Redis + dashboard bundled)
+  # launchgate:full — all-in-one image (PG + Redis + dashboard bundled)
   # ---------------------------------------------------------------------------
   docker-full:
-    name: Push sidekick:full
+    name: Push launchgate:full
     needs: build-dashboard
     runs-on: ubuntu-latest
     permissions:
@@ -128,14 +128,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/sidekick
+          images: ${{ secrets.DOCKER_USERNAME }}/launchgate
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest
 
-      - name: Build and push sidekick:full
+      - name: Build and push launchgate:full
         uses: docker/build-push-action@v6
         with:
           context: .

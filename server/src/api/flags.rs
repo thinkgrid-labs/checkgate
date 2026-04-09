@@ -7,7 +7,7 @@ use axum::{
 };
 use redis::AsyncCommands;
 use serde_json::json;
-use sidekick_core::evaluator::Flag;
+use launchgate_core::evaluator::Flag;
 use sqlx::Row;
 use std::sync::Arc;
 use tracing::{error, info, instrument, warn};
@@ -211,7 +211,7 @@ async fn publish_update(state: &AppState, msg: &str, op: &str) {
             );
         }
         Ok(mut conn) => {
-            if let Err(e) = conn.publish::<_, _, ()>("sidekick_updates", msg).await {
+            if let Err(e) = conn.publish::<_, _, ()>("launchgate_updates", msg).await {
                 warn!(
                     error = %e,
                     operation = op,

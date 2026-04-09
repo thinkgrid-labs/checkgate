@@ -1,16 +1,16 @@
 {
-  "name": "@sidekick/browser",
+  "name": "@launchgate/browser",
   "version": "0.1.0",
-  "description": "Sidekick feature-flag SDK for browsers \u2014 local evaluation via WebAssembly.",
+  "description": "Launchgate feature-flag SDK for browsers — local evaluation via WebAssembly.",
   "main": "index.js",
   "module": "index.js",
-  "types": "dist/sidekick.d.ts",
+  "types": "dist/launchgate.d.ts",
   "license": "MIT",
   "files": [
     "index.js",
     "dist/"
   ],
   "scripts": {
-    "build": "wasm-pack build --target web --out-name sidekick --out-dir dist"
+    "build": "wasm-pack build --target web --out-name launchgate --out-dir dist"
   }
 }

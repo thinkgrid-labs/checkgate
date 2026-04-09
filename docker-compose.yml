@@ -1,6 +1,6 @@
 # docker-compose.yml — server-only variant
 #
-# Runs the Sidekick server image alongside managed PostgreSQL and Redis
+# Runs the Launchgate server image alongside managed PostgreSQL and Redis
 # containers. Use this when you want Compose to own the dependencies but
 # still keep each service in its own container (12-factor style).
 #
@@ -13,28 +13,28 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: sidekick-postgres
+    container_name: launchgate-postgres
     environment:
-      POSTGRES_USER: sidekick
-      POSTGRES_PASSWORD: sidekick
-      POSTGRES_DB: sidekick
+      POSTGRES_USER: launchgate
+      POSTGRES_PASSWORD: launchgate
+      POSTGRES_DB: launchgate
     ports:
       - "5432:5432"
     volumes:
-      - sidekick_pg_data:/var/lib/postgresql/data
+      - launchgate_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sidekick -d sidekick"]
+      test: ["CMD-SHELL", "pg_isready -U launchgate -d launchgate"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: sidekick-redis
+    container_name: launchgate-redis
     ports:
       - "6379:6379"
     volumes:
-      - sidekick_redis_data:/data
+      - launchgate_redis_data:/data
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -42,18 +42,20 @@ services:
       timeout: 3s
       retries: 10
 
-  sidekick:
+  launchgate:
     build:
       context: .
       dockerfile: Dockerfile.server
-    image: sidekick:server
-    container_name: sidekick-server
+    image: launchgate:server
+    container_name: launchgate-server
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://sidekick:sidekick@postgres/sidekick
+      DATABASE_URL: postgres://launchgate:launchgate@postgres/launchgate
       REDIS_URL: redis://redis:6379
       SDK_KEY: ${SDK_KEY:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,5 +64,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  sidekick_pg_data:
-  sidekick_redis_data:
+  launchgate_pg_data:
+  launchgate_redis_data:

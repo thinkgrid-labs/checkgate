@@ -5,17 +5,17 @@ The browser SDK compiles the Rust evaluation core to **WebAssembly** using [wasm
 ## Installation
 
 ```bash
-npm install @sidekick/browser
+npm install @launchgate/browser
 # or
-yarn add @sidekick/browser
+yarn add @launchgate/browser
 ```
 
 ## Quick Start
 
 ```typescript
-import { SidekickBrowserClient } from '@sidekick/browser'
+import { LaunchgateBrowserClient } from '@launchgate/browser'
 
-const client = new SidekickBrowserClient({
+const client = new LaunchgateBrowserClient({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-sdk-key',
 })
@@ -32,11 +32,11 @@ const enabled = client.isEnabled('dark-mode', currentUserId, {
 
 ## API Reference
 
-### `new SidekickBrowserClient(options)`
+### `new LaunchgateBrowserClient(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Sidekick server |
+| `serverUrl` | `string` | Yes | Base URL of your Launchgate server |
 | `sdkKey` | `string` | No | SDK key (sent as `Authorization: Bearer`) |
 | `reconnectDelayMs` | `number` | No | Reconnect delay on SSE disconnect (default: 3000) |
 

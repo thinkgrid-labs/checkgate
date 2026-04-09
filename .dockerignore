@@ -1,0 +1,17 @@
+# Dependencies — never copy these; they're rebuilt inside the image
+dashboard/node_modules/
+**/node_modules/
+
+# Rust build artifacts — large and not needed in the image
+target/
+
+# Local dev files
+.env
+.env.*
+*.local
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

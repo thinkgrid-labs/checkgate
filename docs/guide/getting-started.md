@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide walks you through running Sidekick locally and evaluating your first feature flag.
+This guide walks you through running Launchgate locally and evaluating your first feature flag.
 
 ## Prerequisites
 
@@ -12,13 +12,13 @@ This guide walks you through running Sidekick locally and evaluating your first 
 Clone the repository and start the full stack with Docker Compose:
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/sidekick.git
-cd sidekick
+git clone https://github.com/ThinkGrid-Labs/launchgate.git
+cd launchgate
 docker compose -f docker-compose.full.yml up -d
 ```
 
 This starts:
-- **Sidekick server** on port `3000`
+- **Launchgate server** on port `3000`
 - **PostgreSQL** on port `5432`
 - **Redis** on port `6379`
 
@@ -51,15 +51,15 @@ curl -X POST http://localhost:3000/api/flags \
 ::: code-group
 
 ```bash [Node.js]
-npm install @sidekick/node
+npm install @launchgate/node
 ```
 
 ```bash [Browser]
-npm install @sidekick/browser
+npm install @launchgate/browser
 ```
 
 ```bash [React Native]
-npm install @sidekick/react-native
+npm install @launchgate/react-native
 ```
 
 :::
@@ -67,9 +67,9 @@ npm install @sidekick/react-native
 ## 4. Connect and Evaluate
 
 ```typescript
-import { SidekickClient } from '@sidekick/node'
+import { LaunchgateClient } from '@launchgate/node'
 
-const client = new SidekickClient({
+const client = new LaunchgateClient({
   serverUrl: 'http://localhost:3000',
   sdkKey: 'your-sdk-key', // set SDK_KEY env var on server to enable auth
 })
@@ -98,7 +98,7 @@ SDK_KEY=your-secret-key docker compose up -d
 Pass the same key when initializing SDKs:
 
 ```typescript
-const client = new SidekickClient({
+const client = new LaunchgateClient({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-secret-key',
 })

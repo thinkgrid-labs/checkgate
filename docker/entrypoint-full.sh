@@ -4,9 +4,9 @@
 set -euo pipefail
 
 PG_DATA="${PGDATA:-/var/lib/postgresql/data}"
-PG_USER="${POSTGRES_USER:-sidekick}"
-PG_PASSWORD="${POSTGRES_PASSWORD:-sidekick}"
-PG_DB="${POSTGRES_DB:-sidekick}"
+PG_USER="${POSTGRES_USER:-launchgate}"
+PG_PASSWORD="${POSTGRES_PASSWORD:-launchgate}"
+PG_DB="${POSTGRES_DB:-launchgate}"
 
 # Locate the versioned PostgreSQL bin dir (e.g. /usr/lib/postgresql/15/bin)
 PG_BIN=$(find /usr/lib/postgresql -name "initdb" -type f 2>/dev/null | head -1 | xargs -r dirname)
@@ -16,8 +16,8 @@ if [ -z "$PG_BIN" ]; then
 fi
 export PATH="$PG_BIN:$PATH"
 
-if [ "${PG_PASSWORD}" = "sidekick" ]; then
-  echo "[warn] POSTGRES_PASSWORD is set to the default value 'sidekick'. Set a strong password in production."
+if [ "${PG_PASSWORD}" = "launchgate" ]; then
+  echo "[warn] POSTGRES_PASSWORD is set to the default value 'launchgate'. Set a strong password in production."
 fi
 
 if [ -z "${SDK_KEY:-}" ]; then
@@ -75,4 +75,4 @@ export PUBLIC_DIR="${PUBLIC_DIR:-/app/public}"
 
 # SDK_KEY and PORT are passed in via docker run -e / docker-compose env
 echo "[init] Starting Sidekick server..."
-exec sidekick-server
+exec launchgate-server

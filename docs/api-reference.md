@@ -1,11 +1,11 @@
 # REST API Reference
 
-The Sidekick server exposes a REST API for managing feature flags. All endpoints require the `Authorization: Bearer <SDK_KEY>` header when `SDK_KEY` is configured on the server.
+The Launchgate server exposes a REST API for managing feature flags. All endpoints require the `Authorization: Bearer <SDK_KEY>` header when `SDK_KEY` is configured on the server.
 
 ## Base URL
 
 ```
-http://your-sidekick-server:3000
+http://your-launchgate-server:3000
 ```
 
 ## Authentication

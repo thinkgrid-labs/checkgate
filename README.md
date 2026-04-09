@@ -1,32 +1,32 @@
-# Sidekick — Self-Hosted Feature Flag Engine
+# Launchgate — Self-Hosted Feature Flag Engine
 
-[![CI](https://github.com/ThinkGrid-Labs/sidekick/actions/workflows/ci.yml/badge.svg)](https://github.com/ThinkGrid-Labs/sidekick/actions/workflows/ci.yml)
+[![CI](https://github.com/ThinkGrid-Labs/launchgate/actions/workflows/ci.yml/badge.svg)](https://github.com/ThinkGrid-Labs/launchgate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![npm @sidekick/node](https://img.shields.io/npm/v/@sidekick/node?label=npm%20node)](https://www.npmjs.com/package/@sidekick/node)
-[![npm @sidekick/browser](https://img.shields.io/npm/v/@sidekick/browser?label=npm%20browser)](https://www.npmjs.com/package/@sidekick/browser)
-[![npm @sidekick/react-native](https://img.shields.io/npm/v/@sidekick/react-native?label=npm%20react-native)](https://www.npmjs.com/package/@sidekick/react-native)
+[![npm @launchgate/node](https://img.shields.io/npm/v/@launchgate/node?label=npm%20node)](https://www.npmjs.com/package/@launchgate/node)
+[![npm @launchgate/browser](https://img.shields.io/npm/v/@launchgate/browser?label=npm%20browser)](https://www.npmjs.com/package/@launchgate/browser)
+[![npm @launchgate/react-native](https://img.shields.io/npm/v/@launchgate/react-native?label=npm%20react-native)](https://www.npmjs.com/package/@launchgate/react-native)
 
-**Sidekick is a self-hosted, open-source feature flag system with sub-microsecond local evaluation — no network calls, no polling, no vendor lock-in.** Built in Rust, it ships native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI). A persistent SSE stream propagates flag changes to every connected SDK in under 50 ms.
+**Launchgate is a self-hosted, open-source feature flag system with sub-microsecond local evaluation — no network calls, no polling, no vendor lock-in.** Built in Rust, it ships native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI). A persistent SSE stream propagates flag changes to every connected SDK in under 50 ms.
 
-**[Documentation →](https://thinkgrid-labs.github.io/sidekick)**
+**[Documentation →](https://thinkgrid-labs.github.io/launchgate)**
 
 ---
 
 ## Quick Start
 
 ```bash
-# Start Postgres + Redis + Sidekick
+# Start Postgres + Redis + Launchgate
 docker compose -f docker-compose.full.yml up -d
 ```
 
 ```bash
-npm install @sidekick/node
+npm install @launchgate/node
 ```
 
 ```typescript
-import { SidekickClient } from '@sidekick/node'
+import { LaunchgateClient } from '@launchgate/node'
 
-const client = new SidekickClient({ serverUrl: 'http://localhost:3000' })
+const client = new LaunchgateClient({ serverUrl: 'http://localhost:3000' })
 await client.connect()
 
 const enabled = client.isEnabled('my-flag', userId, { plan: 'pro' })
@@ -51,7 +51,7 @@ That's it — `isEnabled()` is a pure in-process lookup. No network, no async, n
 
 | Topic | Link |
 |-------|------|
-| Why Sidekick / comparisons | [What is Sidekick?](docs/guide/what-is-sidekick.md) |
+| Why Launchgate / comparisons | [What is Launchgate?](docs/guide/what-is-launchgate.md) |
 | System architecture | [Architecture](docs/guide/architecture.md) |
 | Flags, rules, rollout concepts | [Core Concepts](docs/guide/concepts.md) |
 | Step-by-step setup | [Getting Started](docs/guide/getting-started.md) |
@@ -85,11 +85,11 @@ docs/               VitePress documentation
 | Workflow | Trigger | Action |
 |----------|---------|--------|
 | `ci.yml` | Push / PR to `main` or `dev` | Rust tests, clippy, fmt, dashboard build |
-| `release-docker.yml` | Tag `v*.*.*` | Build multi-arch `sidekick:server` + `sidekick:full` → Docker Hub |
-| `release-sdk-nodejs.yml` | Tag `v*.*.*` | Cross-compile 7 platforms → publish `@sidekick/node` to npm |
-| `release-sdk-browser.yml` | Tag `v*.*.*` | wasm-pack build → publish `@sidekick/browser` to npm |
-| `release-sdk-react-native.yml` | Tag `v*.*.*` | Publish `@sidekick/react-native` to npm |
-| `release-sdk-flutter.yml` | Tag `v*.*.*` | Publish `sidekick_flutter` to pub.dev |
+| `release-docker.yml` | Tag `v*.*.*` | Build multi-arch `launchgate:server` + `launchgate:full` → Docker Hub |
+| `release-sdk-nodejs.yml` | Tag `v*.*.*` | Cross-compile 7 platforms → publish `@launchgate/node` to npm |
+| `release-sdk-browser.yml` | Tag `v*.*.*` | wasm-pack build → publish `@launchgate/browser` to npm |
+| `release-sdk-react-native.yml` | Tag `v*.*.*` | Publish `@launchgate/react-native` to npm |
+| `release-sdk-flutter.yml` | Tag `v*.*.*` | Publish `launchgate_flutter` to pub.dev |
 
 ---
 

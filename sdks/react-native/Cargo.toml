@@ -5,9 +5,9 @@ edition = "2021"
 
 # Produces both a dynamic lib (Android .so) and a static lib (iOS .a)
 [lib]
-name = "sidekick_rn"
+name = "launchgate_rn"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-sidekick-core = { version = "0.1.0", path = "../../core" }
+launchgate-core = { version = "0.1.0", path = "../../core" }
 serde_json = "1.0.149"

@@ -29,7 +29,7 @@ jobs:
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish @sidekick/react-native
+      - name: Publish @launchgate/react-native
         working-directory: sdks/react-native
         run: npm publish --access public
         env:

@@ -5,11 +5,11 @@ The Node.js SDK uses [NAPI-RS](https://napi.rs/) to compile the Rust evaluation 
 ## Installation
 
 ```bash
-npm install @sidekick/node
+npm install @launchgate/node
 # or
-yarn add @sidekick/node
+yarn add @launchgate/node
 # or
-pnpm add @sidekick/node
+pnpm add @launchgate/node
 ```
 
 Pre-built binaries are included for:
@@ -24,11 +24,11 @@ Pre-built binaries are included for:
 ## Quick Start
 
 ```typescript
-import { SidekickClient } from '@sidekick/node'
+import { LaunchgateClient } from '@launchgate/node'
 
-const client = new SidekickClient({
+const client = new LaunchgateClient({
   serverUrl: 'https://flags.yourcompany.com',
-  sdkKey: process.env.SIDEKICK_SDK_KEY,
+  sdkKey: process.env.LAUNCHGATE_SDK_KEY,
 })
 
 // Connect and download flags (call once at startup)
@@ -43,11 +43,11 @@ const enabled = client.isEnabled('new-checkout-flow', userId, {
 
 ## API Reference
 
-### `new SidekickClient(options)`
+### `new LaunchgateClient(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Sidekick server |
+| `serverUrl` | `string` | Yes | Base URL of your Launchgate server |
 | `sdkKey` | `string` | No | SDK key for authentication |
 | `reconnectDelayMs` | `number` | No | SSE reconnect delay in ms (default: 3000) |
 
@@ -77,11 +77,11 @@ Closes the SSE connection and cleans up resources. Call on graceful shutdown.
 
 ```typescript
 import express from 'express'
-import { SidekickClient } from '@sidekick/node'
+import { LaunchgateClient } from '@launchgate/node'
 
-const flags = new SidekickClient({
-  serverUrl: process.env.SIDEKICK_URL!,
-  sdkKey: process.env.SIDEKICK_SDK_KEY,
+const flags = new LaunchgateClient({
+  serverUrl: process.env.LAUNCHGATE_URL!,
+  sdkKey: process.env.LAUNCHGATE_SDK_KEY,
 })
 
 await flags.connect()
@@ -105,21 +105,21 @@ process.on('SIGTERM', () => flags.disconnect())
 
 ```typescript
 // lib/flags.ts
-import { SidekickClient } from '@sidekick/node'
+import { LaunchgateClient } from '@launchgate/node'
 
 declare global {
-  var sidekick: SidekickClient | undefined
+  var launchgate: LaunchgateClient | undefined
 }
 
-export async function getFlags(): Promise<SidekickClient> {
-  if (!global.sidekick) {
-    global.sidekick = new SidekickClient({
-      serverUrl: process.env.SIDEKICK_URL!,
-      sdkKey: process.env.SIDEKICK_SDK_KEY,
+export async function getFlags(): Promise<LaunchgateClient> {
+  if (!global.launchgate) {
+    global.launchgate = new LaunchgateClient({
+      serverUrl: process.env.LAUNCHGATE_URL!,
+      sdkKey: process.env.LAUNCHGATE_SDK_KEY,
     })
-    await global.sidekick.connect()
+    await global.launchgate.connect()
   }
-  return global.sidekick
+  return global.launchgate
 }
 ```
 

@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "Sidekick"
+  name: "Launchgate"
   text: "Self-Hosted Feature Flag Engine"
   tagline: Sub-microsecond local evaluation. No network round-trips. No vendor lock-in. Native SDKs for Node.js, React Native, Flutter, and browsers.
   actions:
@@ -11,7 +11,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ThinkGrid-Labs/sidekick
+      link: https://github.com/ThinkGrid-Labs/launchgate
 
 features:
   - icon: ⚡

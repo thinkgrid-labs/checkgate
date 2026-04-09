@@ -30,7 +30,7 @@ jobs:
 
       - name: Build WASM (web target)
         working-directory: sdks/browser
-        run: wasm-pack build --target web --out-name sidekick --out-dir dist --release
+        run: wasm-pack build --target web --out-name launchgate --out-dir dist --release
 
       - name: Set version from tag
         working-directory: sdks/browser
@@ -39,7 +39,7 @@ jobs:
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish @sidekick/browser
+      - name: Publish @launchgate/browser
         working-directory: sdks/browser
         run: npm publish --access public
         env:

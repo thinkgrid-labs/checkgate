@@ -1,15 +1,15 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  base: '/sidekick/',
+  base: '/launchgate/',
   ignoreDeadLinks: [/^http:\/\/localhost/],
-  title: 'Sidekick',
+  title: 'Launchgate',
   description:
     'Open-source self-hosted feature flag engine with sub-microsecond local evaluation. Native SDKs for Node.js, React Native, Flutter, and browsers via WebAssembly.',
 
   head: [
     ['meta', { name: 'og:type', content: 'website' }],
-    ['meta', { name: 'og:title', content: 'Sidekick — Self-Hosted Feature Flag Engine' }],
+    ['meta', { name: 'og:title', content: 'Launchgate — Self-Hosted Feature Flag Engine' }],
     ['meta', {
       name: 'og:description',
       content: 'Sub-microsecond feature flag evaluation for Node.js, React Native, Flutter, and browsers. Self-hosted, open-source, no vendor lock-in.',
@@ -25,7 +25,7 @@ export default defineConfig({
       { text: 'API', link: '/api-reference' },
       {
         text: 'GitHub',
-        link: 'https://github.com/ThinkGrid-Labs/sidekick',
+        link: 'https://github.com/ThinkGrid-Labs/launchgate',
       },
     ],
 
@@ -33,7 +33,7 @@ export default defineConfig({
       {
         text: 'Introduction',
         items: [
-          { text: 'What is Sidekick?', link: '/guide/what-is-sidekick' },
+          { text: 'What is Launchgate?', link: '/guide/what-is-launchgate' },
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Architecture', link: '/guide/architecture' },
           { text: 'Core Concepts', link: '/guide/concepts' },
@@ -67,7 +67,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ThinkGrid-Labs/sidekick' },
+      { icon: 'github', link: 'https://github.com/ThinkGrid-Labs/launchgate' },
     ],
 
     footer: {

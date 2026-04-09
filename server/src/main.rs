@@ -5,9 +5,10 @@ mod state;
 mod stream;
 
 use axum::{Router, extract::DefaultBodyLimit, http::Method, middleware, routing::get};
+use axum_extra::extract::cookie::Key;
 use rate_limit::new_rate_limiter;
-use sidekick_core::evaluator::Flag;
-use sidekick_core::store::FlagStore;
+use launchgate_core::evaluator::Flag;
+use launchgate_core::store::FlagStore;
 use sqlx::{Row, postgres::PgPoolOptions};
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +24,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // JSON structured logging — parseable by Docker log drivers, CloudWatch, Loki, Datadog, etc.
     // Control verbosity with RUST_LOG env var (default: info).
-    // Example: RUST_LOG=sidekick=debug,tower_http=debug
+    // Example: RUST_LOG=launchgate=debug,tower_http=debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
@@ -39,13 +40,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(
         version = env!("CARGO_PKG_VERSION"),
-        "Starting Sidekick Control Plane"
+        "Starting Launchgate Control Plane"
     );
 
     // ── PostgreSQL ────────────────────────────────────────────────────────────
 
     let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://sidekick:password@localhost/sidekick".to_string());
+        .unwrap_or_else(|_| "postgres://launchgate:password@localhost/launchgate".to_string());
 
     let max_conns = std::env::var("DB_MAX_CONNECTIONS")
         .ok()
@@ -117,6 +118,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // ── Session key ───────────────────────────────────────────────────────────
+    //
+    // Used to encrypt/authenticate `sk_session` HttpOnly cookies via
+    // `axum_extra::extract::cookie::PrivateCookieJar`.
+    //
+    // Set `SESSION_SECRET` to a random string of ≥ 32 characters in production.
+    // Without it, a hard-coded dev key is used — sessions survive restarts but
+    // are predictable; **never** ship without setting this in production.
+
+    const DEV_SESSION_KEY: &str = "INSECURE_DEFAULT_DEV_KEY_CHANGE_IN_PRODUCTION_SIDEKICK";
+
+    let session_key = match std::env::var("SESSION_SECRET") {
+        Ok(ref s) if s.len() >= 32 => {
+            info!("SESSION_SECRET configured — session cookies are cryptographically secure");
+            Key::derive_from(s.as_bytes())
+        }
+        Ok(ref s) if !s.is_empty() => {
+            warn!("SESSION_SECRET is shorter than 32 chars; consider a longer secret for production");
+            Key::derive_from(s.as_bytes())
+        }
+        _ => {
+            warn!(
+                "SESSION_SECRET not set — using insecure dev key; \
+                 set SESSION_SECRET to a random ≥32-char string in production"
+            );
+            Key::derive_from(DEV_SESSION_KEY.as_bytes())
+        }
+    };
+
     // ── Broadcast channel ─────────────────────────────────────────────────────
 
     // A single Redis subscriber pushes payloads here; SSE handlers subscribe
@@ -181,13 +211,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                if let Err(e) = con.subscribe("sidekick_updates").await {
+                if let Err(e) = con.subscribe("launchgate_updates").await {
                     error!(error = %e, "Redis subscriber: subscribe failed — retrying in 2s");
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     continue;
                 }
 
-                info!("Redis subscriber: listening on channel 'sidekick_updates'");
+                info!("Redis subscriber: listening on channel 'launchgate_updates'");
 
                 let mut msg_stream = con.into_on_message();
 
@@ -258,6 +288,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         flag_tx,
         sdk_key,
         rate_limiter: new_rate_limiter(),
+        session_key,
     };
 
     // ── Middleware stack ───────────────────────────────────────────────────────
@@ -284,22 +315,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let serve_dashboard =
         ServeDir::new(&public_dir).fallback(ServeFile::new(format!("{public_dir}/index.html")));
 
-    // Body limit applies to API routes only — the SSE stream has no request body.
-    let api_router = api::router().layer(DefaultBodyLimit::max(65_536));
+    // ── Routing ───────────────────────────────────────────────────────────────
+    //
+    // Auth routes (/api/auth/*) are public — no auth middleware, no body limit.
+    // All other API routes and the SSE stream are protected by require_auth.
+    //
+    // Layer order (innermost → outermost): trace → rate_limit → auth/public → cors
+    // Requests are processed outermost first.
+
+    // Public: login / logout / me — must not require auth to reach them.
+    let auth_routes = api::auth_router();
+
+    // Protected: flag management + SSE stream.
+    let protected = Router::new()
+        .nest("/api", api::router().layer(DefaultBodyLimit::max(65_536)))
+        .route("/stream", get(stream::sse_handler))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            auth::require_auth,
+        ));
 
     let app = Router::new()
-        .nest("/api", api_router)
-        .route("/stream", get(stream::sse_handler))
-        // Layer order (innermost → outermost): trace → rate_limit → auth → cors
-        // Requests are processed outermost first: cors → auth → rate_limit → trace → handler
+        .nest("/api/auth", auth_routes)
+        .merge(protected)
         .layer(trace_layer)
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             rate_limit::rate_limit,
-        ))
-        .layer(middleware::from_fn_with_state(
-            app_state.clone(),
-            auth::require_auth,
         ))
         .layer(cors)
         .fallback_service(serve_dashboard)
