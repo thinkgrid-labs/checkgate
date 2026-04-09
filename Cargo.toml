@@ -4,7 +4,7 @@ members = [
     "server",
     "sdks/nodejs",
     "sdks/web",
-    "sdks/flutter",
+    "sdks/flutter/dart/rust",
     "sdks/react-native",
 ]
 resolver = "2"

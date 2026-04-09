@@ -9,5 +9,5 @@ name = "checkgate_rn"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-checkgate-core = { version = "0.1.0", path = "./rust-core" }
+checkgate-core = { version = "0.1.0", path = "../../core" }
 serde_json = "1.0.149"

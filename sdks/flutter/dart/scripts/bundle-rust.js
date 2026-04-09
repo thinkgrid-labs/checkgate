@@ -27,4 +27,11 @@ function copyRecursive(src, dest) {
 copyRecursive(path.join(coreDir, 'src'), path.join(destDir, 'src'));
 fs.copyFileSync(path.join(coreDir, 'Cargo.toml'), path.join(destDir, 'Cargo.toml'));
 
-console.log('[Checkgate] Rust core bundled for Flutter SDK.');
+// HOT-FIX: Update the migrated Rust Cargo.toml (now inside rust/ directory)
+// to point to the local bundled core for the pub.dev release.
+const sdkCargoPath = path.join(sdkDir, 'rust', 'Cargo.toml');
+let sdkCargo = fs.readFileSync(sdkCargoPath, 'utf8');
+sdkCargo = sdkCargo.replace(/path\s*=\s*"\.\.\/\.\.\/\.\.\/\.\.\/core"/, 'path = "../rust-core"');
+fs.writeFileSync(sdkCargoPath, sdkCargo);
+
+console.log('[Checkgate] Rust core bundled and Cargo.toml patched for Flutter SDK.');
