@@ -389,6 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
 
     let app = Router::new()
+        .route("/health", get(|| async { "OK" }))
         .nest("/api/auth", auth_routes)
         .nest("/api", setup_routes)
         .merge(protected)

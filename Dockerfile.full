@@ -75,7 +75,8 @@ RUN apt-get update && \
         libssl3 \
         postgresql \
         postgresql-client \
-        redis-server && \
+        redis-server \
+        curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -91,6 +92,10 @@ RUN sed -i 's/\r//' /entrypoint.sh && chmod +x /entrypoint.sh && \
     chown postgres:postgres /var/log/postgresql.log /var/log/redis.log
 
 EXPOSE 3000
+
+# Allow orchestrators to monitor container health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
 
 ENV PUBLIC_DIR=/app/public \
     PGDATA=/var/lib/postgresql/data \

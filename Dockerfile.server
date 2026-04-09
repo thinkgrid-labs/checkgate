@@ -57,27 +57,40 @@ RUN mkdir -p core/src server/src sdks/nodejs/src sdks/web/src sdks/flutter/src s
 
 RUN cargo build --release -p server 2>/dev/null || true
 
+RUN cargo build --release -p server 2>/dev/null || true
+
 # Now copy real source and do the final build (only changed crates recompile)
 COPY core/ core/
 COPY server/ server/
 
 RUN cargo build --release -p server
 
-# ---------------------------------------------------------------------------
-# Stage 3 — minimal runtime
-# ---------------------------------------------------------------------------
+# 3. Runtime Stage: Minimal production image
 FROM debian:bookworm-slim
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates libssl3 && \
-    rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
+# Create a non-root system user for security
+RUN groupadd -r checkgate && useradd -r -g checkgate checkgate
+
+# Install runtime dependencies (OpenSSL 3) and curl for healthchecks
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates libssl3 curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the compiled binary from the builder
 COPY --from=server-builder /app/target/release/server /usr/local/bin/checkgate-server
+# Copy the built dashboard from the dashboard-builder
 COPY --from=dashboard-builder /app/server/public ./public
 
+# Expose the Axum port
 EXPOSE 3000
+
+# Switch to non-root user
+USER checkgate
+
+# Allow orchestrators to monitor container health
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
 
 ENV PUBLIC_DIR=/app/public
 
