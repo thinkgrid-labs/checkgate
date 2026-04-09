@@ -67,16 +67,6 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Setup Zig
-        if: ${{ matrix.zig }}
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.11.0
-
-      - name: Install cargo-zigbuild
-        if: ${{ matrix.zig }}
-        run: cargo install cargo-zigbuild
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -89,13 +79,14 @@ jobs:
         working-directory: sdks/nodejs
         shell: bash
         run: |
-          if [ "${{ matrix.zig }}" = "true" ]; then
-            cargo zigbuild --target ${{ matrix.target }} --release
-            mv ../../target/${{ matrix.target }}/release/libnodejs.so ${{ matrix.artifact }}
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            # Satisfy host-side NAPI-RS linker check (will use real linker inside Docker)
+            sudo ln -s /usr/bin/true /usr/bin/aarch64-linux-musl-gcc
+            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           elif [ "${{ matrix.cross }}" = "true" ]; then
-            npm run build:cross -- --target ${{ matrix.target }}
+            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
-            npm run build -- --target ${{ matrix.target }}
+            npx napi build --platform --release --target ${{ matrix.target }}
           fi
 
       - name: Upload artifact

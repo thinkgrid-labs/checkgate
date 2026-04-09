@@ -46,4 +46,4 @@ This document outlines the vision and future development priorities for Checkgat
 ---
 
 > [!TIP]
-> **Want to contribute?** We welcome ideas and pull requests! Check the [Contributing Guide](../CONTRIBUTING.md) to get started.
+> **Want to contribute?** We welcome ideas and pull requests! Check the [Contributing Guide](https://github.com/thinkgrid-labs/checkgate/blob/main/CONTRIBUTING.md) to get started.
