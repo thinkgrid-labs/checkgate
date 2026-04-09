@@ -1,6 +1,6 @@
 name: checkgate_flutter
 description: Checkgate feature-flag SDK for Flutter — local evaluation via Rust FFI.
-version: 0.1.3
+version: 0.1.4
 homepage: https://github.com/thinkgrid-labs/checkgate
 
 environment:

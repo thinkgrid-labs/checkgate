@@ -29,6 +29,11 @@ jobs:
         working-directory: sdks/flutter/dart
         run: dart pub get
 
+      - name: Set up pub.dev credentials
+        run: |
+          mkdir -p ~/.config/dart
+          echo '${{ secrets.PUB_CREDENTIALS }}' > ~/.config/dart/pub-credentials.json
+
       - name: Validate pub.dev score (dry run)
         working-directory: sdks/flutter/dart
         run: dart pub publish --dry-run
