@@ -66,22 +66,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("PostgreSQL connection established");
 
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS flags (
-            key VARCHAR(255) PRIMARY KEY,
-            data JSONB NOT NULL
-        );
-        "#,
-    )
-    .execute(&db)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "Failed to run schema migration");
-        e
-    })?;
+    sqlx::migrate!()
+        .run(&db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "Failed to run database migrations");
+            e
+        })?;
 
-    info!("Schema ready");
+    info!("Migrations complete — schema ready");
 
     // ── Redis ─────────────────────────────────────────────────────────────────
 
@@ -343,6 +336,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/auth", auth_routes)
         .merge(protected)
         .layer(trace_layer)
+        .layer(middleware::from_fn(api::csrf_protection))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             rate_limit::rate_limit,

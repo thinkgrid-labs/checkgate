@@ -12,6 +12,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
+      // CSRF protection header — cross-site requests cannot set custom headers
+      // without explicit CORS permission, which we do not grant to anyone.
+      'X-Checkgate-Request': 'true',
       ...init?.headers,
     },
   })
