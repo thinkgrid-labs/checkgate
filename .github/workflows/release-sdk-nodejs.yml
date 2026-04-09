@@ -89,7 +89,7 @@ jobs:
         working-directory: sdks/nodejs
         run: |
           if [ "${{ matrix.zig }}" = "true" ]; then
-            napi build --platform --release --target ${{ matrix.target }} --zig
+            CARGO=cargo-zigbuild napi build --platform --release --target ${{ matrix.target }}
           elif [ "${{ matrix.cross }}" = "true" ]; then
             napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
