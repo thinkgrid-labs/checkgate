@@ -25,8 +25,8 @@ Initialize the Checkgate client with your unique server URL and SDK key:
 import { CheckgateClient } from '@checkgate/node'
 
 const checkgate = new CheckgateClient({
-  url: 'http://localhost:3000', // Your self-hosted Checkgate server URL
-  sdkKey: 'sk_prod_xxxxxxxx',   // Your secure server-side SDK Key
+  serverUrl: 'http://localhost:3000', // Your self-hosted Checkgate server URL
+  sdkKey: 'sk_prod_xxxxxxxx',         // Your secure server-side SDK Key
 })
 
 async function run() {
@@ -34,8 +34,7 @@ async function run() {
   await checkgate.connect()
 
   // Evaluate features with sub-microsecond latency locally
-  const showFeature = checkgate.isEnabled('new-dashboard', { 
-    userId: 'user_123',
+  const showFeature = checkgate.isEnabled('new-dashboard', 'user_123', { 
     email: 'user@example.com' 
   })
 

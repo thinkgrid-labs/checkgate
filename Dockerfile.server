@@ -74,11 +74,11 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY --from=server-builder /app/target/release/server /usr/local/bin/sidekick-server
+COPY --from=server-builder /app/target/release/server /usr/local/bin/checkgate-server
 COPY --from=dashboard-builder /app/server/public ./public
 
 EXPOSE 3000
 
 ENV PUBLIC_DIR=/app/public
 
-CMD ["sidekick-server"]
+CMD ["checkgate-server"]

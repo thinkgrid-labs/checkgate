@@ -1,3 +1,8 @@
+---
+title: Flutter SDK (FFI) — Feature Flags for Flutter & Dart via Dart FFI
+description: Use the Checkgate Flutter SDK to evaluate feature flags synchronously in Dart using FFI. Works with Provider, Riverpod, iOS, Android, macOS, Linux, and Windows.
+---
+
 # Flutter SDK (FFI)
 
 The Flutter SDK uses **Dart FFI** to call into the Rust evaluation core compiled as a native shared library. Evaluation is synchronous and happens on the Dart side with zero async overhead.

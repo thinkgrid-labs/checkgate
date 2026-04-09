@@ -1,3 +1,8 @@
+---
+title: Web SDK (WebAssembly) — Feature Flags for Browsers with WASM
+description: Use the Checkgate Web SDK to evaluate feature flags in the browser with WebAssembly. Zero server round-trips — flags are evaluated locally at near-native speed with React and Vue support.
+---
+
 # Web SDK (WebAssembly)
 
 The web SDK compiles the Rust evaluation core to **WebAssembly** using [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen). Flag evaluation runs at near-native speed entirely in the browser — no evaluation round-trips to your server.

@@ -20,19 +20,19 @@ cd ios && pod install
 Plug the incredibly fast evaluating `CheckgateProvider` context or native clients directly into your React Native app.
 
 ```javascript
-import { CheckgateClient } from '@checkgate/react-native'
+import { CheckgateNativeClient } from '@checkgate/react-native'
 
-const client = new CheckgateClient({
-  url: 'https://checkgate.your-company.com',
-  clientKey: 'pk_mobile_xxxxxx'
+const client = new CheckgateNativeClient({
+  serverUrl: 'https://checkgate.your-company.com',
+  sdkKey: 'pk_mobile_xxxxxx'
 })
 
 // Run this during app initialization
-client.connect().catch(console.error)
+client.connect()
 
 // Later natively inside your RN component lifecycle
 function CheckoutScreen({ user }) {
-  const showApplePay = client.isEnabled('apple-pay-checkout', { userId: user.id })
+  const showApplePay = client.isEnabled('apple-pay-checkout', user.id, { plan: user.plan })
   
   return showApplePay ? <ApplePayButton /> : <StandardCheckout />
 }

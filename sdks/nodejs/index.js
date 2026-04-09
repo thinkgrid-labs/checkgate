@@ -1,44 +1,61 @@
-const { SidekickCore } = require('./nodejs.node');
+const { CheckgateCore } = require('./index.node');
 const EventSource = require('eventsource');
 
-class SidekickClient {
-    constructor(serverUrl, sdkKey) {
+class CheckgateClient {
+    /**
+     * @param {Object} options
+     * @param {string} options.serverUrl - Base URL of your Checkgate server
+     * @param {string} [options.sdkKey] - SDK key for authentication
+     * @param {number} [options.reconnectDelayMs=3000] - SSE reconnect delay in ms
+     */
+    constructor({ serverUrl, sdkKey, reconnectDelayMs = 3000 } = {}) {
         this.serverUrl = serverUrl;
         this.sdkKey = sdkKey;
-        this.core = new SidekickCore();
-        this.initialized = false;
+        this.reconnectDelayMs = reconnectDelayMs;
+        this.core = new CheckgateCore();
+        this._initialized = false;
         this.sse = null;
     }
 
     /**
-     * Opens the SSE connection. The server now sends:
-     *   1. "connected" event  → clear local cache
-     *   2. "update" UPSERT events for every live flag (full bootstrap)
-     *   3. Ongoing "update" UPSERT/DELETE deltas
+     * Connects to the server's SSE stream and downloads the current flag set.
+     * Resolves when the initial bootstrap is complete (after the first "connected"
+     * event and all bootstrap "update" events have been received).
      *
-     * On reconnect EventSource calls this automatically, so the cache is
-     * rebuilt cleanly and any flags deleted while disconnected are evicted.
+     * Sets up automatic reconnection on connection loss.
+     *
+     * @returns {Promise<void>}
      */
-    async init() {
-        if (this.initialized) return;
-        this._connectDeltas();
-        this.initialized = true;
+    connect() {
+        if (this._initialized) return Promise.resolve();
+
+        return new Promise((resolve) => {
+            this._connectDeltas(resolve);
+        });
     }
 
-    _connectDeltas() {
+    _connectDeltas(onBootstrapped) {
         if (this.sse) {
             this.sse.close();
         }
 
         this.sse = new EventSource(`${this.serverUrl}/stream`, {
-            headers: { 'Authorization': `Bearer ${this.sdkKey}` }
+            headers: this.sdkKey ? { 'Authorization': `Bearer ${this.sdkKey}` } : {}
         });
 
         // Server sends "connected" before the full-state dump on every (re)connect.
         // Clear the cache so stale/deleted flags from the previous session are evicted.
         this.sse.addEventListener('connected', () => {
             this.core.clearStore();
-            console.log('[Sidekick] Stream connected — cache cleared, rebuilding from server state.');
+            console.log('[Checkgate] Stream connected — cache cleared, rebuilding from server state.');
+
+            // Mark as initialized on the first successful connection so connect() resolves.
+            if (!this._initialized) {
+                this._initialized = true;
+                // call onBootstrapped on next tick to allow the bootstrap update events
+                // that immediately follow "connected" to be processed first.
+                setImmediate(() => { if (onBootstrapped) onBootstrapped(); });
+            }
         });
 
         this.sse.addEventListener('update', (e) => {
@@ -52,35 +69,43 @@ class SidekickClient {
                         f.is_enabled,
                         f.rollout_percentage ?? null,
                         f.description ?? null,
-                        f.rules || []
+                        // Rust expects a JSON string, not a JS Array
+                        JSON.stringify(f.rules || [])
                     );
                 } else if (event.type === 'DELETE') {
-                    // Properly remove the flag from cache instead of zombie-upserting it.
                     this.core.deleteFlag(event.key);
                 }
             } catch (err) {
-                console.error('[Sidekick] Failed to parse delta update:', err);
+                console.error('[Checkgate] Failed to parse delta update:', err);
             }
         });
 
         this.sse.onerror = () => {
             // EventSource reconnects automatically; no action needed here.
-            console.warn('[Sidekick] Stream disconnected — EventSource will reconnect automatically.');
+            console.warn('[Checkgate] Stream disconnected — EventSource will reconnect automatically.');
         };
     }
 
     /**
-     * Evaluates a feature flag in <1 microsecond with 0 network IO.
+     * Evaluates a feature flag synchronously in <1 microsecond with 0 network IO.
+     *
+     * @param {string} flagKey
+     * @param {string} userKey - Stable user identifier used for rollout hashing
+     * @param {Record<string, string>} [userAttributes={}] - User attributes for targeting rules
+     * @returns {boolean}
      */
     isEnabled(flagKey, userKey, userAttributes = {}) {
-        if (!this.initialized) {
-            console.warn('[Sidekick] Evaluated flag before init! Returning false.');
+        if (!this._initialized) {
+            console.warn('[Checkgate] isEnabled() called before connect() resolved. Returning false.');
             return false;
         }
         return this.core.isEnabled(flagKey, userKey, userAttributes);
     }
 
-    close() {
+    /**
+     * Closes the SSE connection and cleans up resources.
+     */
+    disconnect() {
         if (this.sse) {
             this.sse.close();
             this.sse = null;
@@ -88,4 +113,4 @@ class SidekickClient {
     }
 }
 
-module.exports = { SidekickClient };
+module.exports = { CheckgateClient };

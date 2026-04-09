@@ -1,7 +1,7 @@
 //! React Native JSI — C FFI layer for Checkgate.
 //!
 //! These `extern "C"` functions are the Rust side of the JSI bridge.
-//! The C++ JSI host (`SidekickJSI.cpp`) calls them synchronously
+//! The C++ JSI host (`checkgate_jsi.cpp`) calls them synchronously
 //! via the generated `checkgate_core.h` header.
 //!
 //! A global `FlagStore` singleton is used because C FFI functions are

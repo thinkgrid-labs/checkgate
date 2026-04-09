@@ -131,7 +131,7 @@ pub async fn login(
 
 /// Clear the session cookie.
 pub async fn logout(jar: PrivateCookieJar) -> (PrivateCookieJar, StatusCode) {
-    let jar = jar.remove(Cookie::from("lg_session"));
+    let jar = jar.remove(Cookie::build(("lg_session", "")).path("/"));
     (jar, StatusCode::NO_CONTENT)
 }
 

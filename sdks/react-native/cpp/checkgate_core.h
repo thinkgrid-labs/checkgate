@@ -1,13 +1,13 @@
 /**
- * sidekick_core.h
+ * checkgate_core.h
  *
- * C interface to the Sidekick Rust library (libsidekick_rn).
+ * C interface to the Checkgate Rust library (libcheckgate_rn).
  * Generated manually — matches the #[no_mangle] extern "C" functions in
  * sdks/react-native/src/lib.rs.
  *
  * Link against:
- *   Android: libsidekick_rn.so
- *   iOS:     libsidekick_rn.a
+ *   Android: libcheckgate_rn.so
+ *   iOS:     libcheckgate_rn.a
  */
 
 #pragma once
@@ -26,10 +26,10 @@ extern "C" {
  * @param rollout_percentage 0-100 inclusive. Pass -1 for "no rollout cap" (100%).
  * @param rules_json         Null-terminated JSON array of targeting rules.
  *                           Pass NULL or "[]" when there are no rules.
- *                           Example: "[{\"attribute\":\"email\",\"operator\":\"EndsWith\",
+ *                           Example: "[{\"attribute\":\"email\",\"operator\":\"ends_with\",
  *                                       \"values\":[\"@acme.com\"]}]"
  */
-void sidekick_upsert_flag(
+void checkgate_upsert_flag(
     const char *key,
     bool        is_enabled,
     int         rollout_percentage,
@@ -41,12 +41,12 @@ void sidekick_upsert_flag(
  *
  * @param key Null-terminated flag key.
  */
-void sidekick_delete_flag(const char *key);
+void checkgate_delete_flag(const char *key);
 
 /**
  * Clear all flags from the cache (call before re-bootstrapping on SSE reconnect).
  */
-void sidekick_clear_store(void);
+void checkgate_clear_store(void);
 
 /**
  * Evaluate a flag for a specific user synchronously.
@@ -58,7 +58,7 @@ void sidekick_clear_store(void);
  *                        Example: "{\"email\":\"u@acme.com\",\"country\":\"US\"}"
  * @return 1 if the flag is enabled for this user, 0 otherwise.
  */
-int sidekick_is_enabled(
+int checkgate_is_enabled(
     const char *flag_key,
     const char *user_key,
     const char *attributes_json

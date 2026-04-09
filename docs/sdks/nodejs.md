@@ -1,3 +1,8 @@
+---
+title: Node.js SDK (NAPI) — Sub-Microsecond Feature Flags for Node.js
+description: Install and use the Checkgate Node.js SDK powered by NAPI-RS. Evaluate feature flags synchronously at native speed in Express, Next.js, and any Node.js server.
+---
+
 # Node.js SDK (NAPI)
 
 The Node.js SDK uses [NAPI-RS](https://napi.rs/) to compile the Rust evaluation core into a native Node.js addon (`.node` file). Flag evaluation runs at native speed without crossing the JS/Rust FFI boundary unnecessarily.

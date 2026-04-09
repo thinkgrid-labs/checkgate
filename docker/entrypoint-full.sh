@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sidekick full-image entrypoint
-# Starts PostgreSQL → Redis → Sidekick server in sequence.
+# Checkgate full-image entrypoint
+# Starts PostgreSQL → Redis → Checkgate server in sequence.
 set -euo pipefail
 
 PG_DATA="${PGDATA:-/var/lib/postgresql/data}"
@@ -74,5 +74,5 @@ fi
 export PUBLIC_DIR="${PUBLIC_DIR:-/app/public}"
 
 # SDK_KEY and PORT are passed in via docker run -e / docker-compose env
-echo "[init] Starting Sidekick server..."
+echo "[init] Starting Checkgate server..."
 exec checkgate-server

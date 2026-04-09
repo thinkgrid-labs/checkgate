@@ -1,16 +1,16 @@
-/// Sidekick Flutter SDK
+/// Checkgate Flutter SDK
 ///
 /// Usage:
 /// ```dart
-/// final client = SidekickFlutterClient(
+/// final client = CheckgateClient(
 ///   serverUrl: 'https://flags.example.com',
 ///   sdkKey: 'my-sdk-key',
 /// );
-/// await client.init();
+/// await client.connect();
 ///
 /// final enabled = client.isEnabled('dark_mode', userId, {'country': 'US'});
 /// ```
-library sidekick_flutter;
+library checkgate_flutter;
 
 import 'dart:async';
 import 'dart:convert';
@@ -18,50 +18,40 @@ import 'dart:convert';
 import 'package:ffi/ffi.dart';
 import 'package:http/http.dart' as http;
 
-import 'sidekick_bindings.dart';
+import 'checkgate_bindings.dart';
 
-class SidekickFlutterClient {
+class CheckgateClient {
   final String serverUrl;
   final String sdkKey;
 
-  late final SidekickBindings _bindings;
+  late final CheckgateBindings _bindings;
   bool _initialized = false;
-  StreamSubscription<String>? _sseSub;
 
-  SidekickFlutterClient({
+  // SSE loop cancellation
+  bool _closed = false;
+  http.Client? _httpClient;
+
+  CheckgateClient({
     required this.serverUrl,
     required this.sdkKey,
-  }) : _bindings = SidekickBindings.open();
+  }) : _bindings = CheckgateBindings.open();
 
   /// Initialise: open the SSE stream. The server sends the full flag state on
   /// connect, so no separate REST bootstrap call is needed.
-  Future<void> init() async {
+  Future<void> connect() async {
     if (_initialized) return;
-    _connectDeltas();
     _initialized = true;
-  }
-
-  void _connectDeltas() {
-    _sseSub?.cancel();
-
-    // Dart doesn't have a built-in SSE client; we use a simple chunked-HTTP
-    // stream and parse the SSE text format manually.
-    final uri = Uri.parse('$serverUrl/stream');
-    final headers = {
+    _httpClient = http.Client();
+    _startSseLoop(_httpClient!, Uri.parse('$serverUrl/stream'), {
       'Authorization': 'Bearer $sdkKey',
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
-    };
-
-    final client = http.Client();
-
-    // Run in the background; reconnect on error.
-    _startSseLoop(client, uri, headers);
+    });
   }
 
   void _startSseLoop(
       http.Client client, Uri uri, Map<String, String> headers) async {
-    while (true) {
+    while (!_closed) {
       try {
         final request = http.Request('GET', uri);
         request.headers.addAll(headers);
@@ -76,6 +66,7 @@ class SidekickFlutterClient {
 
         await for (final chunk
             in response.stream.transform(utf8.decoder)) {
+          if (_closed) break;
           for (final line in chunk.split('\n')) {
             if (line.startsWith('event:')) {
               eventName = line.substring(6).trim();
@@ -90,6 +81,7 @@ class SidekickFlutterClient {
           }
         }
       } catch (e) {
+        if (_closed) break;
         // Stream dropped — wait briefly then reconnect.
         await Future<void>.delayed(const Duration(seconds: 2));
       }
@@ -99,7 +91,7 @@ class SidekickFlutterClient {
   void _handleSseEvent(String eventName, String data) {
     if (eventName == 'connected') {
       // Clear the Rust cache before the server replays the full state.
-      _bindings.sidekick_clear_store();
+      _bindings.checkgate_clear_store();
       return;
     }
 
@@ -124,7 +116,7 @@ class SidekickFlutterClient {
     final rulesJson = jsonEncode(flag['rules'] ?? []).toNativeUtf8();
     final rollout = (flag['rollout_percentage'] as int?) ?? -1;
 
-    _bindings.sidekick_upsert_flag(
+    _bindings.checkgate_upsert_flag(
       key,
       flag['is_enabled'] as bool,
       rollout,
@@ -137,7 +129,7 @@ class SidekickFlutterClient {
 
   void _deleteFlag(String key) {
     final k = key.toNativeUtf8();
-    _bindings.sidekick_delete_flag(k);
+    _bindings.checkgate_delete_flag(k);
     malloc.free(k);
   }
 
@@ -157,7 +149,7 @@ class SidekickFlutterClient {
     final attrsJson = jsonEncode(attributes).toNativeUtf8();
 
     final result =
-        _bindings.sidekick_is_enabled(fKey, uKey, attrsJson);
+        _bindings.checkgate_is_enabled(fKey, uKey, attrsJson);
 
     malloc.free(fKey);
     malloc.free(uKey);
@@ -166,9 +158,10 @@ class SidekickFlutterClient {
     return result != 0;
   }
 
-  /// Cancel the SSE subscription and free resources.
+  /// Cancel the SSE stream and release the HTTP client.
   void close() {
-    _sseSub?.cancel();
-    _sseSub = null;
+    _closed = true;
+    _httpClient?.close();
+    _httpClient = null;
   }
 }

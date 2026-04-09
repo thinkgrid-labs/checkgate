@@ -1,7 +1,7 @@
 # =============================================================================
-# Sidekick — full all-in-one image
+# Checkgate — full all-in-one image
 #
-# Bundles: PostgreSQL 16 + Redis 7 + Sidekick server + React dashboard.
+# Bundles: PostgreSQL 16 + Redis 7 + Checkgate server + React dashboard.
 # Perfect for demos, staging, or single-node self-hosted deployments.
 #
 # Optional env vars (all have sensible defaults):

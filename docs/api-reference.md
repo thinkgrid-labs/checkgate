@@ -1,3 +1,8 @@
+---
+title: REST API Reference — Checkgate Feature Flag Management API
+description: Complete REST API reference for Checkgate. Manage feature flags via CRUD endpoints, connect to the SSE stream for real-time updates, and understand flag schema and targeting rule operators.
+---
+
 # REST API Reference
 
 The Checkgate server exposes a REST API for managing feature flags. All endpoints require the `Authorization: Bearer <SDK_KEY>` header when `SDK_KEY` is configured on the server.

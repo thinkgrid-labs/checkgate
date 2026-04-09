@@ -1,4 +1,4 @@
-#include "sidekick_core.h"
+#include "checkgate_core.h"
 #include <jsi/jsi.h>
 #include <memory>
 #include <string>
@@ -6,7 +6,7 @@
 using namespace facebook::jsi;
 using namespace std;
 
-namespace sidekick {
+namespace checkgate {
 
 // ---------------------------------------------------------------------------
 // Helper: call JSON.stringify on a JSI Value and return a std::string.
@@ -25,15 +25,15 @@ static string jsi_to_json(Runtime &runtime, const Value &val) {
 }
 
 // ---------------------------------------------------------------------------
-// installSidekickJSI
+// installCheckgateJSI
 //
-// Installs the __SidekickInternal global on the JS runtime with four methods:
+// Installs the __CheckgateInternal global on the JS runtime with four methods:
 //   upsertFlag(key, isEnabled, rolloutPct, rulesArray)
 //   deleteFlag(key)
 //   clearStore()
 //   isEnabled(flagKey, userKey, attributesObject) -> bool
 // ---------------------------------------------------------------------------
-void installSidekickJSI(Runtime &jsiRuntime) {
+void installCheckgateJSI(Runtime &jsiRuntime) {
 
   // -- upsertFlag -----------------------------------------------------------
   auto upsertFlag = Function::createFromHostFunction(
@@ -41,7 +41,7 @@ void installSidekickJSI(Runtime &jsiRuntime) {
       [](Runtime &runtime, const Value & /*thisValue*/, const Value *arguments,
          size_t count) -> Value {
         if (count < 2 || !arguments[0].isString()) {
-          throw JSError(runtime, "[Sidekick] upsertFlag: expected (key: string, isEnabled: bool, rolloutPct?: number, rules?: array)");
+          throw JSError(runtime, "[Checkgate] upsertFlag: expected (key: string, isEnabled: bool, rolloutPct?: number, rules?: array)");
         }
 
         string key = arguments[0].getString(runtime).utf8(runtime);
@@ -59,7 +59,7 @@ void installSidekickJSI(Runtime &jsiRuntime) {
           rulesJson = jsi_to_json(runtime, arguments[3]);
         }
 
-        sidekick_upsert_flag(key.c_str(), isEnabled, rollout, rulesJson.c_str());
+        checkgate_upsert_flag(key.c_str(), isEnabled, rollout, rulesJson.c_str());
 
         return Value::undefined();
       });
@@ -70,10 +70,10 @@ void installSidekickJSI(Runtime &jsiRuntime) {
       [](Runtime &runtime, const Value & /*thisValue*/, const Value *arguments,
          size_t count) -> Value {
         if (count < 1 || !arguments[0].isString()) {
-          throw JSError(runtime, "[Sidekick] deleteFlag: expected (key: string)");
+          throw JSError(runtime, "[Checkgate] deleteFlag: expected (key: string)");
         }
         string key = arguments[0].getString(runtime).utf8(runtime);
-        sidekick_delete_flag(key.c_str());
+        checkgate_delete_flag(key.c_str());
         return Value::undefined();
       });
 
@@ -82,7 +82,7 @@ void installSidekickJSI(Runtime &jsiRuntime) {
       jsiRuntime, PropNameID::forAscii(jsiRuntime, "clearStore"), 0,
       [](Runtime & /*runtime*/, const Value & /*thisValue*/,
          const Value * /*arguments*/, size_t /*count*/) -> Value {
-        sidekick_clear_store();
+        checkgate_clear_store();
         return Value::undefined();
       });
 
@@ -93,7 +93,7 @@ void installSidekickJSI(Runtime &jsiRuntime) {
       [](Runtime &runtime, const Value & /*thisValue*/, const Value *arguments,
          size_t count) -> Value {
         if (count < 2 || !arguments[0].isString() || !arguments[1].isString()) {
-          throw JSError(runtime, "[Sidekick] isEnabled: expected (flagKey: string, userKey: string, attributes?: object)");
+          throw JSError(runtime, "[Checkgate] isEnabled: expected (flagKey: string, userKey: string, attributes?: object)");
         }
 
         string flagKey = arguments[0].getString(runtime).utf8(runtime);
@@ -105,21 +105,21 @@ void installSidekickJSI(Runtime &jsiRuntime) {
           attrsJson = jsi_to_json(runtime, arguments[2]);
         }
 
-        int result = sidekick_is_enabled(
+        int result = checkgate_is_enabled(
             flagKey.c_str(), userKey.c_str(), attrsJson.c_str());
 
         return Value(result != 0);
       });
 
-  // -- Bind to global.__SidekickInternal ------------------------------------
-  Object sidekickModule = Object(jsiRuntime);
-  sidekickModule.setProperty(jsiRuntime, "upsertFlag", move(upsertFlag));
-  sidekickModule.setProperty(jsiRuntime, "deleteFlag", move(deleteFlag));
-  sidekickModule.setProperty(jsiRuntime, "clearStore", move(clearStore));
-  sidekickModule.setProperty(jsiRuntime, "isEnabled",  move(isEnabled));
+  // -- Bind to global.__CheckgateInternal -----------------------------------
+  Object checkgateModule = Object(jsiRuntime);
+  checkgateModule.setProperty(jsiRuntime, "upsertFlag", move(upsertFlag));
+  checkgateModule.setProperty(jsiRuntime, "deleteFlag", move(deleteFlag));
+  checkgateModule.setProperty(jsiRuntime, "clearStore", move(clearStore));
+  checkgateModule.setProperty(jsiRuntime, "isEnabled",  move(isEnabled));
 
-  jsiRuntime.global().setProperty(jsiRuntime, "__SidekickInternal",
-                                  move(sidekickModule));
+  jsiRuntime.global().setProperty(jsiRuntime, "__CheckgateInternal",
+                                  move(checkgateModule));
 }
 
-} // namespace sidekick
+} // namespace checkgate

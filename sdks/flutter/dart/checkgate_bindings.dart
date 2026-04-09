@@ -1,11 +1,12 @@
 // ignore_for_file: non_constant_identifier_names, camel_case_types
-/// Raw Dart FFI bindings to libsidekick_flutter.
+/// Raw Dart FFI bindings to libcheckgate_flutter.
 ///
 /// These typedefs mirror the C signatures in sdks/flutter/src/lib.rs exactly.
-/// Do not call these directly — use [SidekickFlutterClient] instead.
-library sidekick_bindings;
+/// Do not call these directly — use [CheckgateFlutterClient] instead.
+library checkgate_bindings;
 
 import 'dart:ffi';
+import 'dart:io';
 import 'package:ffi/ffi.dart';
 
 // ---------------------------------------------------------------------------
@@ -54,35 +55,40 @@ typedef IsEnabledFn = int Function(
 // Binding class — loads symbols from the compiled Rust library.
 // ---------------------------------------------------------------------------
 
-class SidekickBindings {
-  final UpsertFlagFn sidekick_upsert_flag;
-  final DeleteFlagFn sidekick_delete_flag;
-  final ClearStoreFn sidekick_clear_store;
-  final IsEnabledFn sidekick_is_enabled;
+class CheckgateBindings {
+  final UpsertFlagFn checkgate_upsert_flag;
+  final DeleteFlagFn checkgate_delete_flag;
+  final ClearStoreFn checkgate_clear_store;
+  final IsEnabledFn checkgate_is_enabled;
 
-  SidekickBindings(DynamicLibrary lib)
-      : sidekick_upsert_flag = lib.lookupFunction<_UpsertFlagNative, UpsertFlagFn>(
-            'sidekick_upsert_flag'),
-        sidekick_delete_flag = lib.lookupFunction<_DeleteFlagNative, DeleteFlagFn>(
-            'sidekick_delete_flag'),
-        sidekick_clear_store = lib.lookupFunction<_ClearStoreNative, ClearStoreFn>(
-            'sidekick_clear_store'),
-        sidekick_is_enabled = lib.lookupFunction<_IsEnabledNative, IsEnabledFn>(
-            'sidekick_is_enabled');
+  CheckgateBindings(DynamicLibrary lib)
+      : checkgate_upsert_flag = lib.lookupFunction<_UpsertFlagNative, UpsertFlagFn>(
+            'checkgate_upsert_flag'),
+        checkgate_delete_flag = lib.lookupFunction<_DeleteFlagNative, DeleteFlagFn>(
+            'checkgate_delete_flag'),
+        checkgate_clear_store = lib.lookupFunction<_ClearStoreNative, ClearStoreFn>(
+            'checkgate_clear_store'),
+        checkgate_is_enabled = lib.lookupFunction<_IsEnabledNative, IsEnabledFn>(
+            'checkgate_is_enabled');
 
   /// Opens the correct shared library for the current platform.
-  factory SidekickBindings.open() {
+  factory CheckgateBindings.open() {
     final DynamicLibrary lib;
 
-    // ignore: do_not_use_environment
-    if (const bool.fromEnvironment('dart.vm.product')) {
-      // iOS static link — symbols are already in the process image.
+    if (Platform.isIOS || Platform.isMacOS) {
+      // iOS / macOS: static link — symbols are already in the process image.
       lib = DynamicLibrary.process();
+    } else if (Platform.isAndroid) {
+      lib = DynamicLibrary.open('libflutter.so');
+    } else if (Platform.isLinux) {
+      lib = DynamicLibrary.open('libflutter.so');
+    } else if (Platform.isWindows) {
+      lib = DynamicLibrary.open('flutter.dll');
     } else {
-      // Android / desktop dynamic library.
-      lib = DynamicLibrary.open('libsidekick_flutter.so');
+      throw UnsupportedError(
+          'CheckgateBindings: unsupported platform ${Platform.operatingSystem}');
     }
 
-    return SidekickBindings(lib);
+    return CheckgateBindings(lib);
   }
 }

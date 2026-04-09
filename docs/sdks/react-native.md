@@ -1,3 +1,8 @@
+---
+title: React Native SDK (JSI) — Feature Flags for iOS & Android
+description: Integrate Checkgate's React Native SDK using JSI and C FFI for synchronous, bridge-free feature flag evaluation on iOS and Android. Compatible with Expo Dev Client.
+---
+
 # React Native SDK (JSI)
 
 The React Native SDK uses **C FFI** to call the Rust evaluation core directly from JavaScript via React Native's JavaScript Interface (JSI). This avoids the async bridge overhead and delivers synchronous, near-native evaluation performance.

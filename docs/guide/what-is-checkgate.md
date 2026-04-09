@@ -1,3 +1,8 @@
+---
+title: What is Checkgate? — Open-Source Self-Hosted Feature Flag Engine
+description: Learn what Checkgate is, how local evaluation delivers sub-microsecond feature flag decisions, and how it compares to LaunchDarkly and Statsig.
+---
+
 # What is Checkgate?
 
 Checkgate is a **self-hosted, open-source feature flag engine** built for teams that need fast, reliable flag evaluation without sending data to a third-party SaaS vendor.
