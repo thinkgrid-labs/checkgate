@@ -3,13 +3,6 @@
 #
 # Bundles: PostgreSQL 16 + Redis 7 + Checkgate server + React dashboard.
 # Perfect for demos, staging, or single-node self-hosted deployments.
-#
-# Optional env vars (all have sensible defaults):
-#   POSTGRES_USER      checkgate
-#   POSTGRES_PASSWORD  checkgate
-#   POSTGRES_DB        checkgate
-#   SDK_KEY            (empty = auth disabled — set this in production)
-#   PORT               3000
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -42,15 +35,15 @@ COPY core/Cargo.toml core/Cargo.toml
 COPY server/Cargo.toml server/Cargo.toml
 COPY sdks/nodejs/Cargo.toml sdks/nodejs/Cargo.toml
 COPY sdks/web/Cargo.toml sdks/web/Cargo.toml
-COPY sdks/flutter/Cargo.toml sdks/flutter/Cargo.toml
+COPY sdks/flutter/dart/rust/Cargo.toml sdks/flutter/dart/rust/Cargo.toml
 COPY sdks/react-native/Cargo.toml sdks/react-native/Cargo.toml
 
-RUN mkdir -p core/src server/src sdks/nodejs/src sdks/web/src sdks/flutter/src sdks/react-native/src && \
+RUN mkdir -p core/src server/src sdks/nodejs/src sdks/web/src sdks/flutter/dart/rust/src sdks/react-native/src && \
     echo "fn main(){}" > server/src/main.rs && \
     echo "" > core/src/lib.rs && \
     echo "" > sdks/nodejs/src/lib.rs && \
     echo "" > sdks/web/src/lib.rs && \
-    echo "" > sdks/flutter/src/lib.rs && \
+    echo "" > sdks/flutter/dart/rust/src/lib.rs && \
     echo "" > sdks/react-native/src/lib.rs
 
 RUN cargo build --release -p server 2>/dev/null || true
