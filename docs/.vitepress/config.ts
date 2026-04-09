@@ -41,6 +41,7 @@ export default defineConfig({
       { text: "Guide", link: "/guide/getting-started" },
       { text: "SDKs", link: "/sdks/nodejs" },
       { text: "Self-Hosting", link: "/self-hosting" },
+      { text: "Roadmap", link: "/roadmap" },
       { text: "API", link: "/api-reference" },
       {
         text: "GitHub",
@@ -56,6 +57,7 @@ export default defineConfig({
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "Architecture", link: "/guide/architecture" },
           { text: "Core Concepts", link: "/guide/concepts" },
+          { text: "Roadmap", link: "/roadmap" },
         ],
       },
       {
@@ -71,7 +73,8 @@ export default defineConfig({
         text: "Self-Hosting",
         items: [
           { text: "Docker", link: "/self-hosting" },
-          { text: "AWS", link: "/self-hosting#aws" },
+          { text: "Enterprise Setup", link: "/enterprise-setup" },
+          { text: "AWS & Cloud", link: "/self-hosting#aws" },
           {
             text: "Environment Variables",
             link: "/self-hosting#environment-variables",
