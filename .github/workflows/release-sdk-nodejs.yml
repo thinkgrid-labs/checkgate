@@ -67,6 +67,12 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Setup Zig
+        if: ${{ matrix.zig }}
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.11.0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -79,7 +85,9 @@ jobs:
         working-directory: sdks/nodejs
         shell: bash
         run: |
-          if [ "${{ matrix.cross }}" = "true" ]; then
+          if [ "${{ matrix.zig }}" = "true" ]; then
+            napi build --platform --release --target ${{ matrix.target }} --zig
+          elif [ "${{ matrix.cross }}" = "true" ]; then
             napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
             napi build --platform --release --target ${{ matrix.target }}
