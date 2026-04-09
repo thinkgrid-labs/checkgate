@@ -79,11 +79,11 @@ class CheckgateBindings {
       // iOS / macOS: static link — symbols are already in the process image.
       lib = DynamicLibrary.process();
     } else if (Platform.isAndroid) {
-      lib = DynamicLibrary.open('libflutter.so');
+      lib = DynamicLibrary.open('libcheckgate_flutter.so');
     } else if (Platform.isLinux) {
-      lib = DynamicLibrary.open('libflutter.so');
+      lib = DynamicLibrary.open('libcheckgate_flutter.so');
     } else if (Platform.isWindows) {
-      lib = DynamicLibrary.open('flutter.dll');
+      lib = DynamicLibrary.open('checkgate_flutter.dll');
     } else {
       throw UnsupportedError(
           'CheckgateBindings: unsupported platform ${Platform.operatingSystem}');

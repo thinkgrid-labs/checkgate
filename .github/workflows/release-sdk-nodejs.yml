@@ -76,41 +76,45 @@ jobs:
         run: npm install -g @napi-rs/cli
 
       - name: Install Zig (musl aarch64 only)
-        if: matrix.zig == true
+        if: matrix.target == 'aarch64-unknown-linux-musl'
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.13.0
 
       - name: Install cargo-zigbuild (musl aarch64 only)
-        if: matrix.zig == true
+        if: matrix.target == 'aarch64-unknown-linux-musl'
         run: cargo install cargo-zigbuild
 
-      - name: Build native binary
+      - name: Build
         working-directory: sdks/nodejs
         run: |
-          if [ "${{ matrix.zig }}" = "true" ]; then
-            CARGO=cargo-zigbuild napi build --platform --release --target ${{ matrix.target }}
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            # Manual zigbuild to bypass NAPI CLI linker detection
+            cargo zigbuild --target aarch64-unknown-linux-musl --release
+            mv ../../target/aarch64-unknown-linux-musl/release/libnodejs.so checkgate.linux-arm64-musl.node
           elif [ "${{ matrix.cross }}" = "true" ]; then
             napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
           else
             napi build --platform --release --target ${{ matrix.target }}
           fi
-        shell: bash
 
-      - name: Upload native artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.target }}
           path: sdks/nodejs/${{ matrix.artifact }}
-          retention-days: 1
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Collect all .node binaries and publish to npm
+  # Publish Job — waits for all native builds above
   # ---------------------------------------------------------------------------
   publish:
     name: Publish to npm
-    needs: build-native
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -125,6 +129,17 @@ jobs:
           pattern: node-*
           merge-multiple: true
           path: sdks/nodejs/
+
+      - name: Validate native binaries count
+        working-directory: sdks/nodejs
+        run: |
+          COUNT=$(ls *.node | wc -l)
+          echo "Found $COUNT native binaries."
+          if [ "$COUNT" -ne 7 ]; then
+            echo "Error: Expected 7 native binaries, found $COUNT."
+            ls -l *.node
+            exit 1
+          fi
 
       - name: Install dependencies
         working-directory: sdks/nodejs

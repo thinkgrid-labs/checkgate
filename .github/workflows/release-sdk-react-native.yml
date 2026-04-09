@@ -29,6 +29,18 @@ jobs:
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
+      - name: Validate package integrity
+        working-directory: sdks/react-native
+        run: |
+          # Manually trigger bundling to ensure it works in CI environment
+          node scripts/bundle-rust.js
+          
+          # Check for critical files that must be in the npm package
+          if [ ! -d "rust-core/src" ]; then echo "Error: rust-core source missing!"; exit 1; fi
+          if [ ! -f "Checkgate.podspec" ]; then echo "Error: Podspec missing!"; exit 1; fi
+          if [ ! -d "android/src/main" ]; then echo "Error: Android configuration missing!"; exit 1; fi
+          echo "Package integrity verified."
+
       - name: Publish @checkgate/react-native
         working-directory: sdks/react-native
         run: npm publish --access public

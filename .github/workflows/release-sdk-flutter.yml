@@ -29,6 +29,17 @@ jobs:
         working-directory: sdks/flutter/dart
         run: dart pub get
 
+      - name: Validate package integrity
+        working-directory: sdks/flutter/dart
+        run: |
+          # Manually trigger bundling
+          node scripts/bundle-rust.js
+          
+          # Check for critical files
+          if [ ! -d "rust-core/src" ]; then echo "Error: rust-core missing!"; exit 1; fi
+          if [ ! -d "rust/src" ]; then echo "Error: Bridge source missing!"; exit 1; fi
+          echo "Flutter package integrity verified."
+
       - name: Set up pub.dev credentials
         run: |
           mkdir -p ~/.config/dart
