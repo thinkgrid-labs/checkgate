@@ -68,3 +68,7 @@ jobs:
       - name: Type-check and build
         working-directory: dashboard
         run: pnpm build
+
+      - name: Run unit and integration tests
+        working-directory: dashboard
+        run: pnpm test -- --run

@@ -12,30 +12,6 @@
 
 ---
 
-## Quick Start
-
-```bash
-# Start Postgres + Redis + Checkgate
-docker compose -f docker-compose.full.yml up -d
-```
-
-```bash
-npm install @checkgate/node
-```
-
-```typescript
-import { CheckgateClient } from '@checkgate/node'
-
-const client = new CheckgateClient({ serverUrl: 'http://localhost:3000' })
-await client.connect()
-
-const enabled = client.isEnabled('my-flag', userId, { plan: 'pro' })
-```
-
-That's it — `isEnabled()` is a pure in-process lookup. No network, no async, no latency.
-
----
-
 ## Features
 
 - **Sub-microsecond evaluation** — flags are evaluated entirely in local memory
@@ -61,35 +37,6 @@ That's it — `isEnabled()` is a pure in-process lookup. No network, no async, n
 | React Native (JSI) SDK | [SDK: React Native](docs/sdks/react-native.md) |
 | Flutter (FFI) SDK | [SDK: Flutter](docs/sdks/flutter.md) |
 | Docker, AWS, env vars | [Self-Hosting](docs/self-hosting.md) |
-
----
-
-## Repository Structure
-
-```
-core/               Rust evaluation engine (shared across all SDKs)
-server/             Axum HTTP server (REST API + SSE stream)
-sdks/
-  nodejs/           NAPI native addon
-  browser/          wasm-bindgen / wasm-pack
-  react-native/     JSI C++ bridge
-  flutter/          dart:ffi binding
-dashboard/          Next.js control-plane UI
-docs/               VitePress documentation
-```
-
----
-
-## CI/CD
-
-| Workflow | Trigger | Action |
-|----------|---------|--------|
-| `ci.yml` | Push / PR to `main` or `dev` | Rust tests, clippy, fmt, dashboard build |
-| `release-docker.yml` | Tag `v*.*.*` | Build multi-arch `checkgate:server` + `checkgate:full` → Docker Hub |
-| `release-sdk-nodejs.yml` | Tag `v*.*.*` | Cross-compile 7 platforms → publish `@checkgate/node` to npm |
-| `release-sdk-browser.yml` | Tag `v*.*.*` | wasm-pack build → publish `@checkgate/browser` to npm |
-| `release-sdk-react-native.yml` | Tag `v*.*.*` | Publish `@checkgate/react-native` to npm |
-| `release-sdk-flutter.yml` | Tag `v*.*.*` | Publish `checkgate_flutter` to pub.dev |
 
 ---
 

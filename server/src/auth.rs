@@ -51,10 +51,10 @@ pub async fn require_auth(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "));
 
-    if let Some(key) = header_key {
-        if constant_time_eq(key.as_bytes(), expected_bytes) {
-            return Ok(next.run(req).await);
-        }
+    if let Some(key) = header_key
+        && constant_time_eq(key.as_bytes(), expected_bytes)
+    {
+        return Ok(next.run(req).await);
     }
 
     // ── 3. ?sdk_key= query param (browser EventSource fallback) ──────────────
@@ -63,10 +63,10 @@ pub async fn require_auth(
         .split('&')
         .find_map(|pair| pair.strip_prefix("sdk_key="));
 
-    if let Some(key) = query_key {
-        if constant_time_eq(key.as_bytes(), expected_bytes) {
-            return Ok(next.run(req).await);
-        }
+    if let Some(key) = query_key
+        && constant_time_eq(key.as_bytes(), expected_bytes)
+    {
+        return Ok(next.run(req).await);
     }
 
     warn!(

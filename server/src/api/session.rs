@@ -69,11 +69,11 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<(PrivateCookieJar, Json<UserInfo>), StatusCode> {
     // Validate SDK key against server configuration (constant-time compare).
-    if let Some(ref expected) = state.sdk_key {
-        if !constant_time_eq(req.sdk_key.as_bytes(), expected.as_bytes()) {
-            warn!(email = %req.email, "Login rejected: invalid SDK key");
-            return Err(StatusCode::UNAUTHORIZED);
-        }
+    if let Some(ref expected) = state.sdk_key
+        && !constant_time_eq(req.sdk_key.as_bytes(), expected.as_bytes())
+    {
+        warn!(email = %req.email, "Login rejected: invalid SDK key");
+        return Err(StatusCode::UNAUTHORIZED);
     }
 
     let session = SessionData {
