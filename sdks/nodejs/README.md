@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../assets/checkgate_logo.png" width="120" alt="Checkgate Logo">
+</p>
+
 # @checkgate/node
 
 **Checkgate Node.js SDK (NAPI)** — The official high-performance, native Node.js client for Checkgate.

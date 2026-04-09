@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../assets/checkgate_logo.png" width="120" alt="Checkgate Logo">
+</p>
+
 # @checkgate/react-native
 
 **Checkgate React Native SDK (JSI)** — The official high-performance mobile client for Checkgate.

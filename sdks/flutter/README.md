@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../assets/checkgate_logo.png" width="120" alt="Checkgate Logo">
+</p>
+
 # checkgate_flutter
 
 **Checkgate Flutter SDK (FFI)** — The official high-performance Dart client for Checkgate.

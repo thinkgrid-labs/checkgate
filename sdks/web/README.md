@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../assets/checkgate_logo.png" width="120" alt="Checkgate Logo">
+</p>
+
 # @checkgate/web
 
 **Checkgate Web SDK (WebAssembly)** — The official frictionless frontend client for Checkgate.

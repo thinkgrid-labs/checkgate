@@ -5,6 +5,9 @@ hero:
   name: "Checkgate"
   text: "Open-Source Feature Flags, Built for Speed."
   tagline: "Sub-microsecond local evaluation. Zero evaluation latency. Complete data privacy. The ultimate self-hosted alternative for feature toggles."
+  image:
+    src: /checkgate_logo.png
+    alt: Checkgate Logo
   actions:
     - theme: brand
       text: Get Started

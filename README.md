@@ -1,4 +1,8 @@
-# Checkgate —Open-Source Feature Flags, Built for Speed.
+<p align="center">
+  <img src="assets/checkgate_logo.png" width="160" alt="Checkgate Logo">
+</p>
+
+# Checkgate — Open-Source Feature Flags, Built for Speed.
 
 [![CI](https://github.com/ThinkGrid-Labs/checkgate/actions/workflows/ci.yml/badge.svg)](https://github.com/ThinkGrid-Labs/checkgate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
