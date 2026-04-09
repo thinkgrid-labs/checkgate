@@ -1,14 +1,16 @@
-# Checkgate — Self-Hosted Feature Flag Engine
+# Checkgate —Open-Source Feature Flags, Built for Speed.
 
 [![CI](https://github.com/ThinkGrid-Labs/checkgate/actions/workflows/ci.yml/badge.svg)](https://github.com/ThinkGrid-Labs/checkgate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm @checkgate/node](https://img.shields.io/npm/v/@checkgate/node?label=npm%20node)](https://www.npmjs.com/package/@checkgate/node)
-[![npm @checkgate/browser](https://img.shields.io/npm/v/@checkgate/browser?label=npm%20browser)](https://www.npmjs.com/package/@checkgate/browser)
+[![npm @checkgate/web](https://img.shields.io/npm/v/@checkgate/web?label=npm%20web)](https://www.npmjs.com/package/@checkgate/web)
 [![npm @checkgate/react-native](https://img.shields.io/npm/v/@checkgate/react-native?label=npm%20react-native)](https://www.npmjs.com/package/@checkgate/react-native)
 
-**Checkgate is a self-hosted, open-source feature flag system with sub-microsecond local evaluation — no network calls, no polling, no vendor lock-in.** Built in Rust, it ships native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI). A persistent SSE stream propagates flag changes to every connected SDK in under 50 ms.
+**Checkgate is a blazing-fast, open-source feature flag engine designed for teams who refuse to compromise on performance or privacy.** By evaluating feature toggles locally in sub-microseconds, Checkgate completely eliminates network latency, expensive API round-trips, and SaaS vendor lock-in. 
 
-**[Documentation →](https://thinkgrid-labs.github.io/checkgate)**
+It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI). A persistent SSE stream propagates flag changes to every connected SDK instance in under 50 ms.
+
+**[Explore the Documentation →](https://thinkgrid-labs.github.io/checkgate)**
 
 ---
 
@@ -33,7 +35,7 @@
 | Step-by-step setup | [Getting Started](docs/guide/getting-started.md) |
 | REST API + SSE stream reference | [API Reference](docs/api-reference.md) |
 | Node.js SDK | [SDK: Node.js](docs/sdks/nodejs.md) |
-| Browser (WASM) SDK | [SDK: Browser](docs/sdks/browser.md) |
+| Web (WASM) SDK | [SDK: Web](docs/sdks/web.md) |
 | React Native (JSI) SDK | [SDK: React Native](docs/sdks/react-native.md) |
 | Flutter (FFI) SDK | [SDK: Flutter](docs/sdks/flutter.md) |
 | Docker, AWS, env vars | [Self-Hosting](docs/self-hosting.md) |

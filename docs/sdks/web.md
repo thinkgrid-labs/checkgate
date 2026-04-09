@@ -13,9 +13,9 @@ yarn add @checkgate/web
 ## Quick Start
 
 ```typescript
-import { CheckgateBrowserClient } from '@checkgate/web'
+import { CheckgateWeb } from '@checkgate/web'
 
-const client = new CheckgateBrowserClient({
+const client = new CheckgateWeb({
   serverUrl: 'https://flags.yourcompany.com',
   sdkKey: 'your-sdk-key',
 })
@@ -32,7 +32,7 @@ const enabled = client.isEnabled('dark-mode', currentUserId, {
 
 ## API Reference
 
-### `new CheckgateBrowserClient(options)`
+### `new CheckgateWeb(options)`
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|

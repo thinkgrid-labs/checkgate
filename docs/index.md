@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "Checkgate"
-  text: "Self-Hosted Feature Flag Engine"
-  tagline: Sub-microsecond local evaluation. No network round-trips. No vendor lock-in. Native SDKs for Node.js, React Native, Flutter, and browsers.
+  text: "Open-Source Feature Flags, Built for Speed."
+  tagline: "Sub-microsecond local evaluation. Zero network latency. Complete data privacy. The ultimate self-hosted alternative for feature toggles."
   actions:
     - theme: brand
       text: Get Started

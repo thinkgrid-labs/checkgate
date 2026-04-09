@@ -3,9 +3,9 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   base: '/checkgate/',
   ignoreDeadLinks: [/^http:\/\/localhost/],
-  title: 'Checkgate',
+  title: 'Checkgate — Fast, Open Source Feature Flags & Toggles',
   description:
-    'Open-source self-hosted feature flag engine with sub-microsecond local evaluation. Native SDKs for Node.js, React Native, Flutter, and browsers via WebAssembly.',
+    'The ultimate open-source feature flag engine. Achieve sub-microsecond feature toggle evaluation down to the local level with native SDKs. Self-hosted and fully private.',
 
   head: [
     ['meta', { name: 'og:type', content: 'website' }],
@@ -14,6 +14,7 @@ export default defineConfig({
       name: 'og:description',
       content: 'Sub-microsecond feature flag evaluation for Node.js, React Native, Flutter, and browsers. Self-hosted, open-source, no vendor lock-in.',
     }],
+    ['meta', { name: 'keywords', content: 'feature flags, open source feature flags, self-hosted feature toggles, LaunchDarkly alternative, sub-microsecond feature flags, Rust feature flag' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
   ],
 
