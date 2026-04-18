@@ -56,3 +56,28 @@ export interface User {
   role: UserRole
   createdAt: string
 }
+
+export interface Project {
+  id: string
+  name: string
+  slug: string
+  environment_count?: number
+  member_count?: number
+  created_at: string
+}
+
+export interface ProjectMember {
+  user_id: number
+  name: string
+  email: string
+  role: UserRole
+}
+
+export interface SdkKeyInfo {
+  id: number
+  name: string
+  prefix: string
+  environment_id: string
+  environment_name: string
+  created_at: string
+}

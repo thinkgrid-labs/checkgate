@@ -104,13 +104,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── SDK keys (DB-backed) ──────────────────────────────────────────────────
 
-    let rows = sqlx::query("SELECT id, name, value FROM sdk_keys ORDER BY id ASC")
-        .fetch_all(&db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to load SDK keys");
-            e
-        })?;
+    let rows = sqlx::query(
+        "SELECT id, name, value, environment_id::text FROM sdk_keys ORDER BY id ASC",
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to load SDK keys");
+        e
+    })?;
 
     let mut sdk_keys_data: Vec<SdkKeyEntry> = rows
         .iter()
@@ -118,6 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id: r.get("id"),
             name: r.get("name"),
             value: r.get("value"),
+            environment_id: r.get("environment_id"),
         })
         .collect();
 
@@ -128,7 +131,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let key_value = format!("sk_live_{hex}");
 
         let row = sqlx::query(
-            "INSERT INTO sdk_keys (name, value) VALUES ('Default', $1) RETURNING id, name, value",
+            "INSERT INTO sdk_keys (name, value, environment_id) \
+             VALUES ('Default', $1, (SELECT id FROM environments WHERE is_default = true LIMIT 1)) \
+             RETURNING id, name, value, environment_id::text",
         )
         .bind(&key_value)
         .fetch_one(&db)
@@ -143,6 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id: row.get("id"),
             name: row.get("name"),
             value: row.get("value"),
+            environment_id: row.get("environment_id"),
         });
     } else {
         info!(count = sdk_keys_data.len(), "SDK keys loaded from database");
@@ -160,6 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id: -1,
             name: "env:SDK_KEY".into(),
             value: env_key,
+            environment_id: String::new(), // env var keys have no environment scope
         });
     }
 

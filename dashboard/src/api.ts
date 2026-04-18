@@ -109,6 +109,8 @@ export interface SdkKeyInfo {
   id: number
   name: string
   prefix: string
+  environment_id: string
+  environment_name: string
   created_at: string
 }
 
@@ -117,22 +119,83 @@ export interface NewKeyResponse {
   name: string
   key: string
   prefix: string
+  environment_id: string
+  environment_name: string
   created_at: string
 }
 
 export const keysApi = {
-  list(): Promise<SdkKeyInfo[]> {
-    return request('/api/keys')
+  list(projectId: string): Promise<SdkKeyInfo[]> {
+    return request(`/api/projects/${projectId}/keys`)
   },
 
-  create(name: string): Promise<NewKeyResponse> {
-    return request('/api/keys', {
+  create(projectId: string, name: string, environmentId: string): Promise<NewKeyResponse> {
+    return request(`/api/projects/${projectId}/keys`, {
       method: 'POST',
+      body: JSON.stringify({ name, environment_id: environmentId }),
+    })
+  },
+
+  revoke(projectId: string, id: number): Promise<void> {
+    return request(`/api/projects/${projectId}/keys/${id}`, { method: 'DELETE' })
+  },
+}
+
+export interface ProjectSummary {
+  id: string
+  name: string
+  slug: string
+  environment_count: number
+  member_count: number
+  created_at: string
+}
+
+export interface ProjectMemberInfo {
+  user_id: number
+  name: string
+  email: string
+  role: string
+}
+
+export const projectsApi = {
+  list(): Promise<ProjectSummary[]> {
+    return request('/api/projects')
+  },
+
+  create(name: string): Promise<ProjectSummary> {
+    return request('/api/projects', { method: 'POST', body: JSON.stringify({ name }) })
+  },
+
+  rename(projectId: string, name: string): Promise<ProjectSummary> {
+    return request(`/api/projects/${projectId}`, {
+      method: 'PATCH',
       body: JSON.stringify({ name }),
     })
   },
 
-  revoke(id: number): Promise<void> {
-    return request(`/api/keys/${id}`, { method: 'DELETE' })
+  delete(projectId: string): Promise<void> {
+    return request(`/api/projects/${projectId}`, { method: 'DELETE' })
+  },
+
+  listMembers(projectId: string): Promise<ProjectMemberInfo[]> {
+    return request(`/api/projects/${projectId}/members`)
+  },
+
+  addMember(projectId: string, userId: number, role: string): Promise<ProjectMemberInfo> {
+    return request(`/api/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, role }),
+    })
+  },
+
+  updateMemberRole(projectId: string, userId: number, role: string): Promise<ProjectMemberInfo> {
+    return request(`/api/projects/${projectId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    })
+  },
+
+  removeMember(projectId: string, userId: number): Promise<void> {
+    return request(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' })
   },
 }

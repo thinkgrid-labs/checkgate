@@ -2,6 +2,7 @@ pub mod environments;
 pub mod flags;
 pub mod impressions;
 pub mod keys;
+pub mod projects;
 pub mod session;
 pub mod users;
 
@@ -77,13 +78,14 @@ pub async fn csrf_protection(req: Request<Body>, next: Next) -> Result<Response,
     Ok(next.run(req).await)
 }
 
-/// Read-only API routes — any authenticated user (admin or viewer).
+/// Read-only API routes — any authenticated user (membership filtered per handler).
 pub fn read_router() -> Router<AppState> {
     flags::read_router()
         .merge(impressions::read_router())
         .merge(environments::read_router())
         .merge(keys::read_router())
         .merge(users::read_router())
+        .merge(projects::read_router())
 }
 
 /// SDK ingest routes — any authenticated client; not admin-gated.
@@ -97,11 +99,12 @@ pub fn editor_write_router() -> Router<AppState> {
     flags::write_router()
 }
 
-/// Admin-only write routes: environments, SDK keys, users (layer added in main.rs).
+/// Admin-only write routes: environments, SDK keys, users, projects (layer added in main.rs).
 pub fn admin_write_router() -> Router<AppState> {
     environments::write_router()
         .merge(keys::write_router())
         .merge(users::write_router())
+        .merge(projects::write_router())
 }
 
 /// Public auth routes — mounted under `/api/auth` WITHOUT auth middleware.

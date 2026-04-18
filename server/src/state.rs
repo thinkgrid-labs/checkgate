@@ -13,6 +13,8 @@ pub struct SdkKeyEntry {
     pub id: i64,
     pub name: String,
     pub value: String,
+    /// UUID of the environment this key is scoped to (used for SSE stream filtering).
+    pub environment_id: String,
 }
 
 #[derive(Clone)]

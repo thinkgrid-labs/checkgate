@@ -36,6 +36,7 @@ interface AuthContextValue {
   logout: () => Promise<void>
   completeSetup: (
     workspaceName: string,
+    projectName: string,
     name: string,
     email: string,
     password: string,
@@ -51,6 +52,7 @@ interface AuthResponse {
   name: string
   role: string
   workspace_name: string
+  is_setup_complete: boolean
 }
 
 function parseSession(body: AuthResponse): Session {
@@ -76,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(KEY_SETUP) === 'true',
   )
 
-  // On mount: restore session from the HttpOnly cookie via GET /api/auth/me.
+  // On mount: restore session and authoritative setup state from the server.
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(res => {
@@ -84,7 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null
       })
       .then(body => {
-        if (body) setSession(parseSession(body))
+        if (body) {
+          setSession(parseSession(body))
+          setIsSetupComplete(body.is_setup_complete)
+          if (body.is_setup_complete) localStorage.setItem(KEY_SETUP, 'true')
+        }
       })
       .catch(() => {/* network error — stay logged out */})
       .finally(() => setSessionLoading(false))
@@ -133,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const completeSetup = useCallback(
-    async (workspaceName: string, name: string, email: string, password: string) => {
+    async (workspaceName: string, projectName: string, name: string, email: string, password: string) => {
       try {
         const res = await fetch('/api/setup/complete', {
           method: 'POST',
@@ -141,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { 'Content-Type': 'application/json', 'X-Checkgate-Request': 'true' },
           body: JSON.stringify({
             workspace_name: workspaceName.trim(),
+            project_name: projectName.trim() || 'My App',
             name: name.trim(),
             email: email.trim(),
             password,

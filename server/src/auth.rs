@@ -10,10 +10,26 @@ use constant_time_eq::constant_time_eq;
 use serde::Deserialize;
 use tracing::warn;
 
-/// Minimal view of the session cookie — only role is needed for access checks.
+/// Minimal view of the session cookie — only role is needed for middleware access checks.
 #[derive(Deserialize)]
-struct SessionClaims {
+struct RoleClaims {
     role: String,
+}
+
+/// Full session claims — used by handlers that need the caller's email/role.
+#[derive(Deserialize, Clone)]
+pub(crate) struct SessionClaims {
+    pub email: String,
+    #[allow(dead_code)]
+    pub name: String,
+    pub role: String,
+}
+
+/// Extract session claims from the private cookie jar.
+/// Returns `None` if the request used SDK key auth (no session cookie present).
+pub(crate) fn get_session_claims(jar: &PrivateCookieJar) -> Option<SessionClaims> {
+    jar.get("lg_session")
+        .and_then(|c| serde_json::from_str::<SessionClaims>(c.value()).ok())
 }
 
 /// Validates a request using either:
@@ -137,7 +153,7 @@ pub async fn require_admin(
     // Session cookie: must carry role=admin (set from DB on login).
     let jar = PrivateCookieJar::from_headers(req.headers(), state.session_key.clone());
     if let Some(cookie) = jar.get("lg_session")
-        && let Ok(claims) = serde_json::from_str::<SessionClaims>(cookie.value())
+        && let Ok(claims) = serde_json::from_str::<RoleClaims>(cookie.value())
     {
         if claims.role == "admin" {
             return Ok(next.run(req).await);
@@ -198,7 +214,7 @@ pub async fn require_editor(
     // Session cookie: admin or editor.
     let jar = PrivateCookieJar::from_headers(req.headers(), state.session_key.clone());
     if let Some(cookie) = jar.get("lg_session")
-        && let Ok(claims) = serde_json::from_str::<SessionClaims>(cookie.value())
+        && let Ok(claims) = serde_json::from_str::<RoleClaims>(cookie.value())
     {
         if claims.role == "admin" || claims.role == "editor" {
             return Ok(next.run(req).await);

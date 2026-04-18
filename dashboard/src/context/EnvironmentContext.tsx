@@ -1,12 +1,12 @@
 import {
   createContext,
-  useContext,
-  useState,
-  useEffect,
   useCallback,
+  useContext,
+  useEffect,
+  useState,
   type ReactNode,
 } from 'react'
-import { useAuth } from './AuthContext'
+import { useProject } from './ProjectContext'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,15 +42,15 @@ const KEY_ACTIVE_ENV = 'lg_active_env_id'
 const EnvironmentContext = createContext<EnvironmentContextValue | null>(null)
 
 export function EnvironmentProvider({ children }: { children: ReactNode }) {
-  const { session } = useAuth()
+  const { activeProject } = useProject()
   const [environments, setEnvironments] = useState<Environment[]>([])
   const [activeEnv, setActiveEnvState] = useState<Environment | null>(null)
   const [loading, setLoading] = useState(true)
 
   const reload = useCallback(async () => {
-    if (!session) return
+    if (!activeProject) return
     try {
-      const res = await fetch('/api/environments', {
+      const res = await fetch(`/api/projects/${activeProject.id}/environments`, {
         credentials: 'same-origin',
         headers: { 'X-Checkgate-Request': '1' },
       })
@@ -58,7 +58,6 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
       const envs = await res.json() as Environment[]
       setEnvironments(envs)
 
-      // Restore previously selected env or fall back to default.
       const savedId = localStorage.getItem(KEY_ACTIVE_ENV)
       const saved = envs.find(e => e.id === savedId)
       const defaultEnv = envs.find(e => e.is_default) ?? envs[0] ?? null
@@ -66,9 +65,13 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [session])
+  }, [activeProject])
 
+  // Reload when active project changes.
   useEffect(() => {
+    setLoading(true)
+    setEnvironments([])
+    setActiveEnvState(null)
     void reload()
   }, [reload])
 

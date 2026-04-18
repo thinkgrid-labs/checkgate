@@ -16,8 +16,9 @@ export default function Setup() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
 
-  // Step 1: Workspace
+  // Step 1: Workspace + first project
   const [workspaceName, setWorkspaceName] = useState('')
+  const [projectName, setProjectName] = useState('')
 
   // Step 2: Account
   const [name, setName] = useState('')
@@ -61,7 +62,7 @@ export default function Setup() {
   async function handleFinish() {
     setError('')
     setLoading(true)
-    const result = await completeSetup(workspaceName.trim(), name.trim(), email.trim(), password)
+    const result = await completeSetup(workspaceName.trim(), projectName.trim() || 'My App', name.trim(), email.trim(), password)
     setLoading(false)
     if (!result.ok) {
       setError(result.error ?? 'Setup failed.')
@@ -163,16 +164,29 @@ export default function Setup() {
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-1">Name your workspace</h2>
               <p className="text-gray-500 mb-6 text-sm">This is usually your company or team name. It'll appear in the dashboard header.</p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Company / workspace name</label>
-                <input
-                  autoFocus
-                  type="text"
-                  value={workspaceName}
-                  onChange={e => setWorkspaceName(e.target.value)}
-                  placeholder="Acme Corp"
-                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Company / workspace name</label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={workspaceName}
+                    onChange={e => setWorkspaceName(e.target.value)}
+                    placeholder="Acme Corp"
+                    className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">First project name</label>
+                  <input
+                    type="text"
+                    value={projectName}
+                    onChange={e => setProjectName(e.target.value)}
+                    placeholder="My App"
+                    className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                  />
+                  <p className="mt-1.5 text-xs text-gray-400">You can add more projects later. Leave blank to use "My App".</p>
+                </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button onClick={() => setStep(0)} className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium rounded-lg transition-colors text-sm">

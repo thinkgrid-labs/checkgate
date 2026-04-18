@@ -47,6 +47,7 @@ pub struct UserInfo {
     pub name: String,
     pub role: String,
     pub workspace_name: String,
+    pub is_setup_complete: bool,
 }
 
 /// Body expected by `POST /api/auth/login`.
@@ -60,9 +61,17 @@ pub struct LoginRequest {
 #[derive(Deserialize)]
 pub struct SetupRequest {
     pub workspace_name: String,
+    /// Name for the first project (e.g. "My App"). The migration seeds a
+    /// "Default Project" placeholder; setup renames it to this value.
+    #[serde(default = "default_project_name")]
+    pub project_name: String,
     pub name: String,
     pub email: String,
     pub password: String,
+}
+
+fn default_project_name() -> String {
+    "Default Project".into()
 }
 
 /// Error body returned on lockout so the UI can show a meaningful message.
@@ -120,6 +129,16 @@ async fn get_workspace_name(state: &AppState) -> String {
         .ok()
         .flatten()
         .unwrap_or_default()
+}
+
+async fn get_is_setup_complete(state: &AppState) -> bool {
+    sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'setup_complete'")
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +344,7 @@ pub async fn login(
     clear_attempts(&state, &email).await;
 
     let workspace_name = get_workspace_name(&state).await;
+    let is_setup_complete = get_is_setup_complete(&state).await;
 
     let session = SessionData {
         email: email.clone(),
@@ -347,6 +367,7 @@ pub async fn login(
             name,
             role,
             workspace_name,
+            is_setup_complete,
         }),
     ))
 }
@@ -367,12 +388,14 @@ pub async fn me(
         serde_json::from_str(cookie.value()).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     let workspace_name = get_workspace_name(&state).await;
+    let is_setup_complete = get_is_setup_complete(&state).await;
 
     Ok(Json(UserInfo {
         email: session.email,
         name: session.name,
         role: session.role,
         workspace_name,
+        is_setup_complete,
     }))
 }
 
@@ -441,6 +464,19 @@ pub async fn setup_complete(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    // Rename the seeded Default Project to the user's chosen name.
+    let project_name = req.project_name.trim().to_string();
+    if !project_name.is_empty() {
+        sqlx::query("UPDATE projects SET name = $1 WHERE slug = 'default'")
+            .bind(&project_name)
+            .execute(&mut *db_tx)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to rename default project during setup");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+    }
+
     sqlx::query(
         "INSERT INTO settings (key, value) VALUES ('setup_complete', 'true') \
          ON CONFLICT (key) DO UPDATE SET value = 'true'",
@@ -457,7 +493,7 @@ pub async fn setup_complete(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    info!(email = %email, workspace = %workspace_name, "Setup complete — admin user created");
+    info!(email = %email, workspace = %workspace_name, project = %project_name, "Setup complete — admin user created");
 
     let session = SessionData {
         email: email.clone(),
@@ -474,6 +510,7 @@ pub async fn setup_complete(
             name,
             role: "admin".into(),
             workspace_name,
+            is_setup_complete: true,
         }),
     ))
 }

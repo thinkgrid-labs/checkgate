@@ -8,19 +8,91 @@ import {
   Globe,
   ChevronDown,
   Activity,
+  FolderKanban,
+  Plus,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useEnvironment, type Environment } from '../context/EnvironmentContext'
+import { useProject } from '../context/ProjectContext'
+import type { Project } from '../types'
 
 const NAV_ALL = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true, adminOnly: false },
   { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false, adminOnly: false },
   { to: '/impressions', icon: Activity, label: 'Impressions', end: false, adminOnly: false },
   { to: '/environments', icon: Globe, label: 'Environments', end: false, adminOnly: true },
+  { to: '/projects', icon: FolderKanban, label: 'Projects', end: false, adminOnly: true },
   { to: '/users', icon: Users, label: 'Users', end: false, adminOnly: true },
   { to: '/settings', icon: Settings, label: 'Settings', end: false, adminOnly: true },
 ]
+
+// ---------------------------------------------------------------------------
+// Project switcher dropdown
+// ---------------------------------------------------------------------------
+
+function ProjectSwitcher() {
+  const { projects, activeProject, setActiveProject } = useProject()
+  const { session } = useAuth()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const isAdmin = session?.user.role === 'admin'
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  if (!activeProject) return null
+
+  function select(p: Project) {
+    setActiveProject(p)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative px-4 mb-1">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-xl transition-colors text-left"
+      >
+        <FolderKanban className="w-4 h-4 text-emerald-600 shrink-0" />
+        <span className="flex-1 text-sm font-bold text-emerald-800 truncate">{activeProject.name}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-emerald-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-4 right-4 top-full mt-1 z-50 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden">
+          {projects.map(p => (
+            <button
+              key={p.id}
+              onClick={() => select(p)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors text-left hover:bg-gray-50 ${
+                p.id === activeProject.id ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700'
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              <span className="flex-1 truncate">{p.name}</span>
+            </button>
+          ))}
+          {isAdmin && (
+            <button
+              onClick={() => { setOpen(false); navigate('/projects') }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 border-t border-gray-100 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-semibold">New project</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Environment switcher dropdown
@@ -109,6 +181,9 @@ export default function Sidebar() {
           )}
         </div>
       </div>
+
+      {/* Project switcher */}
+      <ProjectSwitcher />
 
       {/* Environment switcher */}
       <EnvSwitcher />

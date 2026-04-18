@@ -1,3 +1,4 @@
+use crate::auth::get_session_claims;
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -5,6 +6,7 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
+use axum_extra::extract::cookie::PrivateCookieJar;
 use checkgate_core::evaluator::Flag;
 use redis::AsyncCommands;
 use serde::Deserialize;
@@ -20,6 +22,58 @@ use tracing::{error, info, instrument, warn};
 pub struct EnvFlagPath {
     env_id: String,
     key: String,
+}
+
+// ---------------------------------------------------------------------------
+// Project access helper
+// ---------------------------------------------------------------------------
+
+/// Verifies the caller can access the project that owns `env_id`.
+/// Workspace admins and SDK key auth always pass.
+/// Others must be a project member.
+async fn check_env_access(
+    db: &sqlx::PgPool,
+    jar: &PrivateCookieJar,
+    env_id: &str,
+) -> Result<(), StatusCode> {
+    let Some(claims) = get_session_claims(jar) else {
+        return Ok(()); // SDK key auth
+    };
+    if claims.role == "admin" {
+        return Ok(());
+    }
+
+    let project_id: Option<String> =
+        sqlx::query_scalar("SELECT project_id::text FROM environments WHERE id = $1::uuid")
+            .bind(env_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "DB error resolving environment project");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+    let project_id = project_id.ok_or(StatusCode::NOT_FOUND)?;
+
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM project_members pm JOIN users u ON u.id = pm.user_id \
+         WHERE pm.project_id = $1::uuid AND u.email = $2)",
+    )
+    .bind(&project_id)
+    .bind(&claims.email)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error checking project membership for flag access");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if exists {
+        Ok(())
+    } else {
+        warn!(email = %claims.email, env_id = %env_id, "Forbidden: not a member of this environment's project");
+        Err(StatusCode::FORBIDDEN)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +103,6 @@ pub fn read_router() -> Router<AppState> {
         .route("/environments/{env_id}/flags/{key}", get(get_flag))
 }
 
-/// Write routes — require admin role (enforced by the layer added in main.rs).
 pub fn write_router() -> Router<AppState> {
     Router::new()
         .route("/environments/{env_id}/flags", post(create_flag))
@@ -83,26 +136,14 @@ fn default_limit() -> usize {
 // Handlers
 // ---------------------------------------------------------------------------
 
-#[instrument(skip(state))]
+#[instrument(skip(state, jar))]
 async fn list_flags(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(env_id): Path<String>,
     Query(page): Query<Pagination>,
 ) -> Result<Json<Vec<Flag>>, StatusCode> {
-    // Validate environment exists.
-    let env_exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM environments WHERE id = $1::uuid)")
-            .bind(&env_id)
-            .fetch_one(&state.db)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "DB error checking environment");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-
-    if !env_exists {
-        return Err(StatusCode::NOT_FOUND);
-    }
+    check_env_access(&state.db, &jar, &env_id).await?;
 
     let rows = sqlx::query(
         "SELECT data FROM flags WHERE environment_id = $1::uuid \
@@ -136,12 +177,14 @@ async fn list_flags(
     Ok(Json(flags))
 }
 
-#[instrument(skip(state, payload), fields(flag_key = %payload.key))]
+#[instrument(skip(state, jar, payload), fields(flag_key = %payload.key))]
 async fn create_flag(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(env_id): Path<String>,
     Json(payload): Json<Flag>,
 ) -> Result<Json<Flag>, StatusCode> {
+    check_env_access(&state.db, &jar, &env_id).await?;
     if !is_valid_flag_key(&payload.key) {
         warn!(key = %payload.key, "Rejected create_flag: invalid key");
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
@@ -181,11 +224,13 @@ async fn create_flag(
     Ok(Json(payload))
 }
 
-#[instrument(skip(state), fields(flag_key = %path.key))]
+#[instrument(skip(state, jar), fields(flag_key = %path.key))]
 async fn get_flag(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(path): Path<EnvFlagPath>,
 ) -> Result<Json<Flag>, StatusCode> {
+    check_env_access(&state.db, &jar, &path.env_id).await?;
     let row = sqlx::query("SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid")
         .bind(&path.key)
         .bind(&path.env_id)
@@ -206,11 +251,13 @@ async fn get_flag(
     Ok(Json(flag))
 }
 
-#[instrument(skip(state), fields(flag_key = %path.key))]
+#[instrument(skip(state, jar), fields(flag_key = %path.key))]
 async fn delete_flag(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(path): Path<EnvFlagPath>,
 ) -> Result<StatusCode, StatusCode> {
+    check_env_access(&state.db, &jar, &path.env_id).await?;
     let result = sqlx::query("DELETE FROM flags WHERE key = $1 AND environment_id = $2::uuid")
         .bind(&path.key)
         .bind(&path.env_id)
@@ -238,12 +285,14 @@ async fn delete_flag(
 /// The `key` field is excluded from the patch to prevent key aliasing.
 /// The read-modify-write is wrapped in a transaction with FOR UPDATE to prevent
 /// concurrent-patch races.
-#[instrument(skip(state, patch), fields(flag_key = %path.key))]
+#[instrument(skip(state, jar, patch), fields(flag_key = %path.key))]
 async fn patch_flag(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(path): Path<EnvFlagPath>,
     Json(mut patch): Json<serde_json::Value>,
 ) -> Result<Json<Flag>, StatusCode> {
+    check_env_access(&state.db, &jar, &path.env_id).await?;
     // Prevent the key from being mutated through a PATCH body.
     if let serde_json::Value::Object(ref mut m) = patch {
         m.remove("key");
@@ -324,12 +373,14 @@ async fn patch_flag(
 /// Copies a flag's configuration from one environment to another (the target
 /// environment is specified in the JSON body as `target_env_id`).
 /// This is the "promote to production" flow.
-#[instrument(skip(state), fields(flag_key = %path.key))]
+#[instrument(skip(state, jar), fields(flag_key = %path.key))]
 async fn promote_flag(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(path): Path<EnvFlagPath>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<Flag>, StatusCode> {
+    check_env_access(&state.db, &jar, &path.env_id).await?;
     let target_env_id = body
         .get("target_env_id")
         .and_then(|v| v.as_str())

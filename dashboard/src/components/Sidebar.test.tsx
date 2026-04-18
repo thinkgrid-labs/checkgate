@@ -25,6 +25,16 @@ vi.mock('../context/EnvironmentContext', () => ({
   }),
 }))
 
+vi.mock('../context/ProjectContext', () => ({
+  useProject: () => ({
+    projects: [],
+    activeProject: null,
+    setActiveProject: vi.fn(),
+    loading: false,
+    reload: vi.fn(),
+  }),
+}))
+
 describe('Sidebar Integration', () => {
   it('renders navigation links and user profile', () => {
     render(
