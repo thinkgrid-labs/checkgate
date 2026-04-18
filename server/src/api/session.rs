@@ -67,6 +67,7 @@ pub struct SetupRequest {
 
 /// Error body returned on lockout so the UI can show a meaningful message.
 #[derive(Serialize)]
+#[allow(dead_code)]
 struct LockoutError {
     error: &'static str,
     retry_after_seconds: i64,
@@ -164,8 +165,7 @@ async fn check_lockout(state: &AppState, email: &str) -> Result<Option<i64>, Sta
     let retry_after = if let Some(oldest) = oldest_in_window {
         let unlock_at = oldest + time::Duration::minutes(LOCKOUT_MINUTES);
         let now = time::OffsetDateTime::now_utc();
-        let remaining = (unlock_at - now).whole_seconds().max(1);
-        remaining
+        (unlock_at - now).whole_seconds().max(1)
     } else {
         LOCKOUT_MINUTES * 60
     };
@@ -492,6 +492,7 @@ pub fn setup_router() -> Router<AppState> {
     Router::new().route("/setup/complete", post(setup_complete))
 }
 
+#[allow(dead_code)]
 pub fn auth_router() -> Router<AppState> {
     Router::new()
         .route("/login", post(login))
