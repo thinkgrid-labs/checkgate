@@ -17,6 +17,14 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => mockAuthContext,
 }))
 
+vi.mock('../context/EnvironmentContext', () => ({
+  useEnvironment: () => ({
+    environments: [],
+    activeEnv: null,
+    setActiveEnv: vi.fn(),
+  }),
+}))
+
 describe('Sidebar Integration', () => {
   it('renders navigation links and user profile', () => {
     render(

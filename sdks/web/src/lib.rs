@@ -46,7 +46,8 @@ impl CheckgateCoreWasm {
         description: Option<String>,
         rules_js: JsValue,
     ) {
-        let rules: Vec<checkgate_core::evaluator::TargetingRule> = serde_wasm_bindgen::from_value(rules_js).unwrap_or_default();
+        let rules: Vec<checkgate_core::evaluator::TargetingRule> =
+            serde_wasm_bindgen::from_value(rules_js).unwrap_or_default();
         let flag_json = serde_json::json!({
             "key": key,
             "is_enabled": is_enabled,
