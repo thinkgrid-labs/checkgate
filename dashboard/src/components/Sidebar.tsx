@@ -13,13 +13,13 @@ import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useEnvironment, type Environment } from '../context/EnvironmentContext'
 
-const NAV = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false },
-  { to: '/impressions', icon: Activity, label: 'Impressions', end: false },
-  { to: '/environments', icon: Globe, label: 'Environments', end: false },
-  { to: '/users', icon: Users, label: 'Users', end: false },
-  { to: '/settings', icon: Settings, label: 'Settings', end: false },
+const NAV_ALL = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true, adminOnly: false },
+  { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false, adminOnly: false },
+  { to: '/impressions', icon: Activity, label: 'Impressions', end: false, adminOnly: false },
+  { to: '/environments', icon: Globe, label: 'Environments', end: false, adminOnly: true },
+  { to: '/users', icon: Users, label: 'Users', end: false, adminOnly: true },
+  { to: '/settings', icon: Settings, label: 'Settings', end: false, adminOnly: true },
 ]
 
 // ---------------------------------------------------------------------------
@@ -87,6 +87,8 @@ function EnvSwitcher() {
 export default function Sidebar() {
   const { session, logout } = useAuth()
   const navigate = useNavigate()
+  const isAdmin = session?.user.role === 'admin'
+  const NAV = NAV_ALL.filter(item => !item.adminOnly || isAdmin)
 
   function handleLogout() {
     logout()

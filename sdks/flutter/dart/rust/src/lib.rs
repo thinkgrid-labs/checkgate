@@ -18,10 +18,10 @@
 //!
 //! Compile as `staticlib` (iOS) or `cdylib` (Android / desktop).
 
-use checkgate_core::evaluator::{Flag, TargetingRule, UserContext, evaluate};
+use checkgate_core::evaluator::{EvalResult, Flag, UserContext, evaluate, evaluate_variant};
 use checkgate_core::store::FlagStore;
 use std::collections::HashMap;
-use std::ffi::{CStr, c_char};
+use std::ffi::{CStr, CString, c_char};
 use std::sync::LazyLock;
 
 static STORE: LazyLock<FlagStore> = LazyLock::new(FlagStore::new);
@@ -32,7 +32,30 @@ pub struct CheckgateContext {
     inner: UserContext,
 }
 
-/// Upsert a flag into the in-process cache.
+/// Upsert a flag from a full JSON string into the in-process cache.
+///
+/// Accepts all flag fields including `flag_type`, `default_value`, `disabled_value`,
+/// and per-rule `variant` values. Prefer this over `checkgate_upsert_flag` for
+/// non-boolean flags.
+///
+/// # Safety
+/// `flag_json` must be a valid, non-dangling, null-terminated C string containing
+/// a JSON object that matches the Checkgate flag schema.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn checkgate_upsert_flag_v2(flag_json: *const c_char) {
+    if flag_json.is_null() {
+        return;
+    }
+    let json = unsafe { CStr::from_ptr(flag_json) }.to_string_lossy();
+    if let Ok(flag) = serde_json::from_str::<Flag>(&json) {
+        STORE.upsert_flag(flag);
+    }
+}
+
+/// Upsert a flag into the in-process cache (legacy positional API).
+///
+/// New callers should prefer `checkgate_upsert_flag_v2` which accepts the full
+/// flag JSON and supports non-boolean variants.
 ///
 /// # Arguments
 /// - `key` — Null-terminated flag key.
@@ -54,26 +77,29 @@ pub unsafe extern "C" fn checkgate_upsert_flag(
         .to_string_lossy()
         .into_owned();
 
-    let rules: Vec<TargetingRule> = if !rules_json.is_null() {
+    let rules: serde_json::Value = if !rules_json.is_null() {
         let json = unsafe { CStr::from_ptr(rules_json) }.to_string_lossy();
-        serde_json::from_str(&json).unwrap_or_default()
+        serde_json::from_str(&json).unwrap_or(serde_json::Value::Array(vec![]))
     } else {
-        vec![]
+        serde_json::Value::Array(vec![])
     };
 
     let rollout = if rollout_percentage < 0 {
-        None
+        serde_json::Value::Null
     } else {
-        Some(rollout_percentage.min(100) as u32)
+        serde_json::json!(rollout_percentage.min(100))
     };
 
-    STORE.upsert_flag(Flag {
-        key,
-        is_enabled,
-        rollout_percentage: rollout,
-        description: None,
-        rules,
+    let flag_json = serde_json::json!({
+        "key": key,
+        "is_enabled": is_enabled,
+        "rollout_percentage": rollout,
+        "description": null,
+        "rules": rules,
     });
+    if let Ok(flag) = serde_json::from_value::<Flag>(flag_json) {
+        STORE.upsert_flag(flag);
+    }
 }
 
 /// Remove a flag from the in-process cache.
@@ -162,6 +188,105 @@ pub unsafe extern "C" fn checkgate_free_context(ctx: *mut CheckgateContext) {
 }
 
 // ---------------------------------------------------------------------------
+// Variant API — returns value alongside enabled/disabled result
+// ---------------------------------------------------------------------------
+
+fn alloc_cstring(s: String) -> *mut c_char {
+    CString::new(s)
+        .unwrap_or_else(|_| CString::new("null").unwrap())
+        .into_raw()
+}
+
+fn eval_result_to_json(result: EvalResult) -> String {
+    serde_json::to_string(&result).unwrap_or_else(|_| "null".to_string())
+}
+
+fn value_to_json(result: EvalResult) -> String {
+    serde_json::to_string(&result.value).unwrap_or_else(|_| "null".to_string())
+}
+
+/// Evaluate a flag and return a heap-allocated JSON string `{"enabled":bool,"value":...}`.
+/// Returns `"null"` if the flag is not found.
+///
+/// The caller must free the returned pointer with `checkgate_free_string`.
+///
+/// # Safety
+/// All pointer arguments must be valid, non-dangling, null-terminated C strings.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn checkgate_get_variant(
+    flag_key: *const c_char,
+    user_key: *const c_char,
+    attributes_json: *const c_char,
+) -> *mut c_char {
+    let flag_key = unsafe { CStr::from_ptr(flag_key) }.to_string_lossy();
+    let flag = match STORE.get_flag(&flag_key) {
+        Some(f) => f,
+        None => return alloc_cstring("null".to_string()),
+    };
+    let user_key = unsafe { CStr::from_ptr(user_key) }
+        .to_string_lossy()
+        .into_owned();
+    let attributes: HashMap<String, String> = if !attributes_json.is_null() {
+        let json = unsafe { CStr::from_ptr(attributes_json) }.to_string_lossy();
+        serde_json::from_str(&json).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+    let ctx = UserContext {
+        key: user_key,
+        attributes,
+    };
+    alloc_cstring(eval_result_to_json(evaluate_variant(flag.as_ref(), &ctx)))
+}
+
+/// Evaluate a flag and return a heap-allocated JSON string of just the variant value.
+/// Returns `"null"` if the flag is not found.
+///
+/// The caller must free the returned pointer with `checkgate_free_string`.
+///
+/// # Safety
+/// All pointer arguments must be valid, non-dangling, null-terminated C strings.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn checkgate_get_value(
+    flag_key: *const c_char,
+    user_key: *const c_char,
+    attributes_json: *const c_char,
+) -> *mut c_char {
+    let flag_key = unsafe { CStr::from_ptr(flag_key) }.to_string_lossy();
+    let flag = match STORE.get_flag(&flag_key) {
+        Some(f) => f,
+        None => return alloc_cstring("null".to_string()),
+    };
+    let user_key = unsafe { CStr::from_ptr(user_key) }
+        .to_string_lossy()
+        .into_owned();
+    let attributes: HashMap<String, String> = if !attributes_json.is_null() {
+        let json = unsafe { CStr::from_ptr(attributes_json) }.to_string_lossy();
+        serde_json::from_str(&json).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+    let ctx = UserContext {
+        key: user_key,
+        attributes,
+    };
+    alloc_cstring(value_to_json(evaluate_variant(flag.as_ref(), &ctx)))
+}
+
+/// Free a string returned by `checkgate_get_variant` or `checkgate_get_value`.
+/// Passing NULL is safe and is a no-op.
+///
+/// # Safety
+/// `s` must be a pointer from `checkgate_get_variant` or `checkgate_get_value`
+/// that has not already been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn checkgate_free_string(s: *mut c_char) {
+    if !s.is_null() {
+        drop(unsafe { CString::from_raw(s) });
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Legacy single-call API (parses attributes JSON on every invocation)
 // ---------------------------------------------------------------------------
 
@@ -201,6 +326,5 @@ pub unsafe extern "C" fn checkgate_is_enabled(
         key: user_key,
         attributes,
     };
-
     if evaluate(flag.as_ref(), &ctx) { 1 } else { 0 }
 }

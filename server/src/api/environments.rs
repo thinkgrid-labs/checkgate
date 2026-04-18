@@ -88,9 +88,7 @@ async fn create_environment(
 ) -> Result<Json<Environment>, StatusCode> {
     let name = req.name.trim().to_string();
     let slug = req.slug.trim().to_lowercase();
-    let color = req
-        .color
-        .unwrap_or_else(|| "#6366f1".to_string());
+    let color = req.color.unwrap_or_else(|| "#6366f1".to_string());
 
     if name.is_empty() || name.len() > 100 {
         warn!("Rejected create_environment: name empty or too long");

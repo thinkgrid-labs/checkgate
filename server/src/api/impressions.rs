@@ -70,10 +70,7 @@ fn default_limit() -> i64 {
 /// Impression read routes — any authenticated user.
 pub fn read_router() -> Router<AppState> {
     Router::new()
-        .route(
-            "/environments/{env_id}/impressions",
-            get(list_impressions),
-        )
+        .route("/environments/{env_id}/impressions", get(list_impressions))
         .route(
             "/environments/{env_id}/impressions/stats",
             get(impression_stats),

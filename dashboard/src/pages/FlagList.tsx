@@ -2,8 +2,25 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, RotateCcw, Pencil, Trash2, ArrowUpRight } from 'lucide-react'
 import { api } from '../api'
-import type { Flag } from '../types'
+import type { Flag, FlagType } from '../types'
 import { useEnvironment } from '../context/EnvironmentContext'
+
+const TYPE_BADGE: Partial<Record<FlagType, { label: string; cls: string }>> = {
+  string: { label: 'STR', cls: 'bg-blue-50 text-blue-700 ring-blue-100' },
+  integer: { label: 'INT', cls: 'bg-violet-50 text-violet-700 ring-violet-100' },
+  json: { label: 'JSON', cls: 'bg-amber-50 text-amber-700 ring-amber-100' },
+}
+
+function TypeBadge({ flagType }: { flagType?: FlagType }) {
+  if (!flagType || flagType === 'boolean') return null
+  const badge = TYPE_BADGE[flagType]
+  if (!badge) return null
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ring-1 ml-2 ${badge.cls}`}>
+      {badge.label}
+    </span>
+  )
+}
 
 function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
   return (
@@ -255,6 +272,7 @@ export default function FlagList() {
                   <tr key={flag.key} className="group hover:bg-emerald-50/20 transition-all">
                     <td className="px-8 py-5">
                       <span className="font-mono text-emerald-600 font-semibold text-sm">{flag.key}</span>
+                      <TypeBadge flagType={flag.flag_type} />
                     </td>
                     <td className="px-8 py-5 hidden md:table-cell">
                       <span className="text-gray-500 truncate max-w-xs block text-xs">

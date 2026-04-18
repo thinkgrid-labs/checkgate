@@ -1,9 +1,14 @@
 export type Operator = 'equals' | 'not_equals' | 'contains' | 'starts_with' | 'ends_with'
 
+export type FlagType = 'boolean' | 'string' | 'integer' | 'json'
+
+export type FlagValue = string | number | boolean | Record<string, unknown> | null
+
 export interface TargetingRule {
   attribute: string
   operator: Operator
   values: string[]
+  variant?: FlagValue
 }
 
 export interface Flag {
@@ -12,6 +17,9 @@ export interface Flag {
   rollout_percentage: number | null
   description: string | null
   rules: TargetingRule[]
+  flag_type?: FlagType
+  default_value?: FlagValue
+  disabled_value?: FlagValue
 }
 
 export type FlagPatch = Partial<Omit<Flag, 'key'>>
@@ -39,7 +47,7 @@ export interface ImpressionStats {
   last_seen: string | null
 }
 
-export type UserRole = 'admin' | 'viewer'
+export type UserRole = 'admin' | 'editor' | 'viewer'
 
 export interface User {
   id: string

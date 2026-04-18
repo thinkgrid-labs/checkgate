@@ -364,20 +364,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Protected write: additionally requires admin role.
     //
     // Layer execution order for a write request (outermost → innermost):
-    //   cors → rate_limit → csrf → require_auth → require_admin → handler
+    //   cors → rate_limit → csrf → require_auth → require_editor/require_admin → handler
 
     let auth_routes = api::auth_router();
     let setup_routes = api::setup_router();
 
-    // Write routes wrapped with require_admin (runs after require_auth).
-    let write_api = api::write_router().layer(middleware::from_fn_with_state(
+    // Flag write routes: editors and admins can create/edit/delete flags.
+    let editor_write_api = api::editor_write_router().layer(middleware::from_fn_with_state(
+        app_state.clone(),
+        auth::require_editor,
+    ));
+
+    // Admin-only write routes: environments, SDK keys, users.
+    let admin_write_api = api::admin_write_router().layer(middleware::from_fn_with_state(
         app_state.clone(),
         auth::require_admin,
     ));
 
     // Standard API routes (65 KB body limit).
     let api_routes = api::read_router()
-        .merge(write_api)
+        .merge(editor_write_api)
+        .merge(admin_write_api)
         .layer(DefaultBodyLimit::max(65_536));
 
     // Impression ingest — kept separate so its 256 KB body limit is not overridden

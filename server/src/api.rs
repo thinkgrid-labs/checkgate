@@ -92,10 +92,14 @@ pub fn ingest_router() -> Router<AppState> {
     impressions::ingest_router()
 }
 
-/// Write API routes — require admin role (layer added in main.rs).
-pub fn write_router() -> Router<AppState> {
+/// Flag write routes — require editor or admin role (layer added in main.rs).
+pub fn editor_write_router() -> Router<AppState> {
     flags::write_router()
-        .merge(environments::write_router())
+}
+
+/// Admin-only write routes: environments, SDK keys, users (layer added in main.rs).
+pub fn admin_write_router() -> Router<AppState> {
+    environments::write_router()
         .merge(keys::write_router())
         .merge(users::write_router())
 }

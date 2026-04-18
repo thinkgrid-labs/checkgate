@@ -113,14 +113,12 @@ fn verify_password(password: &str, hash: &str) -> bool {
 }
 
 async fn get_workspace_name(state: &AppState) -> String {
-    sqlx::query_scalar::<_, String>(
-        "SELECT value FROM settings WHERE key = 'workspace_name'",
-    )
-    .fetch_optional(&state.db)
-    .await
-    .ok()
-    .flatten()
-    .unwrap_or_default()
+    sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'workspace_name'")
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------
@@ -177,13 +175,11 @@ async fn check_lockout(state: &AppState, email: &str) -> Result<Option<i64>, Sta
 
 /// Records a failed login attempt and purges stale rows older than the window.
 async fn record_failure(state: &AppState, email: &str, ip: &str) {
-    if let Err(e) = sqlx::query(
-        "INSERT INTO login_attempts (email, ip) VALUES ($1, $2)",
-    )
-    .bind(email)
-    .bind(ip)
-    .execute(&state.db)
-    .await
+    if let Err(e) = sqlx::query("INSERT INTO login_attempts (email, ip) VALUES ($1, $2)")
+        .bind(email)
+        .bind(ip)
+        .execute(&state.db)
+        .await
     {
         error!(error = %e, "Failed to record login attempt");
     }
@@ -250,19 +246,17 @@ pub async fn login(
     }
 
     // ── User lookup ───────────────────────────────────────────────────────────
-    let row = sqlx::query(
-        "SELECT name, role, password_hash FROM users WHERE email = $1",
-    )
-    .bind(&email)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "DB error during login user lookup");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": "Internal error." })),
-        )
-    })?;
+    let row = sqlx::query("SELECT name, role, password_hash FROM users WHERE email = $1")
+        .bind(&email)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "DB error during login user lookup");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Internal error." })),
+            )
+        })?;
 
     // ── Credential validation ─────────────────────────────────────────────────
     // We validate both "user not found" and "wrong password" the same way to

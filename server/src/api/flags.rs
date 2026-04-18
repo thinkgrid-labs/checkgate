@@ -186,20 +186,20 @@ async fn get_flag(
     State(state): State<AppState>,
     Path(path): Path<EnvFlagPath>,
 ) -> Result<Json<Flag>, StatusCode> {
-    let row = sqlx::query(
-        "SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid",
-    )
-    .bind(&path.key)
-    .bind(&path.env_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "DB error fetching flag");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    let row = sqlx::query("SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid")
+        .bind(&path.key)
+        .bind(&path.env_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "DB error fetching flag");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
-    let v: serde_json::Value = row.try_get("data").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let v: serde_json::Value = row
+        .try_get("data")
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let flag: Flag = serde_json::from_value(v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     info!(env_id = %path.env_id, "Flag retrieved");
@@ -211,16 +211,15 @@ async fn delete_flag(
     State(state): State<AppState>,
     Path(path): Path<EnvFlagPath>,
 ) -> Result<StatusCode, StatusCode> {
-    let result =
-        sqlx::query("DELETE FROM flags WHERE key = $1 AND environment_id = $2::uuid")
-            .bind(&path.key)
-            .bind(&path.env_id)
-            .execute(&state.db)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "PostgreSQL delete failed");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+    let result = sqlx::query("DELETE FROM flags WHERE key = $1 AND environment_id = $2::uuid")
+        .bind(&path.key)
+        .bind(&path.env_id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "PostgreSQL delete failed");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if result.rows_affected() == 0 {
         return Err(StatusCode::NOT_FOUND);
@@ -297,18 +296,16 @@ async fn patch_flag(
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    sqlx::query(
-        "UPDATE flags SET data = $1 WHERE key = $2 AND environment_id = $3::uuid",
-    )
-    .bind(&flag_val)
-    .bind(&path.key)
-    .bind(&path.env_id)
-    .execute(&mut *db_tx)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "PostgreSQL update failed");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    sqlx::query("UPDATE flags SET data = $1 WHERE key = $2 AND environment_id = $3::uuid")
+        .bind(&flag_val)
+        .bind(&path.key)
+        .bind(&path.env_id)
+        .execute(&mut *db_tx)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "PostgreSQL update failed");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     db_tx.commit().await.map_err(|e| {
         error!(error = %e, "Transaction commit failed");
@@ -345,21 +342,22 @@ async fn promote_flag(
     })?;
 
     // Read source flag.
-    let rec = sqlx::query(
-        "SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid",
-    )
-    .bind(&path.key)
-    .bind(&path.env_id)
-    .fetch_optional(&mut *db_tx)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "Failed to read source flag for promote");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    let rec = sqlx::query("SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid")
+        .bind(&path.key)
+        .bind(&path.env_id)
+        .fetch_optional(&mut *db_tx)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "Failed to read source flag for promote");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
-    let flag_val: serde_json::Value = rec.try_get("data").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let flag: Flag = serde_json::from_value(flag_val.clone()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let flag_val: serde_json::Value = rec
+        .try_get("data")
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let flag: Flag =
+        serde_json::from_value(flag_val.clone()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Upsert into target environment.
     sqlx::query(
@@ -381,8 +379,7 @@ async fn promote_flag(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let msg =
-        json!({"type": "UPSERT", "env_id": target_env_id, "flag": flag}).to_string();
+    let msg = json!({"type": "UPSERT", "env_id": target_env_id, "flag": flag}).to_string();
     publish_update(&state, &msg, "promote_flag").await;
 
     info!(

@@ -81,7 +81,7 @@ pub async fn create_user(
     if name.is_empty() || name.len() > 100 || email.is_empty() {
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
-    if role != "admin" && role != "viewer" {
+    if !matches!(role.as_str(), "admin" | "editor" | "viewer") {
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
     if req.password.len() < 8 {
@@ -133,15 +133,14 @@ pub async fn delete_user(
     if let Some(cookie) = jar.get("lg_session")
         && let Ok(claims) = serde_json::from_str::<CallerClaims>(cookie.value())
     {
-        let self_id: Option<i64> =
-            sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-                .bind(&claims.email)
-                .fetch_optional(&state.db)
-                .await
-                .map_err(|e| {
-                    error!(error = %e, "DB error resolving session user");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
+        let self_id: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+            .bind(&claims.email)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "DB error resolving session user");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         if self_id == Some(id) {
             warn!(user_id = id, "Rejected self-delete attempt");

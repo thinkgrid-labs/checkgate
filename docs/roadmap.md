@@ -1,6 +1,6 @@
 # Checkgate Product Roadmap
 
-This document outlines the vision and future development priorities for Checkgate. Our goal is to provide the most robust, local-first feature management platform for developers.
+This document outlines the vision and future development priorities for Checkgate. Items are ordered by **impact** — what unblocks the most users, most quickly.
 
 ---
 
@@ -12,37 +12,44 @@ This document outlines the vision and future development priorities for Checkgat
 
 ---
 
-## 🟢 Phase 2: Observability & Analytics (Completed)
-*Goal: Provide developers with real-time feedback on how their flags are performing.*
+## 🟢 Phase 2: Observability & Security (Completed)
+*Goal: Give developers real-time feedback on how their flags are performing, and harden the platform for production.*
 
-- [x] **Environment Management**: First-class production/staging/UAT/development environments with isolated flag configurations, environment-scoped API keys, and a one-click "promote to production" flow from the dashboard.
-- [x] **Onboarding Refactor**: Redesigned first-run setup flow that collects workspace/company name, admin email, and a proper password — decoupling user authentication (email + password) from SDK key authentication so key rotations no longer invalidate user sessions.
-- [x] **Impression Tracking**: Asynchronous reporting of evaluation events from SDKs to the server.
+- [x] **Environment Management**: First-class production/staging/UAT/development environments with isolated flag configurations and one-click "promote to production".
+- [x] **Onboarding Refactor**: Workspace name, admin email/password setup — decoupling user auth from SDK key auth.
+- [x] **Impression Tracking**: Asynchronous reporting of evaluation events from SDKs to the server, with per-flag aggregate stats.
+- [x] **Security Hardening**: Account-level login lockout, CSRF protection, security headers, Bearer-auth CSRF exemption.
+
+---
+
+## 🟢 Phase 3: Multi-Variant Flags & RBAC (Completed)
+*Goal: Close the biggest feature gaps vs. Flagsmith and LaunchDarkly.*
+
+- [x] **Multi-Variant Flags**: String, Integer, and JSON variants alongside Boolean flags. Per-rule return values, flag-level default and disabled values. Full backward compatibility — existing boolean flags unaffected. Available in all SDKs via `getValue()` / `getVariant()`.
+- [x] **RBAC — Editor Role**: Three-tier access control (admin / editor / viewer). Editors can create and manage flags; only admins can manage users, environments, and SDK keys. Dashboard nav gated by role.
+- [x] **Percentage Rollouts**: Sticky, hash-based (MurmurHash3) bucketing for gradual feature releases.
+
+---
+
+## 🔵 Phase 4: Advanced Targeting & Analytics
+*Goal: Give teams the tools to debug and understand their flag usage.*
+
+- **Evaluation Stream**: A live, searchable log of evaluations in the dashboard for debugging "why isn't this flag working for that user?" Leverages the impressions infrastructure already in place.
+- **Audit Logs**: Comprehensive "Who changed What and When" history — required for enterprise trust and incident response.
+- **User Segmentation**: Reusable audience definitions (e.g., "Internal Employees", "Power Users") to eliminate repeated targeting rules across flags.
 - **Exposure Dashboards**: Visualize which users are being exposed to specific variants.
-- **A/B Testing Beta**: Basic statistical comparison between two variants based on custom event goals.
-- **Evaluation Stream**: A live, searchable log of evaluations in the dashboard for debugging.
+- **A/B Testing Beta**: Basic statistical comparison between two variants based on custom event goals. Meaningful only after multi-variant is fully adopted.
 
 ---
 
-## 🔵 Phase 3: Advanced Targeting & DX
-*Goal: Make Checkgate the most powerful tool in a developer's arsenal.*
-
-- **Percentage Rollouts**: Sticky, hash-based bucketing for gradual feature releases.
-- **User Segmentation**: Reusable audience definitions (e.g., "Internal Employees", "Power Users").
-- **Multi-Variant Flags**: Support for JSON, String, and Integer variants instead of just Booleans.
-- **VS Code Extension**: Inline flag status, targeting rules, and direct links to the dashboard from your editor.
-- **Type-Safe Schema**: CLI tool to generate TypeScript/Dart/Rust types from your flag definitions.
-
----
-
-## 🟣 Phase 4: Enterprise Governance & Scale
+## 🟣 Phase 5: Enterprise Governance & Scale
 *Goal: Enable large teams to move fast without breaking things.*
 
 - **Change Requests**: Pull-request style workflow for flag rule changes with required approvals.
-- **Role-Based Access Control (RBAC)**: Fine-grained permissions for environments and projects.
-- **Audit Logs**: Comprehensive history of "Who changed What and When."
-- **Edge Side Evaluation**: Official integration with Cloudflare Workers and Fly.io for global low-latency.
+- **VS Code Extension**: Inline flag status, targeting rules, and direct links to the dashboard from your editor.
+- **Type-Safe Schema CLI**: Generate TypeScript/Dart/Rust types from your flag definitions.
 - **Terraform/OpenTofu Provider**: Manage your entire feature flag infrastructure as code.
+- **Edge Side Evaluation**: Official integration with Cloudflare Workers and Fly.io for global low-latency.
 - **Kubernetes Operator**: Native orchestration for large-scale self-hosted deployments.
 
 ---

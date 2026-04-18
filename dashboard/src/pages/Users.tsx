@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { UserPlus, Trash2, Shield, Eye, EyeOff, X } from 'lucide-react'
+import { UserPlus, Trash2, Shield, Eye, EyeOff, X, Pencil } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { userApi, type ApiUser } from '../api'
 import type { UserRole } from '../types'
@@ -8,11 +8,21 @@ const inputClass =
   'w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium'
 
 function RoleBadge({ role }: { role: string }) {
-  return role === 'admin' ? (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-      <Shield className="w-2 h-2" /> Admin
-    </span>
-  ) : (
+  if (role === 'admin') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+        <Shield className="w-2 h-2" /> Admin
+      </span>
+    )
+  }
+  if (role === 'editor') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+        <Pencil className="w-2 h-2" /> Editor
+      </span>
+    )
+  }
+  return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200">
       <Eye className="w-3 h-3" /> Viewer
     </span>
@@ -122,26 +132,28 @@ function AddUserModal({ onClose, onAdd }: AddUserModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Role</label>
-            <div className="flex gap-3">
-              {(['admin', 'viewer'] as UserRole[]).map(r => (
+            <div className="flex gap-2">
+              {(['admin', 'editor', 'viewer'] as UserRole[]).map(r => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setRole(r)}
-                  className={`flex-1 py-2.5 px-3 rounded-xl border text-sm font-bold transition-all ${
+                  className={`flex-1 py-2.5 px-3 rounded-xl border text-sm font-bold transition-all capitalize ${
                     role === r
                       ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-100'
                       : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200 hover:text-gray-900'
                   }`}
                 >
-                  {r === 'admin' ? 'Admin' : 'Viewer'}
+                  {r.charAt(0).toUpperCase() + r.slice(1)}
                 </button>
               ))}
             </div>
             <p className="mt-1.5 text-xs text-gray-500">
               {role === 'admin'
-                ? 'Can create, edit, and delete flags.'
-                : 'Read-only access to flags.'}
+                ? 'Full access: flags, environments, users, and SDK keys.'
+                : role === 'editor'
+                ? 'Can create, edit, and delete flags. Cannot manage users or settings.'
+                : 'Read-only access to flags and environments.'}
             </p>
           </div>
 
