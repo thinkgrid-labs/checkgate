@@ -121,7 +121,8 @@ pub async fn create_user(
             return Ok((
                 StatusCode::CONFLICT,
                 Json(json!({"error": "Email address is already in use."})),
-            ).into_response());
+            )
+                .into_response());
         }
         Err(Some(_)) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
@@ -137,7 +138,8 @@ pub async fn create_user(
         email,
         role,
         created_at: created_at.to_string(),
-    }).into_response())
+    })
+    .into_response())
 }
 
 pub async fn delete_user(

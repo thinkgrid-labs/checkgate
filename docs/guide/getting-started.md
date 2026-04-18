@@ -30,9 +30,10 @@ On first run, you are redirected to the setup wizard at [http://localhost:3000/s
 
 The wizard collects:
 1. **Workspace name** — your company or team name (shown on the login page)
-2. **Your name** and **work email** — used for the first admin account
-3. **Password** — minimum 8 characters
-4. **SDK key** — auto-generated; copy it now for use in your applications
+2. **First project name** — the initial project (e.g. "My App"); more projects can be added later
+3. **Your name** and **work email** — used for the first admin account
+4. **Password** — minimum 8 characters
+5. **SDK key** — auto-generated for the Production environment; copy it now for use in your applications
 
 After completing the wizard you are logged in as the first admin.
 
@@ -63,10 +64,16 @@ curl -X POST "http://localhost:3000/api/environments/${ENV_ID}/flags" \
   }'
 ```
 
-To get the list of environments and their IDs:
+To get the list of projects and their IDs, then the environments within a project:
 
 ```bash
-curl http://localhost:3000/api/environments \
+# List projects (returns project IDs)
+curl http://localhost:3000/api/projects \
+  -H "Authorization: Bearer ${SDK_KEY}"
+
+# List environments for a project
+PROJECT_ID=your-project-uuid
+curl "http://localhost:3000/api/projects/${PROJECT_ID}/environments" \
   -H "Authorization: Bearer ${SDK_KEY}"
 ```
 
@@ -128,6 +135,6 @@ COOKIE_SECURE=true \
 docker compose up -d
 ```
 
-SDK keys are managed entirely through the dashboard Settings page. Additional keys can be created and revoked there without restarting the server.
+SDK keys are managed per-project from **Project Settings → SDK Keys**. Each key is bound to a specific environment — the key implicitly tells the server which project and environment to serve flags from. Additional keys can be created and revoked there without restarting the server.
 
 See [Self-Hosting](/self-hosting) for full production deployment options including AWS, environment variable reference, and upgrade instructions.

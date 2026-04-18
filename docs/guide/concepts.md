@@ -1,21 +1,48 @@
 ---
-title: "Core Concepts — Flags, Environments, Targeting Rules, Rollouts & SSE Stream"
-description: "Understand Checkgate's core building blocks: environments, feature flag schema, targeting rule operators, deterministic rollout hashing, user context, impression tracking, and the SSE update stream."
+title: "Core Concepts — Projects, Environments, Flags, Targeting, Rollouts & Evaluation Stream"
+description: "Understand Checkgate's core building blocks: the workspace/project/environment hierarchy, feature flag schema, targeting rule operators, deterministic rollout hashing, user context, impression tracking, the evaluation stream, and the SSE update channel."
 ---
 
 # Core Concepts
 
+## Hierarchy
+
+Checkgate organizes everything into a four-level hierarchy:
+
+```
+Workspace (singleton — one per installation)
+  └── Projects  (e.g. "Mobile App", "Web App", "API Service")
+        ├── Members  (per-project user roles)
+        └── Environments  (e.g. Production, Staging, Development)
+              ├── SDK Keys  (per-environment, auth for SDK clients)
+              ├── Flags     (per-environment configuration)
+              └── Impressions
+```
+
+Each **project** is a fully isolated space: its own environments, flags, SDK keys, and team members. Changes in one project never affect another.
+
+## Projects
+
+A project represents a single application or service. You might have separate projects for your mobile app, your backend API, and an internal tooling suite — each with independent flag configurations and team membership.
+
+### Creating Projects
+
+The first project is created during the **setup wizard**. Additional projects can be added from the **Projects** page (admin only). Each new project is automatically seeded with three environments: Production, Staging, and Development.
+
+### Project Membership
+
+Users can be members of one or more projects with a per-project role. A **workspace admin** always has full access to all projects regardless of membership.
+
 ## Environments
 
-Environments are isolated flag namespaces. Every flag belongs to exactly one environment, so you can have different configurations for Production, Staging, UAT, and Development without them affecting each other.
+Environments are isolated flag namespaces within a project. Every flag belongs to exactly one environment, so Production, Staging, and Development each have their own independent configuration.
 
-Four environments are created automatically on first run:
+Three environments are seeded automatically when a project is created:
 
 | Environment | Color | Notes |
 |-------------|-------|-------|
 | Production | Red | |
 | Staging | Amber | |
-| UAT | Purple | |
 | Development | Green | Default — used when no environment is specified |
 
 The active environment is shown in the dashboard sidebar and can be switched at any time. The **Promote** action copies a flag's configuration from one environment to another in a single atomic transaction.
@@ -123,7 +150,7 @@ Attributes are **never sent to the server** — they are only used locally for r
 
 ## Impression Tracking
 
-SDKs can report flag evaluation events back to the server asynchronously. This powers the **Impressions** dashboard page with per-flag analytics.
+SDKs can report flag evaluation events back to the server asynchronously. This powers the **Impressions** dashboard page.
 
 An impression payload:
 
@@ -144,27 +171,41 @@ An impression payload:
 - Fire-and-forget — evaluation is never blocked waiting for the report
 - Up to 500 impressions per batch
 
-The dashboard shows total evaluations, true/false split, unique users per flag, and a live evaluation stream filterable by flag key.
+### Impressions Dashboard
+
+The Impressions page has two tabs:
+
+**Analytics** — aggregate statistics per flag: total evaluations, true/false split, unique user count, last seen timestamp.
+
+**Stream** — a live evaluation log that auto-refreshes every 3 seconds. Useful for debugging "why isn't this flag working for that user?". Filters by flag key, user ID, and evaluated value. Click any row to expand the full evaluation context JSON.
 
 ## Users and Roles
 
-Checkgate has two roles:
+Checkgate has three roles:
 
 | Role | Access |
 |------|--------|
-| `admin` | Full access: create/edit/delete flags, environments, users, and SDK keys |
-| `viewer` | Read-only access to flags and environments |
+| `admin` | Full access: create/edit/delete flags, manage environments, users, projects, and SDK keys |
+| `editor` | Can create and edit flags; cannot manage users, projects, or SDK keys |
+| `viewer` | Read-only access to flags and impressions |
 
-Users authenticate with **email and password** through the dashboard login page. The first admin account is created during the setup wizard. Additional users can be invited from the **Users** page (admin only).
+### Workspace Admin vs Project Member
 
-User sessions are stored in an HttpOnly, AES-256-GCM encrypted cookie with a 7-day TTL. Session secrets are derived from the `SESSION_SECRET` environment variable.
+- A **workspace admin** has full access to all projects, environments, and users.
+- Other users are granted access per-project via the **Members** tab in Project Settings. Each project membership has its own role (`admin`, `editor`, or `viewer`) that is independent of any other project.
+- Removing a user from a project revokes their access to that project's flags and environments; it does not delete their account.
+
+Users authenticate with **email and password** through the dashboard login page. The first admin account is created during the setup wizard. Additional users are managed from the **Users** page (workspace admin only).
+
+User sessions are stored in an HttpOnly, AES-256-GCM encrypted cookie with a 7-day TTL.
 
 ## SDK Keys
 
-SDK keys (`sk_live_...`) authenticate SDK clients and programmatic API access. They are stored in PostgreSQL and managed from the dashboard Settings page.
+SDK keys (`sk_live_...`) authenticate SDK clients and programmatic API access. Each key is tied to a specific **environment** — so the key implicitly identifies both the project and the environment that SDK clients will receive flags from.
 
-- Multiple keys are supported simultaneously (e.g. one per service)
-- A key is auto-generated on first boot
+- Keys are managed from the **Project Settings → SDK Keys** tab
+- Multiple keys per project are supported (e.g. one per service or platform)
+- One key is auto-generated for the Production environment on first boot
 - Keys are shown in full only once — copy them immediately after creation
 - Revoking a key invalidates it instantly; SDK clients using it will receive 401 errors
 - The legacy `SDK_KEY` environment variable is also accepted for backwards compatibility
@@ -191,7 +232,7 @@ The SSE stream (`GET /stream`) is the connection between the server and each SDK
 {"type": "DELETE", "env_id": "<uuid>", "key": "flag-key"}
 ```
 
-The `env_id` field is included in all update payloads so SDK clients can scope their local store to a specific environment if needed.
+The stream is **scoped to the environment identified by the SDK key**. When a client connects, the server looks up the key's `environment_id`, bootstraps only the flags for that environment, and filters all live updates to that environment. Clients only ever see flags for their own project and environment.
 
 ## Authentication
 

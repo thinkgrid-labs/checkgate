@@ -162,7 +162,9 @@ async fn list_projects(
         })?
     } else {
         // Non-admin: only projects where the user has membership.
-        let email = get_session_claims(&jar).map(|c| c.email).unwrap_or_default();
+        let email = get_session_claims(&jar)
+            .map(|c| c.email)
+            .unwrap_or_default();
         sqlx::query(
             "SELECT p.id::text, p.name, p.slug, p.created_at::text, \
              (SELECT COUNT(*) FROM environments e WHERE e.project_id = p.id) AS environment_count, \
@@ -516,6 +518,9 @@ pub fn write_router() -> Router<AppState> {
         .route("/projects/{id}", patch(rename_project))
         .route("/projects/{id}", delete(delete_project))
         .route("/projects/{id}/members", post(add_member))
-        .route("/projects/{id}/members/{user_id}", patch(update_member_role))
+        .route(
+            "/projects/{id}/members/{user_id}",
+            patch(update_member_role),
+        )
         .route("/projects/{id}/members/{user_id}", delete(remove_member))
 }

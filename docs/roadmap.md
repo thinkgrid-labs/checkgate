@@ -22,23 +22,24 @@ This document outlines the vision and future development priorities for Checkgat
 
 ---
 
-## 🟢 Phase 3: Multi-Variant Flags & RBAC (Completed)
+## 🟢 Phase 3: Multi-Variant Flags, RBAC & Projects (Completed)
 *Goal: Close the biggest feature gaps vs. Flagsmith and LaunchDarkly.*
 
 - [x] **Multi-Variant Flags**: String, Integer, and JSON variants alongside Boolean flags. Per-rule return values, flag-level default and disabled values. Full backward compatibility — existing boolean flags unaffected. Available in all SDKs via `getValue()` / `getVariant()`.
 - [x] **RBAC — Editor Role**: Three-tier access control (admin / editor / viewer). Editors can create and manage flags; only admins can manage users, environments, and SDK keys. Dashboard nav gated by role.
 - [x] **Percentage Rollouts**: Sticky, hash-based (MurmurHash3) bucketing for gradual feature releases.
+- [x] **Projects Layer**: Workspace → Projects → Environments → Flags hierarchy. Each project has isolated environments, SDK keys, flags, and impressions. Per-project user membership with independent roles. SDK keys are per-environment — the key implicitly identifies the project and environment. Setup wizard creates the first project; admins can add more. Existing installations auto-migrate to a "Default Project" with no data loss.
 
 ---
 
-## 🔵 Phase 4: Advanced Targeting & Analytics
+## 🔵 Phase 4: Advanced Targeting & Analytics (In Progress)
 *Goal: Give teams the tools to debug and understand their flag usage.*
 
-- **Evaluation Stream**: A live, searchable log of evaluations in the dashboard for debugging "why isn't this flag working for that user?" Leverages the impressions infrastructure already in place.
-- **Audit Logs**: Comprehensive "Who changed What and When" history — required for enterprise trust and incident response.
-- **User Segmentation**: Reusable audience definitions (e.g., "Internal Employees", "Power Users") to eliminate repeated targeting rules across flags.
-- **Exposure Dashboards**: Visualize which users are being exposed to specific variants.
-- **A/B Testing Beta**: Basic statistical comparison between two variants based on custom event goals. Meaningful only after multi-variant is fully adopted.
+- [x] **Evaluation Stream**: A live, searchable log of evaluations in the dashboard for debugging "why isn't this flag working for that user?" Polls every 3 seconds; filterable by flag key, user ID, and evaluated value; full context JSON expandable inline. Backed by efficient `since_id` incremental queries.
+- [ ] **Audit Logs**: Comprehensive "Who changed What and When" history — required for enterprise trust and incident response.
+- [ ] **User Segmentation**: Reusable audience definitions (e.g., "Internal Employees", "Power Users") to eliminate repeated targeting rules across flags.
+- [ ] **Exposure Dashboards**: Visualize which users are being exposed to specific variants.
+- [ ] **A/B Testing Beta**: Basic statistical comparison between two variants based on custom event goals. Meaningful only after multi-variant is fully adopted.
 
 ---
 

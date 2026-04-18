@@ -104,15 +104,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── SDK keys (DB-backed) ──────────────────────────────────────────────────
 
-    let rows = sqlx::query(
-        "SELECT id, name, value, environment_id::text FROM sdk_keys ORDER BY id ASC",
-    )
-    .fetch_all(&db)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "Failed to load SDK keys");
-        e
-    })?;
+    let rows =
+        sqlx::query("SELECT id, name, value, environment_id::text FROM sdk_keys ORDER BY id ASC")
+            .fetch_all(&db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to load SDK keys");
+                e
+            })?;
 
     let mut sdk_keys_data: Vec<SdkKeyEntry> = rows
         .iter()

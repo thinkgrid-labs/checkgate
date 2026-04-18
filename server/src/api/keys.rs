@@ -92,7 +92,11 @@ async fn can_access_project(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    if exists { Ok(()) } else { Err(StatusCode::FORBIDDEN) }
+    if exists {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
 }
 
 async fn can_admin_project(

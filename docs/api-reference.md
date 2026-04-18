@@ -1,6 +1,6 @@
 ---
 title: "REST API Reference — Checkgate Feature Flag Management API"
-description: "Complete REST API reference for Checkgate. Manage feature flags, environments, users, and SDK keys via CRUD endpoints. Connect to the SSE stream for real-time updates."
+description: "Complete REST API reference for Checkgate. Manage projects, environments, feature flags, users, and SDK keys via CRUD endpoints. Connect to the SSE stream for real-time updates."
 ---
 
 # REST API Reference
@@ -56,7 +56,8 @@ Content-Type: application/json
   "email": "admin@example.com",
   "name": "Jane Smith",
   "role": "admin",
-  "workspace_name": "Acme Corp"
+  "workspace_name": "Acme Corp",
+  "is_setup_complete": true
 }
 ```
 
@@ -100,7 +101,7 @@ Clears the session cookie.
 GET /api/auth/me
 ```
 
-**Response** `200 OK` — returns the authenticated user (same shape as login response).
+**Response** `200 OK` — returns the authenticated user (same shape as login response, includes `is_setup_complete`).
 
 **Response** `401 Unauthorized` — no valid session.
 
@@ -122,12 +123,160 @@ Public endpoint — no auth required. Returns the workspace name for the login p
 
 ---
 
+## Projects
+
+Projects are the top-level namespace for environments, flags, and SDK keys. Workspace admins can manage all projects; other users see only projects they are members of.
+
+### List Projects
+
+```http
+GET /api/projects
+```
+
+Returns all projects the caller has access to (all projects for workspace admins; only member projects for others).
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Mobile App",
+    "slug": "mobile-app",
+    "environment_count": 3,
+    "member_count": 4,
+    "created_at": "2026-04-18T00:00:00Z"
+  }
+]
+```
+
+---
+
+### Create Project
+
+```http
+POST /api/projects
+Content-Type: application/json
+```
+
+Admin only. Creates a new project and seeds it with Production, Staging, and Development environments plus one SDK key for the Production environment.
+
+**Request Body**
+
+```json
+{ "name": "Mobile App" }
+```
+
+**Response** `200 OK` — returns the created project.
+
+**Response** `409 Conflict` — slug derived from the name already exists.
+
+---
+
+### Rename Project
+
+```http
+PATCH /api/projects/{project_id}
+Content-Type: application/json
+```
+
+```json
+{ "name": "Mobile App v2" }
+```
+
+**Response** `200 OK` — returns the updated project.
+
+---
+
+### Delete Project
+
+```http
+DELETE /api/projects/{project_id}
+```
+
+Admin only. Cascades to all environments, flags, SDK keys, and impressions in the project.
+
+**Response** `204 No Content`
+
+**Response** `422 Unprocessable Entity` — cannot delete the last project.
+
+---
+
+## Project Members
+
+### List Members
+
+```http
+GET /api/projects/{project_id}/members
+```
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "user_id": 1,
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "role": "admin"
+  }
+]
+```
+
+---
+
+### Add Member
+
+```http
+POST /api/projects/{project_id}/members
+Content-Type: application/json
+```
+
+```json
+{ "user_id": 2, "role": "editor" }
+```
+
+- `role` must be `"admin"`, `"editor"`, or `"viewer"`
+
+**Response** `200 OK` — returns the added member.
+
+**Response** `409 Conflict` — user is already a member.
+
+---
+
+### Update Member Role
+
+```http
+PATCH /api/projects/{project_id}/members/{user_id}
+Content-Type: application/json
+```
+
+```json
+{ "role": "viewer" }
+```
+
+**Response** `200 OK` — returns the updated member.
+
+---
+
+### Remove Member
+
+```http
+DELETE /api/projects/{project_id}/members/{user_id}
+```
+
+**Response** `204 No Content`
+
+---
+
 ## Environments
+
+Environments are scoped to a project. All environment routes are nested under `/api/projects/{project_id}/environments`.
 
 ### List Environments
 
 ```http
-GET /api/environments
+GET /api/projects/{project_id}/environments
 ```
 
 **Response** `200 OK`
@@ -150,7 +299,7 @@ GET /api/environments
 ### Create Environment
 
 ```http
-POST /api/environments
+POST /api/projects/{project_id}/environments
 Content-Type: application/json
 ```
 
@@ -170,14 +319,29 @@ Content-Type: application/json
 
 **Response** `200 OK` — returns the created environment.
 
-**Response** `409 Conflict` — slug already exists.
+**Response** `409 Conflict` — slug already exists in this project.
+
+---
+
+### Update Environment
+
+```http
+PATCH /api/projects/{project_id}/environments/{env_id}
+Content-Type: application/json
+```
+
+```json
+{ "name": "Canary East", "color": "#8b5cf6" }
+```
+
+**Response** `200 OK` — returns the updated environment.
 
 ---
 
 ### Delete Environment
 
 ```http
-DELETE /api/environments/{id}
+DELETE /api/projects/{project_id}/environments/{env_id}
 ```
 
 **Response** `204 No Content`
@@ -189,7 +353,7 @@ DELETE /api/environments/{id}
 ### Set Default Environment
 
 ```http
-POST /api/environments/{id}/default
+POST /api/projects/{project_id}/environments/{env_id}/default
 ```
 
 **Response** `200 OK` — returns the updated environment with `is_default: true`.
@@ -198,20 +362,13 @@ POST /api/environments/{id}/default
 
 ## Flags
 
-All flag endpoints are scoped to an environment via `{env_id}` (UUID).
+Flag endpoints remain environment-scoped via `{env_id}` (UUID). The environment UUID can be obtained from the environments list.
 
 ### List Flags
 
 ```http
 GET /api/environments/{env_id}/flags
 ```
-
-**Query Parameters**
-
-| Param | Default | Description |
-|-------|---------|-------------|
-| `limit` | `200` | Max results to return |
-| `offset` | `0` | Pagination offset |
 
 **Response** `200 OK`
 
@@ -299,7 +456,7 @@ Applies a JSON merge patch. Only the provided fields are updated; omitted fields
 DELETE /api/environments/{env_id}/flags/{key}
 ```
 
-Deletes the flag from this environment. Broadcasts a `DELETE` event to connected SDK clients.
+Deletes the flag and broadcasts a `DELETE` event to connected SDK clients.
 
 **Response** `204 No Content`
 
@@ -406,9 +563,14 @@ GET /api/environments/{env_id}/impressions
 
 | Param | Default | Description |
 |-------|---------|-------------|
-| `flag_key` | — | Filter by flag key |
+| `flag_key` | — | Filter by exact flag key |
+| `user_id` | — | Filter by exact user ID |
+| `value` | — | Filter by evaluated value (e.g. `"true"`, `"false"`) |
+| `since_id` | — | Return only rows with `id > since_id` — for live polling |
 | `limit` | `50` | Max results (1–200) |
-| `offset` | `0` | Pagination offset |
+| `offset` | `0` | Pagination offset (ignored when `since_id` is set) |
+
+`total` in the response always reflects the count matching the base filters (ignoring `since_id`), so it can be used for pagination display regardless of polling state.
 
 **Response** `200 OK`
 
@@ -416,7 +578,7 @@ GET /api/environments/{env_id}/impressions
 {
   "items": [
     {
-      "id": 1,
+      "id": 142,
       "flag_key": "checkout_v2",
       "user_id": "user-123",
       "value": "true",
@@ -457,13 +619,15 @@ Returns per-flag aggregate counts.
 
 ## SDK Keys
 
+SDK keys are scoped to a project and bound to a specific environment. All key routes are nested under `/api/projects/{project_id}/keys`.
+
 ### List Keys
 
 ```http
-GET /api/keys
+GET /api/projects/{project_id}/keys
 ```
 
-Returns all SDK keys. The full key value is never returned after creation.
+Returns all SDK keys for the project. The full key value is never returned after creation.
 
 **Response** `200 OK`
 
@@ -473,6 +637,8 @@ Returns all SDK keys. The full key value is never returned after creation.
     "id": 1,
     "name": "Default",
     "prefix": "sk_live_a1b2c3…",
+    "environment_id": "550e8400-e29b-41d4-a716-446655440000",
+    "environment_name": "Production",
     "created_at": "2026-04-10T00:00:00Z"
   }
 ]
@@ -483,22 +649,29 @@ Returns all SDK keys. The full key value is never returned after creation.
 ### Create Key
 
 ```http
-POST /api/keys
+POST /api/projects/{project_id}/keys
 Content-Type: application/json
 ```
 
 ```json
-{ "name": "Production Server" }
+{
+  "name": "iOS Production",
+  "environment_id": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
+
+- `environment_id` must belong to the project
 
 **Response** `200 OK` — returns the key including the full value (shown once only).
 
 ```json
 {
   "id": 2,
-  "name": "Production Server",
+  "name": "iOS Production",
   "key": "sk_live_a1b2c3d4e5f6...",
   "prefix": "sk_live_a1b2c3…",
+  "environment_id": "550e8400-e29b-41d4-a716-446655440000",
+  "environment_name": "Production",
   "created_at": "2026-04-18T12:00:00Z"
 }
 ```
@@ -508,16 +681,18 @@ Content-Type: application/json
 ### Revoke Key
 
 ```http
-DELETE /api/keys/{id}
+DELETE /api/projects/{project_id}/keys/{id}
 ```
 
 **Response** `204 No Content`
 
-**Response** `422 Unprocessable Entity` — cannot revoke the last key.
+**Response** `422 Unprocessable Entity` — cannot revoke the last key in the project.
 
 ---
 
 ## Users
+
+Users are workspace-level. Role here is the workspace role; per-project access is managed via Project Members.
 
 ### List Users
 
@@ -557,12 +732,19 @@ Content-Type: application/json
 }
 ```
 
-- `role` must be `"admin"` or `"viewer"`
+- `role` must be `"admin"`, `"editor"`, or `"viewer"`
 - `password` must be at least 8 characters
+- `email` must be unique
 
 **Response** `200 OK` — returns the created user (password hash is never returned).
 
-**Response** `409 Conflict` — email already exists.
+**Response** `409 Conflict` — email already in use.
+
+```json
+{ "error": "Email address is already in use." }
+```
+
+**Response** `422 Unprocessable Entity` — invalid input or password too short.
 
 ---
 
@@ -594,11 +776,11 @@ Or for browser `EventSource`:
 GET /stream?sdk_key=sk_live_your_key
 ```
 
-Opens a persistent SSE connection. The server sends:
+Opens a persistent SSE connection scoped to the environment associated with the SDK key. The server sends:
 
 1. A `connected` event immediately
-2. One `update` event per existing flag (bootstrap)
-3. `update` events as flags change in real time
+2. One `update` event per existing flag in the key's environment (bootstrap)
+3. `update` events as flags change in that environment in real time
 4. Keep-alive comments every 15 seconds
 
 ### Event: `connected`
@@ -635,7 +817,7 @@ Sent every 15 seconds to prevent proxy timeouts.
 If the SSE connection drops, clients should reconnect with exponential backoff. On reconnect:
 
 1. Server sends `connected` → SDK clears local store
-2. Server replays all current flags → SDK rebuilds from scratch
+2. Server replays all current flags for the environment → SDK rebuilds from scratch
 
 This guarantees consistency even after missed updates during the disconnected period.
 

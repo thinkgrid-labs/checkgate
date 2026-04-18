@@ -225,17 +225,18 @@ async fn delete_environment(
 ) -> Result<StatusCode, StatusCode> {
     can_admin_project(&state.db, &jar, &project_id).await?;
 
-    let row =
-        sqlx::query("SELECT is_default FROM environments WHERE id = $1::uuid AND project_id = $2::uuid")
-            .bind(&env_id)
-            .bind(&project_id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to fetch environment for delete");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?
-            .ok_or(StatusCode::NOT_FOUND)?;
+    let row = sqlx::query(
+        "SELECT is_default FROM environments WHERE id = $1::uuid AND project_id = $2::uuid",
+    )
+    .bind(&env_id)
+    .bind(&project_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to fetch environment for delete");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
 
     let is_default: bool = row.get("is_default");
     if is_default {

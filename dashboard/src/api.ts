@@ -79,10 +79,20 @@ export const api = {
 
   listImpressions(
     envId: string,
-    opts: { flagKey?: string; limit?: number; offset?: number } = {},
+    opts: {
+      flagKey?: string
+      userId?: string
+      value?: string
+      sinceId?: number
+      limit?: number
+      offset?: number
+    } = {},
   ): Promise<ImpressionListResponse> {
     const params = new URLSearchParams()
     if (opts.flagKey) params.set('flag_key', opts.flagKey)
+    if (opts.userId) params.set('user_id', opts.userId)
+    if (opts.value) params.set('value', opts.value)
+    if (opts.sinceId != null) params.set('since_id', String(opts.sinceId))
     if (opts.limit != null) params.set('limit', String(opts.limit))
     if (opts.offset != null) params.set('offset', String(opts.offset))
     const qs = params.toString()

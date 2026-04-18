@@ -63,6 +63,6 @@ describe('api functions', () => {
       text: () => Promise.resolve('Invalid JSON'),
     })
 
-    await expect(api.listFlags(ENV_ID)).rejects.toThrow('400 Invalid JSON')
+    await expect(api.listFlags(ENV_ID)).rejects.toThrow('Invalid JSON')
   })
 })

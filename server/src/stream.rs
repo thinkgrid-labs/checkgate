@@ -12,7 +12,11 @@ use tracing::{info, warn};
 
 /// Resolve the sdk_key from the request to its environment_id.
 /// Returns `None` if the request used session-cookie auth (dashboard debugging).
-fn resolve_sdk_key_env(req_query: &str, req_auth: Option<&str>, key_entries: &[crate::state::SdkKeyEntry]) -> Option<String> {
+fn resolve_sdk_key_env(
+    req_query: &str,
+    req_auth: Option<&str>,
+    key_entries: &[crate::state::SdkKeyEntry],
+) -> Option<String> {
     // Bearer header first.
     if let Some(bearer) = req_auth.and_then(|v| v.strip_prefix("Bearer ")) {
         return key_entries
@@ -21,7 +25,10 @@ fn resolve_sdk_key_env(req_query: &str, req_auth: Option<&str>, key_entries: &[c
             .map(|e| e.environment_id.clone());
     }
     // Query param fallback (browser EventSource).
-    if let Some(key) = req_query.split('&').find_map(|p| p.strip_prefix("sdk_key=")) {
+    if let Some(key) = req_query
+        .split('&')
+        .find_map(|p| p.strip_prefix("sdk_key="))
+    {
         return key_entries
             .iter()
             .find(|e| constant_time_eq(key.as_bytes(), e.value.as_bytes()))

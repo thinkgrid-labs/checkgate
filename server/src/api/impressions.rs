@@ -53,6 +53,13 @@ pub struct ImpressionListResponse {
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
     pub flag_key: Option<String>,
+    /// Filter by exact user_id.
+    pub user_id: Option<String>,
+    /// Filter by exact evaluated value (e.g. "true", "false", or a variant string).
+    pub value: Option<String>,
+    /// Return only rows with id > since_id — used by live stream polling to fetch
+    /// only new evaluations since the last poll.
+    pub since_id: Option<i64>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -172,7 +179,11 @@ async fn ingest_impressions(
 
 /// GET /api/environments/{env_id}/impressions
 ///
-/// Returns a paginated list of recent evaluations. Filter by `flag_key` query param.
+/// Returns a paginated list of recent evaluations.
+///
+/// Optional filters: `flag_key`, `user_id`, `value`, `since_id`.
+/// `since_id` is for live polling — returns only rows with `id > since_id`.
+/// `total` always reflects the count matching the base filters (ignoring `since_id`).
 async fn list_impressions(
     State(state): State<AppState>,
     Path(env_id): Path<String>,
@@ -181,67 +192,51 @@ async fn list_impressions(
     let limit = q.limit.clamp(1, 200);
     let offset = q.offset.max(0);
 
-    let (rows, total) = if let Some(ref fk) = q.flag_key {
-        let rows = sqlx::query(
-            "SELECT id, flag_key, user_id, value, context, evaluated_at \
-             FROM impressions \
-             WHERE environment_id = $1::uuid AND flag_key = $2 \
-             ORDER BY evaluated_at DESC LIMIT $3 OFFSET $4",
-        )
-        .bind(&env_id)
-        .bind(fk)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "DB error listing impressions");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    // Unified parameterized query — NULL params act as "no filter".
+    // $2=flag_key, $3=user_id, $4=value, $5=since_id
+    let rows = sqlx::query(
+        "SELECT id, flag_key, user_id, value, context, evaluated_at \
+         FROM impressions \
+         WHERE environment_id = $1::uuid \
+           AND ($2::text   IS NULL OR flag_key = $2) \
+           AND ($3::text   IS NULL OR user_id  = $3) \
+           AND ($4::text   IS NULL OR value    = $4) \
+           AND ($5::bigint IS NULL OR id       > $5) \
+         ORDER BY evaluated_at DESC, id DESC \
+         LIMIT $6 OFFSET $7",
+    )
+    .bind(&env_id)
+    .bind(q.flag_key.as_deref())
+    .bind(q.user_id.as_deref())
+    .bind(q.value.as_deref())
+    .bind(q.since_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error listing impressions");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
-        let total: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM impressions \
-             WHERE environment_id = $1::uuid AND flag_key = $2",
-        )
-        .bind(&env_id)
-        .bind(fk)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "DB error counting impressions");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-        (rows, total)
-    } else {
-        let rows = sqlx::query(
-            "SELECT id, flag_key, user_id, value, context, evaluated_at \
-             FROM impressions \
-             WHERE environment_id = $1::uuid \
-             ORDER BY evaluated_at DESC LIMIT $2 OFFSET $3",
-        )
-        .bind(&env_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "DB error listing impressions");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-        let total: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM impressions WHERE environment_id = $1::uuid")
-                .bind(&env_id)
-                .fetch_one(&state.db)
-                .await
-                .map_err(|e| {
-                    error!(error = %e, "DB error counting impressions");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-
-        (rows, total)
-    };
+    // Total ignores since_id so the client can display "X total" independent of polling state.
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM impressions \
+         WHERE environment_id = $1::uuid \
+           AND ($2::text IS NULL OR flag_key = $2) \
+           AND ($3::text IS NULL OR user_id  = $3) \
+           AND ($4::text IS NULL OR value    = $4)",
+    )
+    .bind(&env_id)
+    .bind(q.flag_key.as_deref())
+    .bind(q.user_id.as_deref())
+    .bind(q.value.as_deref())
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error counting impressions");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let items: Vec<Impression> = rows
         .iter()

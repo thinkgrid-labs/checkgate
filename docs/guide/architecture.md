@@ -1,6 +1,6 @@
 ---
 title: "Checkgate Architecture — Control Plane, Evaluation Core & SDK Design"
-description: "Deep dive into Checkgate's three-layer architecture: the Axum-based control plane, the Rust evaluation core, and cross-platform SDK clients connected via SSE."
+description: "Deep dive into Checkgate's architecture: the project/environment hierarchy, the Axum-based control plane, the Rust evaluation core, per-environment SSE streams, and cross-platform SDK clients."
 ---
 
 # Architecture
@@ -10,41 +10,60 @@ Checkgate has three main layers: the **control plane** (server), the **evaluatio
 ## Overview
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                      Checkgate Server                         │
-│                                                              │
-│  ┌──────────────────────┐   ┌──────────┐   ┌─────────────┐  │
-│  │  REST API            │   │ In-Memory│   │ SSE Stream  │  │
-│  │  /api/environments/  │──▶│ FlagStore│──▶│  /stream    │  │
-│  │    {env_id}/flags    │   └──────────┘   └─────────────┘  │
-│  └──────────────────────┘        ▲                          │
-│         │                        │                          │
-│         ▼                        │ (Redis subscriber        │
-│  ┌──────────────┐   ┌──────────┐  │  applies updates)       │
-│  │  PostgreSQL  │──▶│  Redis   │──┘                         │
-│  │  (durable)   │   │ (pub/sub)│                            │
-│  └──────────────┘   └──────────┘                            │
-└──────────────────────────────────────────────────────────────┘
-           SSE (push on change)
-                   │
-    ┌──────────────┼──────────────┐
-    ▼              ▼              ▼
-┌────────┐   ┌──────────┐   ┌─────────┐
-│Node.js │   │ Browser  │   │ Flutter │
-│  SDK   │   │   WASM   │   │   FFI   │
-│(NAPI)  │   │   SDK    │   │   SDK   │
-└────────┘   └──────────┘   └─────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        Checkgate Server                           │
+│                                                                  │
+│  Projects → Environments → Flags/Keys/Impressions                │
+│                                                                  │
+│  ┌──────────────────────────┐  ┌──────────┐  ┌───────────────┐  │
+│  │  REST API                │  │ In-Memory│  │  SSE Stream   │  │
+│  │  /api/projects/{id}/     │─▶│ FlagStore│─▶│  /stream      │  │
+│  │    environments/{id}/    │  └──────────┘  └───────────────┘  │
+│  │      flags               │       ▲          (per-env, scoped  │
+│  └──────────────────────────┘       │           by SDK key)      │
+│           │                         │ Redis subscriber           │
+│           ▼                         │ applies updates            │
+│  ┌──────────────┐  ┌──────────┐     │                            │
+│  │  PostgreSQL  │─▶│  Redis   │─────┘                            │
+│  │  (durable)   │  │ (pub/sub)│                                  │
+│  └──────────────┘  └──────────┘                                  │
+└──────────────────────────────────────────────────────────────────┘
+           SSE (push on change, per-environment)
+                    │
+     ┌──────────────┼──────────────┬──────────────┐
+     ▼              ▼              ▼              ▼
+┌────────┐   ┌──────────┐   ┌─────────┐   ┌──────────────┐
+│Node.js │   │ Browser  │   │ Flutter │   │ React Native │
+│  SDK   │   │   WASM   │   │   FFI   │   │  C FFI/JSI   │
+│(NAPI)  │   │   SDK    │   │   SDK   │   │     SDK      │
+└────────┘   └──────────┘   └─────────┘   └──────────────┘
  isEnabled()  in-process, sub-microsecond
 ```
+
+## Data Model
+
+The server organizes data in a strict four-level hierarchy:
+
+```
+Workspace  (singleton — one per installation)
+  └── Projects
+        ├── project_members (project_id, user_id, role)
+        └── Environments
+              ├── sdk_keys   (environment_id FK)
+              ├── flags      (environment_id FK)
+              └── impressions (environment_id FK)
+```
+
+An SDK key is tied to one environment. When a client authenticates, the server uses the key to resolve both the project and the environment — no `project_id` or `environment_id` needs to be passed separately in the SDK.
 
 ## Control Plane (Server)
 
 The server is a single Rust binary built with **Axum**. It is responsible for:
 
-- Storing flags and environments durably in **PostgreSQL**
+- Storing projects, environments, flags, and users durably in **PostgreSQL**
 - Maintaining an in-memory `FlagStore` for fast SSE bootstrap
-- Exposing a **REST API** (environment-scoped) for CRUD operations
-- Broadcasting flag changes to connected SDKs via **SSE** (`/stream`)
+- Exposing a **REST API** for CRUD operations (project- and environment-scoped)
+- Broadcasting flag changes to connected SDKs via **SSE** (`/stream`), scoped per environment
 - Publishing change events to **Redis** pub/sub for multi-instance deployments
 - Tracking flag evaluation events (**impressions**) from SDK clients
 
@@ -53,9 +72,9 @@ The server is a single Rust binary built with **Axum**. It is responsible for:
 When a flag is created or updated:
 
 1. The REST API handler writes the flag to **PostgreSQL**
-2. It publishes an `UPSERT` event to the `checkgate_updates` **Redis** channel
+2. It publishes an `UPSERT` event (with `env_id`) to the `checkgate_updates` **Redis** channel
 3. The server's own Redis subscriber receives the event and updates the local in-memory `FlagStore`
-4. All connected SSE clients receive the event via the broadcast channel and update their local cache
+4. Connected SSE clients whose SDK key matches the flag's `environment_id` receive the event
 
 > The in-memory store is updated via the Redis subscriber loop, not directly by the write handler. This ensures the same code path runs for both local writes and cross-instance propagation.
 
@@ -66,6 +85,45 @@ When running multiple Checkgate server instances behind a load balancer:
 - Each instance subscribes to Redis pub/sub on startup
 - A write to any instance propagates to all others via Redis
 - All instances stay in sync without direct inter-node communication
+
+## API Routes
+
+Routes are organized by scope:
+
+```
+# Projects (workspace admin only for mutations)
+GET     /api/projects
+POST    /api/projects
+PATCH   /api/projects/{project_id}
+DELETE  /api/projects/{project_id}
+
+# Project members
+GET     /api/projects/{project_id}/members
+POST    /api/projects/{project_id}/members
+PATCH   /api/projects/{project_id}/members/{user_id}
+DELETE  /api/projects/{project_id}/members/{user_id}
+
+# Environments (project-scoped)
+GET     /api/projects/{project_id}/environments
+POST    /api/projects/{project_id}/environments
+PATCH   /api/projects/{project_id}/environments/{env_id}
+DELETE  /api/projects/{project_id}/environments/{env_id}
+
+# SDK Keys (project-scoped, environment-targeted)
+GET     /api/projects/{project_id}/keys
+POST    /api/projects/{project_id}/keys          body: { name, environment_id }
+DELETE  /api/projects/{project_id}/keys/{id}
+
+# Flags (environment-scoped)
+GET/POST         /api/environments/{env_id}/flags
+GET/PATCH/DELETE /api/environments/{env_id}/flags/{key}
+POST             /api/environments/{env_id}/flags/{key}/promote
+
+# Impressions
+GET  /api/environments/{env_id}/impressions       ?flag_key= &user_id= &value= &since_id=
+GET  /api/environments/{env_id}/impressions/stats
+POST /api/environments/{env_id}/impressions
+```
 
 ## Evaluation Core (`checkgate-core`)
 
@@ -100,43 +158,77 @@ Rollout uses **MurmurHash3** (x86/32-bit) for:
 - **Stability** — same user + flag always maps to the same bucket
 - **Distribution** — uniform bucketing across the 0–99 range
 
-## Environments
+## SSE Stream
 
-Flags are scoped to **environments** (e.g. Production, Staging, UAT, Development). Each environment has an isolated flag configuration. The REST API routes are all environment-scoped:
+The SSE stream (`GET /stream`) connects SDK clients to the server for real-time flag updates. It is **scoped per environment**.
 
-```
-/api/environments/{env_id}/flags
-/api/environments/{env_id}/flags/{key}
-/api/environments/{env_id}/flags/{key}/promote
-```
+### Environment Scoping via SDK Key
 
-The **promote** operation copies a flag's configuration from one environment to another (e.g. Staging → Production) in a single atomic transaction.
+Each SDK key is stored with an `environment_id` in the database. When a client connects:
 
-Four default environments are created on first run: Production, Staging, UAT, and Development (default).
+1. The server resolves the SDK key to an `environment_id`
+2. It bootstraps the client with only the flags belonging to that environment (queried from PostgreSQL)
+3. All subsequent live events are filtered to that `environment_id`
+
+This means a single Checkgate installation can serve multiple projects with multiple environments, with each SDK client receiving only the flags relevant to its environment.
+
+### Connection Lifecycle
+
+1. SDK connects to `GET /stream` with `Authorization: Bearer sk_live_...`
+2. Server looks up the key → resolves `environment_id`
+3. Server sends `connected` event — SDK clears its local store
+4. Server bootstraps the SDK by replaying all current flags for that environment
+5. Server sends `keep-alive` pings every 15 seconds
+6. On flag change, only clients in the matching environment receive the update
+7. On reconnect, the SDK clears its local store and re-bootstraps from scratch
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `connected` | `"true"` | Connection established; SDK resets its store |
+| `update` | JSON string | A flag was upserted or deleted in this environment |
+| (keep-alive) | `keep-alive-text` | Heartbeat every 15 seconds |
 
 ## Authentication
 
-Checkgate uses two separate authentication mechanisms:
+Two separate authentication mechanisms:
 
 | Credential | Used by | How |
 |------------|---------|-----|
-| Email + password | Dashboard users (admin/viewer) | Issues an HttpOnly AES-256-GCM encrypted session cookie |
-| SDK key (`sk_live_...`) | SDK clients, CI/CD | `Authorization: Bearer <key>` header or `?sdk_key=` query param |
+| Email + password | Dashboard users | Issues an HttpOnly AES-256-GCM encrypted session cookie |
+| SDK key (`sk_live_...`) | SDK clients, CI/CD | `Authorization: Bearer <key>` or `?sdk_key=` query param |
 
-SDK keys are stored in PostgreSQL and managed via the dashboard Settings page. A key is auto-generated on first boot. Multiple keys are supported simultaneously; any valid key grants access.
+SDK keys are stored in PostgreSQL, managed per-project from the **Project Settings → SDK Keys** tab. Each key is bound to one environment — it implicitly identifies both the project and the environment for all API calls and the SSE stream.
+
+### Role Enforcement
+
+| Route category | Required role |
+|---|---|
+| Read flags, impressions | Any authenticated user with project access |
+| Write flags | `editor` or `admin` (project member) |
+| Manage environments, SDK keys, project members | `admin` (project member) |
+| Manage workspace users, create/delete projects | Workspace `admin` |
+
+Workspace admins bypass all per-project membership checks.
 
 ## Impression Tracking
 
-SDKs can report evaluation events asynchronously to the server:
+SDKs report evaluation events asynchronously:
 
 ```
 POST /api/environments/{env_id}/impressions
 Authorization: Bearer <sdk_key>
 
-[{"flag_key": "checkout_v2", "user_id": "u123", "value": "true", ...}]
+[{"flag_key": "checkout_v2", "user_id": "u123", "value": "true", "context": {...}}]
 ```
 
-Impressions are stored in the `impressions` table and surfaced in the dashboard's **Impressions** page with per-flag aggregates (total evaluations, true/false split, unique users).
+Impressions are stored in the `impressions` table (indexed by `environment_id`, `flag_key`, `evaluated_at`). The dashboard surfaces them on two tabs:
+
+- **Analytics** — per-flag aggregates: total evaluations, true/false split, unique users
+- **Stream** — live polling log (refreshes every 3s), filterable by `flag_key`, `user_id`, and `value`; context JSON expandable inline
+
+The `GET /api/environments/{env_id}/impressions` endpoint supports `since_id` for efficient incremental polling — the stream tab uses this to fetch only new rows since the last poll.
 
 ## SDK Clients
 
@@ -149,13 +241,4 @@ Each SDK maintains its own local copy of the flag store:
 | React Native | C FFI via JSI | `.so` / `.dylib` |
 | Flutter | `dart:ffi` | `.so` / `.dylib` |
 
-### Connection Lifecycle
-
-1. SDK connects to `GET /stream` with an SDK key in the `Authorization: Bearer` header
-2. Server sends a `connected` SSE event — SDK clears its local store
-3. Server bootstraps the SDK by replaying all current flags as `update` events
-4. SDK updates its local `FlagStore` for each event
-5. Server sends `keep-alive` pings every 15 seconds
-6. On reconnect, the SDK clears its local store and re-bootstraps from scratch
-
-This ensures the SDK always has a consistent snapshot even after network interruptions.
+The SDK key passed at initialization determines which project and environment the client receives. No project ID or environment ID needs to be specified separately in the SDK — the key encodes that association server-side.
