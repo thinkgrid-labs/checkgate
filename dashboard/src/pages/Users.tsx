@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { UserPlus, Trash2, Shield, Eye, X } from 'lucide-react'
+import { UserPlus, Trash2, Shield, Eye, EyeOff, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { userApi, type ApiUser } from '../api'
 import type { UserRole } from '../types'
@@ -21,13 +21,15 @@ function RoleBadge({ role }: { role: string }) {
 
 interface AddUserModalProps {
   onClose: () => void
-  onAdd: (name: string, email: string, role: UserRole) => Promise<void>
+  onAdd: (name: string, email: string, role: UserRole, password: string) => Promise<void>
 }
 
 function AddUserModal({ onClose, onAdd }: AddUserModalProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<UserRole>('viewer')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -37,9 +39,13 @@ function AddUserModal({ onClose, onAdd }: AddUserModalProps) {
       setError('Name and email are required.')
       return
     }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
     setSaving(true)
     try {
-      await onAdd(name.trim(), email.trim(), role)
+      await onAdd(name.trim(), email.trim(), role, password)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add user.')
@@ -90,6 +96,28 @@ function AddUserModal({ onClose, onAdd }: AddUserModalProps) {
               placeholder="jane@company.com"
               className={inputClass}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError('') }}
+                placeholder="Min. 8 characters"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(s => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">The user will use this to log in.</p>
           </div>
 
           <div>
@@ -161,8 +189,8 @@ export default function Users() {
 
   useEffect(() => { void load() }, [load])
 
-  async function handleAdd(name: string, email: string, role: UserRole) {
-    const created = await userApi.create({ name, email, role })
+  async function handleAdd(name: string, email: string, role: UserRole, password: string) {
+    const created = await userApi.create({ name, email, role, password })
     setUsers(prev => [...prev, created])
   }
 

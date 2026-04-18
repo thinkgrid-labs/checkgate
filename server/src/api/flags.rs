@@ -10,8 +10,17 @@ use redis::AsyncCommands;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::Row;
-use std::sync::Arc;
 use tracing::{error, info, instrument, warn};
+
+// ---------------------------------------------------------------------------
+// Environment-scoped path params
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct EnvFlagPath {
+    env_id: String,
+    key: String,
+}
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -36,16 +45,22 @@ fn is_valid_flag_key(key: &str) -> bool {
 /// Read-only routes — available to any authenticated user (admin or viewer).
 pub fn read_router() -> Router<AppState> {
     Router::new()
-        .route("/flags", get(list_flags))
-        .route("/flags/{key}", get(get_flag))
+        .route("/environments/{env_id}/flags", get(list_flags))
+        .route("/environments/{env_id}/flags/{key}", get(get_flag))
 }
 
 /// Write routes — require admin role (enforced by the layer added in main.rs).
 pub fn write_router() -> Router<AppState> {
-    Router::new().route("/flags", post(create_flag)).route(
-        "/flags/{key}",
-        axum::routing::delete(delete_flag).patch(patch_flag),
-    )
+    Router::new()
+        .route("/environments/{env_id}/flags", post(create_flag))
+        .route(
+            "/environments/{env_id}/flags/{key}",
+            axum::routing::delete(delete_flag).patch(patch_flag),
+        )
+        .route(
+            "/environments/{env_id}/flags/{key}/promote",
+            post(promote_flag),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -71,28 +86,60 @@ fn default_limit() -> usize {
 #[instrument(skip(state))]
 async fn list_flags(
     State(state): State<AppState>,
+    Path(env_id): Path<String>,
     Query(page): Query<Pagination>,
-) -> Json<Vec<Arc<Flag>>> {
-    let mut flags = state.store.list_flags();
-    // Stable sort by key so pagination is deterministic.
-    flags.sort_by(|a, b| a.key.cmp(&b.key));
-    let page_flags: Vec<Arc<Flag>> = flags
-        .into_iter()
-        .skip(page.offset)
-        .take(page.limit)
+) -> Result<Json<Vec<Flag>>, StatusCode> {
+    // Validate environment exists.
+    let env_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM environments WHERE id = $1::uuid)")
+            .bind(&env_id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "DB error checking environment");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+    if !env_exists {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let rows = sqlx::query(
+        "SELECT data FROM flags WHERE environment_id = $1::uuid \
+         ORDER BY key ASC LIMIT $2 OFFSET $3",
+    )
+    .bind(&env_id)
+    .bind(page.limit as i64)
+    .bind(page.offset as i64)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to list flags");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let flags: Vec<Flag> = rows
+        .iter()
+        .filter_map(|r| {
+            let v: serde_json::Value = r.try_get("data").ok()?;
+            serde_json::from_value(v).ok()
+        })
         .collect();
+
     info!(
-        count = page_flags.len(),
+        count = flags.len(),
         offset = page.offset,
         limit = page.limit,
+        env_id = %env_id,
         "Listed flags"
     );
-    Json(page_flags)
+    Ok(Json(flags))
 }
 
 #[instrument(skip(state, payload), fields(flag_key = %payload.key))]
 async fn create_flag(
     State(state): State<AppState>,
+    Path(env_id): Path<String>,
     Json(payload): Json<Flag>,
 ) -> Result<Json<Flag>, StatusCode> {
     if !is_valid_flag_key(&payload.key) {
@@ -114,9 +161,11 @@ async fn create_flag(
     })?;
 
     sqlx::query(
-        "INSERT INTO flags (key, data) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data",
+        "INSERT INTO flags (key, environment_id, data) VALUES ($1, $2::uuid, $3) \
+         ON CONFLICT (key, environment_id) DO UPDATE SET data = EXCLUDED.data",
     )
     .bind(&payload.key)
+    .bind(&env_id)
     .bind(&data)
     .execute(&state.db)
     .await
@@ -125,70 +174,75 @@ async fn create_flag(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    state.store.upsert_flag(payload.clone());
-
-    let msg = json!({"type": "UPSERT", "flag": payload}).to_string();
+    let msg = json!({"type": "UPSERT", "env_id": env_id, "flag": payload}).to_string();
     publish_update(&state, &msg, "create_flag").await;
 
-    info!("Flag created/replaced");
+    info!(env_id = %env_id, "Flag created/replaced");
     Ok(Json(payload))
 }
 
-#[instrument(skip(state), fields(flag_key = %key))]
+#[instrument(skip(state), fields(flag_key = %path.key))]
 async fn get_flag(
     State(state): State<AppState>,
-    Path(key): Path<String>,
-) -> Result<Json<Arc<Flag>>, StatusCode> {
-    match state.store.get_flag(&key) {
-        Some(flag) => {
-            info!("Flag retrieved");
-            Ok(Json(flag))
-        }
-        None => {
-            info!("Flag not found");
-            Err(StatusCode::NOT_FOUND)
-        }
-    }
+    Path(path): Path<EnvFlagPath>,
+) -> Result<Json<Flag>, StatusCode> {
+    let row = sqlx::query(
+        "SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid",
+    )
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error fetching flag");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let v: serde_json::Value = row.try_get("data").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let flag: Flag = serde_json::from_value(v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    info!(env_id = %path.env_id, "Flag retrieved");
+    Ok(Json(flag))
 }
 
-#[instrument(skip(state), fields(flag_key = %key))]
+#[instrument(skip(state), fields(flag_key = %path.key))]
 async fn delete_flag(
     State(state): State<AppState>,
-    Path(key): Path<String>,
+    Path(path): Path<EnvFlagPath>,
 ) -> Result<StatusCode, StatusCode> {
-    let result = sqlx::query("DELETE FROM flags WHERE key = $1")
-        .bind(&key)
-        .execute(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "PostgreSQL delete failed");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let result =
+        sqlx::query("DELETE FROM flags WHERE key = $1 AND environment_id = $2::uuid")
+            .bind(&path.key)
+            .bind(&path.env_id)
+            .execute(&state.db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "PostgreSQL delete failed");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
     if result.rows_affected() == 0 {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    state.store.delete_flag(&key);
-
-    // Only broadcast when a row was actually deleted to avoid spurious SSE events.
-    let msg = json!({"type": "DELETE", "key": key}).to_string();
+    let msg = json!({"type": "DELETE", "env_id": path.env_id, "key": path.key}).to_string();
     publish_update(&state, &msg, "delete_flag").await;
 
-    info!("Flag deleted");
+    info!(env_id = %path.env_id, "Flag deleted");
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// PATCH /api/flags/:key — partial update via JSON merge.
+/// PATCH /api/environments/:env_id/flags/:key — partial update via JSON merge.
 ///
 /// Only provided fields are changed; omitted fields retain their current values.
 /// The `key` field is excluded from the patch to prevent key aliasing.
 /// The read-modify-write is wrapped in a transaction with FOR UPDATE to prevent
 /// concurrent-patch races.
-#[instrument(skip(state, patch), fields(flag_key = %key))]
+#[instrument(skip(state, patch), fields(flag_key = %path.key))]
 async fn patch_flag(
     State(state): State<AppState>,
-    Path(key): Path<String>,
+    Path(path): Path<EnvFlagPath>,
     Json(mut patch): Json<serde_json::Value>,
 ) -> Result<Json<Flag>, StatusCode> {
     // Prevent the key from being mutated through a PATCH body.
@@ -201,18 +255,21 @@ async fn patch_flag(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let rec = sqlx::query("SELECT data FROM flags WHERE key = $1 FOR UPDATE")
-        .bind(&key)
-        .fetch_optional(&mut *db_tx)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "PostgreSQL read failed");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or_else(|| {
-            info!("Flag not found for PATCH");
-            StatusCode::NOT_FOUND
-        })?;
+    let rec = sqlx::query(
+        "SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid FOR UPDATE",
+    )
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .fetch_optional(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "PostgreSQL read failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or_else(|| {
+        info!("Flag not found for PATCH");
+        StatusCode::NOT_FOUND
+    })?;
 
     let mut flag_val: serde_json::Value = rec.try_get("data").map_err(|e| {
         error!(error = %e, "Failed to deserialize stored flag data");
@@ -240,27 +297,99 @@ async fn patch_flag(
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    sqlx::query("UPDATE flags SET data = $1 WHERE key = $2")
-        .bind(&flag_val)
-        .bind(&key)
-        .execute(&mut *db_tx)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "PostgreSQL update failed");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    sqlx::query(
+        "UPDATE flags SET data = $1 WHERE key = $2 AND environment_id = $3::uuid",
+    )
+    .bind(&flag_val)
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .execute(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "PostgreSQL update failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     db_tx.commit().await.map_err(|e| {
         error!(error = %e, "Transaction commit failed");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    state.store.upsert_flag(flag.clone());
-
-    let msg = json!({"type": "UPSERT", "flag": flag}).to_string();
+    let msg = json!({"type": "UPSERT", "env_id": path.env_id, "flag": flag}).to_string();
     publish_update(&state, &msg, "patch_flag").await;
 
-    info!("Flag patched");
+    info!(env_id = %path.env_id, "Flag patched");
+    Ok(Json(flag))
+}
+
+/// POST /api/environments/:env_id/flags/:key/promote
+///
+/// Copies a flag's configuration from one environment to another (the target
+/// environment is specified in the JSON body as `target_env_id`).
+/// This is the "promote to production" flow.
+#[instrument(skip(state), fields(flag_key = %path.key))]
+async fn promote_flag(
+    State(state): State<AppState>,
+    Path(path): Path<EnvFlagPath>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<Flag>, StatusCode> {
+    let target_env_id = body
+        .get("target_env_id")
+        .and_then(|v| v.as_str())
+        .ok_or(StatusCode::UNPROCESSABLE_ENTITY)?
+        .to_string();
+
+    let mut db_tx = state.db.begin().await.map_err(|e| {
+        error!(error = %e, "Failed to begin transaction");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Read source flag.
+    let rec = sqlx::query(
+        "SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid",
+    )
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .fetch_optional(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to read source flag for promote");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let flag_val: serde_json::Value = rec.try_get("data").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let flag: Flag = serde_json::from_value(flag_val.clone()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Upsert into target environment.
+    sqlx::query(
+        "INSERT INTO flags (key, environment_id, data) VALUES ($1, $2::uuid, $3) \
+         ON CONFLICT (key, environment_id) DO UPDATE SET data = EXCLUDED.data",
+    )
+    .bind(&path.key)
+    .bind(&target_env_id)
+    .bind(&flag_val)
+    .execute(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to write promoted flag");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    db_tx.commit().await.map_err(|e| {
+        error!(error = %e, "Transaction commit failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let msg =
+        json!({"type": "UPSERT", "env_id": target_env_id, "flag": flag}).to_string();
+    publish_update(&state, &msg, "promote_flag").await;
+
+    info!(
+        from_env = %path.env_id,
+        to_env = %target_env_id,
+        "Flag promoted"
+    );
     Ok(Json(flag))
 }
 

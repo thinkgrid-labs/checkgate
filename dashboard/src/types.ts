@@ -16,6 +16,29 @@ export interface Flag {
 
 export type FlagPatch = Partial<Omit<Flag, 'key'>>
 
+export interface Impression {
+  id: number
+  flag_key: string
+  user_id: string | null
+  value: string
+  context: Record<string, unknown> | null
+  evaluated_at: string
+}
+
+export interface ImpressionListResponse {
+  items: Impression[]
+  total: number
+}
+
+export interface ImpressionStats {
+  flag_key: string
+  total: number
+  true_count: number
+  false_count: number
+  unique_users: number
+  last_seen: string | null
+}
+
 export type UserRole = 'admin' | 'viewer'
 
 export interface User {

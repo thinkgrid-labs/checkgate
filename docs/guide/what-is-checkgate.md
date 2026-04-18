@@ -42,7 +42,7 @@ The result: **sub-microsecond flag evaluation** with real-time updates and zero 
 
 - **Not a A/B testing platform** — Checkgate focuses on feature flags and rollouts, not experiment analysis
 - **Not a managed service** — you operate the server yourself
-- **Not a data warehouse** — Checkgate does not store analytics or events (that is your job)
+- **Not a data warehouse** — Checkgate stores flag evaluation impressions for basic analytics, but is not a replacement for a dedicated analytics platform
 
 ## Who Is It For?
 

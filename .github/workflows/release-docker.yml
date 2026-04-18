@@ -1,4 +1,4 @@
-name: Release Docker images
+name: Release Docker image
 
 # Triggered by version tags: v1.2.3
 on:
@@ -6,45 +6,8 @@ on:
     tags: ["v*.*.*"]
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Build dashboard first — both images need the static files
-  # ---------------------------------------------------------------------------
-  build-dashboard:
-    name: Build dashboard
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-          run_install: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: dashboard/pnpm-lock.yaml
-
-      - name: Install & build dashboard
-        working-directory: dashboard
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm build
-
-      - name: Upload dashboard artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dashboard-dist
-          path: server/public/
-          retention-days: 1
-
-  # ---------------------------------------------------------------------------
-  # checkgate:full — all-in-one image (PG + Redis + dashboard bundled)
-  # ---------------------------------------------------------------------------
-  docker-full:
-    name: Push checkgate:full
-    needs: build-dashboard
+  docker:
+    name: Build and push checkgate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,12 +15,6 @@ jobs:
       id-token: write # Required for Cosign keyless signing
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download dashboard dist
-        uses: actions/download-artifact@v4
-        with:
-          name: dashboard-dist
-          path: server/public/
 
       - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3
@@ -84,29 +41,29 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
-      - name: Build and push checkgate:full
+      - name: Build and push
         id: build-push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.full
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=full
-          cache-to: type=gha,scope=full,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ secrets.DOCKER_USERNAME }}/checkgate:${{ github.ref_name }}
           format: 'table'
-          exit-code: '1' # Fail the build if critical vulnerabilities are found
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL'
 
-      - name: Sign the images with Cosign
+      - name: Sign the image with Cosign
         run: |
           cosign sign --yes ${{ secrets.DOCKER_USERNAME }}/checkgate:${{ github.ref_name }}

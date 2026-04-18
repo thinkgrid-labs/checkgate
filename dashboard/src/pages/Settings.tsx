@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Globe, LogOut, Shield, Info, Key, Plus, Trash2, Copy, Check, AlertCircle, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { keysApi, type SdkKeyInfo, type NewKeyResponse } from '../api'
 
 function SectionCard({ icon: Icon, title, description, children }: {
   icon: React.ElementType
@@ -29,21 +30,6 @@ function SectionCard({ icon: Icon, title, description, children }: {
 // SDK Keys
 // ---------------------------------------------------------------------------
 
-interface SdkKeyInfo {
-  id: number
-  name: string
-  prefix: string
-  created_at: string
-}
-
-interface NewKeyResponse {
-  id: number
-  name: string
-  key: string
-  prefix: string
-  created_at: string
-}
-
 function SdkKeysSection() {
   const [keys, setKeys] = useState<SdkKeyInfo[]>([])
   const [loadError, setLoadError] = useState('')
@@ -57,12 +43,7 @@ function SdkKeysSection() {
   const load = useCallback(async () => {
     setLoadError('')
     try {
-      const res = await fetch('/api/keys', {
-        credentials: 'same-origin',
-        headers: { 'X-Checkgate-Request': '1' },
-      })
-      if (!res.ok) throw new Error(`${res.status}`)
-      setKeys(await res.json() as SdkKeyInfo[])
+      setKeys(await keysApi.list())
     } catch {
       setLoadError('Failed to load SDK keys.')
     }
@@ -74,17 +55,7 @@ function SdkKeysSection() {
     if (!newKeyName.trim()) return
     setCreating(true)
     try {
-      const res = await fetch('/api/keys', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Checkgate-Request': '1',
-        },
-        body: JSON.stringify({ name: newKeyName.trim() }),
-      })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const created = await res.json() as NewKeyResponse
+      const created = await keysApi.create(newKeyName.trim())
       setRevealedKey(created)
       setNewKeyName('')
       setShowCreateForm(false)
@@ -100,11 +71,7 @@ function SdkKeysSection() {
     if (!confirm('Revoke this key? Any SDK clients using it will stop working immediately.')) return
     setRevoking(id)
     try {
-      await fetch(`/api/keys/${id}`, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: { 'X-Checkgate-Request': '1' },
-      })
+      await keysApi.revoke(id)
       await load()
     } finally {
       setRevoking(null)

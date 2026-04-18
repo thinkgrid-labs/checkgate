@@ -14,7 +14,7 @@ use axum::{
 use axum_extra::extract::cookie::Key;
 use checkgate_core::evaluator::Flag;
 use checkgate_core::store::FlagStore;
-use rand::RngCore;
+use rand::RngExt as _;
 use rate_limit::new_rate_limiter;
 use sqlx::{Row, postgres::PgPoolOptions};
 use state::SdkKeyEntry;
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if sdk_keys_data.is_empty() {
         let mut bytes = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill(&mut bytes);
         let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
         let key_value = format!("sk_live_{hex}");
 
@@ -375,13 +375,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         auth::require_admin,
     ));
 
-    // All API routes: reads + writes, body limit applied to both.
+    // Standard API routes (65 KB body limit).
     let api_routes = api::read_router()
         .merge(write_api)
         .layer(DefaultBodyLimit::max(65_536));
 
+    // Impression ingest — kept separate so its 256 KB body limit is not overridden
+    // by the smaller limit applied to api_routes above.
+    let ingest_routes = api::ingest_router().layer(DefaultBodyLimit::max(256 * 1024));
+
     let protected = Router::new()
         .nest("/api", api_routes)
+        .nest("/api", ingest_routes)
         .route("/stream", get(stream::sse_handler))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
@@ -394,6 +399,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api", setup_routes)
         .merge(protected)
         .layer(trace_layer)
+        .layer(middleware::from_fn(api::security_headers))
         .layer(middleware::from_fn(api::csrf_protection))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),

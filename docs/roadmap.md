@@ -12,10 +12,12 @@ This document outlines the vision and future development priorities for Checkgat
 
 ---
 
-## 🟡 Phase 2: Observability & Analytics (Current Focus)
+## 🟢 Phase 2: Observability & Analytics (Completed)
 *Goal: Provide developers with real-time feedback on how their flags are performing.*
 
-- **Impression Tracking**: Asynchronous reporting of evaluation events from SDKs to the server.
+- [x] **Environment Management**: First-class production/staging/UAT/development environments with isolated flag configurations, environment-scoped API keys, and a one-click "promote to production" flow from the dashboard.
+- [x] **Onboarding Refactor**: Redesigned first-run setup flow that collects workspace/company name, admin email, and a proper password — decoupling user authentication (email + password) from SDK key authentication so key rotations no longer invalidate user sessions.
+- [x] **Impression Tracking**: Asynchronous reporting of evaluation events from SDKs to the server.
 - **Exposure Dashboards**: Visualize which users are being exposed to specific variants.
 - **A/B Testing Beta**: Basic statistical comparison between two variants based on custom event goals.
 - **Evaluation Stream**: A live, searchable log of evaluations in the dashboard for debugging.

@@ -6,7 +6,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::PrivateCookieJar;
-use rand::RngCore;
+use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tracing::{error, info};
@@ -49,7 +49,7 @@ pub struct CreateKeyRequest {
 
 pub(crate) fn generate_sdk_key() -> String {
     let mut bytes = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill(&mut bytes);
     let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
     format!("sk_live_{hex}")
 }
@@ -144,7 +144,7 @@ pub async fn create_key(
     Json(req): Json<CreateKeyRequest>,
 ) -> Result<Json<NewKeyResponse>, StatusCode> {
     let name = req.name.trim().to_string();
-    if name.is_empty() {
+    if name.is_empty() || name.len() > 100 {
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 

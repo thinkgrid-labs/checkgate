@@ -4,6 +4,7 @@ import { ArrowLeft, Save } from 'lucide-react'
 import { api } from '../api'
 import type { Flag, TargetingRule } from '../types'
 import RuleEditor from '../components/RuleEditor'
+import { useEnvironment } from '../context/EnvironmentContext'
 
 const EMPTY_FLAG: Flag = {
   key: '',
@@ -50,6 +51,7 @@ export default function FlagEditor() {
   const { key } = useParams<{ key?: string }>()
   const isEdit = Boolean(key)
   const navigate = useNavigate()
+  const { activeEnv } = useEnvironment()
 
   const [flag, setFlag] = useState<Flag>(EMPTY_FLAG)
   const [rolloutInput, setRolloutInput] = useState('')
@@ -58,15 +60,15 @@ export default function FlagEditor() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!key) return
-    api.getFlag(key)
+    if (!key || !activeEnv) return
+    api.getFlag(activeEnv.id, key)
       .then(f => {
         setFlag(f)
         setRolloutInput(f.rollout_percentage != null ? String(f.rollout_percentage) : '')
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load flag'))
       .finally(() => setLoading(false))
-  }, [key])
+  }, [key, activeEnv])
 
   function setField<K extends keyof Flag>(field: K, value: Flag[K]) {
     setFlag(prev => ({ ...prev, [field]: value }))
@@ -86,16 +88,22 @@ export default function FlagEditor() {
 
     const payload: Flag = { ...flag, rollout_percentage: rollout }
 
+    if (!activeEnv) {
+      setError('No active environment selected.')
+      setSaving(false)
+      return
+    }
+
     try {
       if (isEdit && key) {
-        await api.patchFlag(key, {
+        await api.patchFlag(activeEnv.id, key, {
           is_enabled: payload.is_enabled,
           rollout_percentage: payload.rollout_percentage,
           description: payload.description,
           rules: payload.rules,
         })
       } else {
-        await api.createFlag(payload)
+        await api.createFlag(activeEnv.id, payload)
       }
       navigate('/flags')
     } catch (e) {

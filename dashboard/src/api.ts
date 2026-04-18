@@ -1,4 +1,4 @@
-import type { Flag, FlagPatch } from './types'
+import type { Flag, FlagPatch, ImpressionListResponse, ImpressionStats } from './types'
 
 export interface ApiUser {
   id: number
@@ -36,32 +36,55 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listFlags(): Promise<Flag[]> {
-    return request('/api/flags')
+  listFlags(envId: string): Promise<Flag[]> {
+    return request(`/api/environments/${envId}/flags`)
   },
 
-  getFlag(key: string): Promise<Flag> {
-    return request(`/api/flags/${encodeURIComponent(key)}`)
+  getFlag(envId: string, key: string): Promise<Flag> {
+    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}`)
   },
 
-  createFlag(flag: Flag): Promise<Flag> {
-    return request('/api/flags', {
+  createFlag(envId: string, flag: Flag): Promise<Flag> {
+    return request(`/api/environments/${envId}/flags`, {
       method: 'POST',
       body: JSON.stringify(flag),
     })
   },
 
-  patchFlag(key: string, patch: FlagPatch): Promise<Flag> {
-    return request(`/api/flags/${encodeURIComponent(key)}`, {
+  patchFlag(envId: string, key: string, patch: FlagPatch): Promise<Flag> {
+    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
     })
   },
 
-  deleteFlag(key: string): Promise<void> {
-    return request(`/api/flags/${encodeURIComponent(key)}`, {
+  deleteFlag(envId: string, key: string): Promise<void> {
+    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}`, {
       method: 'DELETE',
     })
+  },
+
+  promoteFlag(envId: string, key: string, targetEnvId: string): Promise<Flag> {
+    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}/promote`, {
+      method: 'POST',
+      body: JSON.stringify({ target_env_id: targetEnvId }),
+    })
+  },
+
+  listImpressions(
+    envId: string,
+    opts: { flagKey?: string; limit?: number; offset?: number } = {},
+  ): Promise<ImpressionListResponse> {
+    const params = new URLSearchParams()
+    if (opts.flagKey) params.set('flag_key', opts.flagKey)
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    if (opts.offset != null) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request(`/api/environments/${envId}/impressions${qs ? `?${qs}` : ''}`)
+  },
+
+  impressionStats(envId: string): Promise<ImpressionStats[]> {
+    return request(`/api/environments/${envId}/impressions/stats`)
   },
 }
 
@@ -70,7 +93,7 @@ export const userApi = {
     return request('/api/users')
   },
 
-  create(data: { name: string; email: string; role: string }): Promise<ApiUser> {
+  create(data: { name: string; email: string; role: string; password: string }): Promise<ApiUser> {
     return request('/api/users', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -79,5 +102,37 @@ export const userApi = {
 
   remove(id: number): Promise<void> {
     return request(`/api/users/${id}`, { method: 'DELETE' })
+  },
+}
+
+export interface SdkKeyInfo {
+  id: number
+  name: string
+  prefix: string
+  created_at: string
+}
+
+export interface NewKeyResponse {
+  id: number
+  name: string
+  key: string
+  prefix: string
+  created_at: string
+}
+
+export const keysApi = {
+  list(): Promise<SdkKeyInfo[]> {
+    return request('/api/keys')
+  },
+
+  create(name: string): Promise<NewKeyResponse> {
+    return request('/api/keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  },
+
+  revoke(id: number): Promise<void> {
+    return request(`/api/keys/${id}`, { method: 'DELETE' })
   },
 }

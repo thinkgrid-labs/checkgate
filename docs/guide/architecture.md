@@ -10,20 +10,21 @@ Checkgate has three main layers: the **control plane** (server), the **evaluatio
 ## Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Checkgate Server                       │
-│                                                          │
-│  ┌──────────────┐   ┌──────────┐   ┌─────────────────┐  │
-│  │  REST API    │   │ In-Memory│   │   SSE Stream    │  │
-│  │  /api/flags  │──▶│ FlagStore│──▶│   /stream       │  │
-│  └──────────────┘   └──────────┘   └─────────────────┘  │
-│         │                │                              │
-│         ▼                ▼                              │
-│  ┌──────────────┐   ┌──────────┐                        │
-│  │  PostgreSQL  │   │  Redis   │                        │
-│  │  (durable)   │   │ (pub/sub)│                        │
-│  └──────────────┘   └──────────┘                        │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Checkgate Server                         │
+│                                                              │
+│  ┌──────────────────────┐   ┌──────────┐   ┌─────────────┐  │
+│  │  REST API            │   │ In-Memory│   │ SSE Stream  │  │
+│  │  /api/environments/  │──▶│ FlagStore│──▶│  /stream    │  │
+│  │    {env_id}/flags    │   └──────────┘   └─────────────┘  │
+│  └──────────────────────┘        ▲                          │
+│         │                        │                          │
+│         ▼                        │ (Redis subscriber        │
+│  ┌──────────────┐   ┌──────────┐  │  applies updates)       │
+│  │  PostgreSQL  │──▶│  Redis   │──┘                         │
+│  │  (durable)   │   │ (pub/sub)│                            │
+│  └──────────────┘   └──────────┘                            │
+└──────────────────────────────────────────────────────────────┘
            SSE (push on change)
                    │
     ┌──────────────┼──────────────┐
@@ -40,20 +41,23 @@ Checkgate has three main layers: the **control plane** (server), the **evaluatio
 
 The server is a single Rust binary built with **Axum**. It is responsible for:
 
-- Storing flags durably in **PostgreSQL**
-- Maintaining an in-memory `FlagStore` for fast reads
-- Exposing a **REST API** (`/api/flags`) for CRUD operations
+- Storing flags and environments durably in **PostgreSQL**
+- Maintaining an in-memory `FlagStore` for fast SSE bootstrap
+- Exposing a **REST API** (environment-scoped) for CRUD operations
 - Broadcasting flag changes to connected SDKs via **SSE** (`/stream`)
 - Publishing change events to **Redis** pub/sub for multi-instance deployments
+- Tracking flag evaluation events (**impressions**) from SDK clients
 
 ### Write Path
 
 When a flag is created or updated:
 
-1. The REST API handler writes the flag to PostgreSQL
-2. It immediately updates the local in-memory `FlagStore`
-3. It publishes a `UPSERT` event to the `checkgate_updates` Redis channel
-4. All connected SSE clients (SDK instances) receive the event and update their local cache
+1. The REST API handler writes the flag to **PostgreSQL**
+2. It publishes an `UPSERT` event to the `checkgate_updates` **Redis** channel
+3. The server's own Redis subscriber receives the event and updates the local in-memory `FlagStore`
+4. All connected SSE clients receive the event via the broadcast channel and update their local cache
+
+> The in-memory store is updated via the Redis subscriber loop, not directly by the write handler. This ensures the same code path runs for both local writes and cross-instance propagation.
 
 ### Multi-Instance Deployments
 
@@ -96,6 +100,44 @@ Rollout uses **MurmurHash3** (x86/32-bit) for:
 - **Stability** — same user + flag always maps to the same bucket
 - **Distribution** — uniform bucketing across the 0–99 range
 
+## Environments
+
+Flags are scoped to **environments** (e.g. Production, Staging, UAT, Development). Each environment has an isolated flag configuration. The REST API routes are all environment-scoped:
+
+```
+/api/environments/{env_id}/flags
+/api/environments/{env_id}/flags/{key}
+/api/environments/{env_id}/flags/{key}/promote
+```
+
+The **promote** operation copies a flag's configuration from one environment to another (e.g. Staging → Production) in a single atomic transaction.
+
+Four default environments are created on first run: Production, Staging, UAT, and Development (default).
+
+## Authentication
+
+Checkgate uses two separate authentication mechanisms:
+
+| Credential | Used by | How |
+|------------|---------|-----|
+| Email + password | Dashboard users (admin/viewer) | Issues an HttpOnly AES-256-GCM encrypted session cookie |
+| SDK key (`sk_live_...`) | SDK clients, CI/CD | `Authorization: Bearer <key>` header or `?sdk_key=` query param |
+
+SDK keys are stored in PostgreSQL and managed via the dashboard Settings page. A key is auto-generated on first boot. Multiple keys are supported simultaneously; any valid key grants access.
+
+## Impression Tracking
+
+SDKs can report evaluation events asynchronously to the server:
+
+```
+POST /api/environments/{env_id}/impressions
+Authorization: Bearer <sdk_key>
+
+[{"flag_key": "checkout_v2", "user_id": "u123", "value": "true", ...}]
+```
+
+Impressions are stored in the `impressions` table and surfaced in the dashboard's **Impressions** page with per-flag aggregates (total evaluations, true/false split, unique users).
+
 ## SDK Clients
 
 Each SDK maintains its own local copy of the flag store:
@@ -109,8 +151,8 @@ Each SDK maintains its own local copy of the flag store:
 
 ### Connection Lifecycle
 
-1. SDK connects to `GET /stream` with the `SDK_KEY` in the `Authorization` header
-2. Server sends a `connected` SSE event
+1. SDK connects to `GET /stream` with an SDK key in the `Authorization: Bearer` header
+2. Server sends a `connected` SSE event — SDK clears its local store
 3. Server bootstraps the SDK by replaying all current flags as `update` events
 4. SDK updates its local `FlagStore` for each event
 5. Server sends `keep-alive` pings every 15 seconds

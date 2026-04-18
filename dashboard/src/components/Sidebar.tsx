@@ -5,15 +5,84 @@ import {
   Users,
   Settings,
   LogOut,
+  Globe,
+  ChevronDown,
+  Activity,
 } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useEnvironment, type Environment } from '../context/EnvironmentContext'
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false },
+  { to: '/impressions', icon: Activity, label: 'Impressions', end: false },
+  { to: '/environments', icon: Globe, label: 'Environments', end: false },
   { to: '/users', icon: Users, label: 'Users', end: false },
   { to: '/settings', icon: Settings, label: 'Settings', end: false },
 ]
+
+// ---------------------------------------------------------------------------
+// Environment switcher dropdown
+// ---------------------------------------------------------------------------
+
+function EnvSwitcher() {
+  const { environments, activeEnv, setActiveEnv } = useEnvironment()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  if (!activeEnv) return null
+
+  function select(env: Environment) {
+    setActiveEnv(env)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative px-4 mb-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl transition-colors text-left"
+      >
+        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: activeEnv.color }} />
+        <span className="flex-1 text-sm font-semibold text-gray-700 truncate">{activeEnv.name}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-4 right-4 top-full mt-1 z-50 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden">
+          {environments.map(env => (
+            <button
+              key={env.id}
+              onClick={() => select(env)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors text-left hover:bg-gray-50 ${
+                env.id === activeEnv.id ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700'
+              }`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: env.color }} />
+              <span className="flex-1 truncate">{env.name}</span>
+              {env.is_default && (
+                <span className="text-[9px] text-gray-400 uppercase tracking-wide font-bold">default</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
 
 export default function Sidebar() {
   const { session, logout } = useAuth()
@@ -26,20 +95,24 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 shrink-0 flex flex-col h-screen bg-white border-r border-gray-100 shadow-premium">
-      {/* Logo */}
+      {/* Logo + workspace name */}
       <div className="flex items-center gap-3 px-6 h-16 mb-2">
         <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-50 overflow-hidden">
-          <img
-            src="/checkgate_logo.png"
-            alt=""
-            className="h-8 w-8 object-contain"
-          />
+          <img src="/checkgate_logo.png" alt="" className="h-8 w-8 object-contain" />
         </div>
-        <span className="text-gray-900 font-display font-bold text-xl tracking-tight">Checkgate</span>
+        <div className="min-w-0">
+          <span className="text-gray-900 font-display font-bold text-xl tracking-tight">Checkgate</span>
+          {session?.workspaceName && (
+            <p className="text-gray-400 text-[10px] font-medium truncate leading-none mt-0.5">{session.workspaceName}</p>
+          )}
+        </div>
       </div>
 
+      {/* Environment switcher */}
+      <EnvSwitcher />
+
       {/* Nav */}
-    <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
         {NAV.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
