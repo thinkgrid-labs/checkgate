@@ -3,10 +3,12 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::Row;
 use tracing::{error, info, warn};
 
@@ -73,7 +75,7 @@ pub async fn list_users(State(state): State<AppState>) -> Result<Json<Vec<UserIn
 pub async fn create_user(
     State(state): State<AppState>,
     Json(req): Json<CreateUserRequest>,
-) -> Result<Json<UserInfo>, StatusCode> {
+) -> Result<Response, StatusCode> {
     let name = req.name.trim().to_string();
     let email = req.email.trim().to_lowercase();
     let role = req.role.trim().to_string();
@@ -102,13 +104,27 @@ pub async fn create_user(
     .fetch_one(&state.db)
     .await
     .map_err(|e| {
-        error!(error = %e, "Failed to create user");
         if e.to_string().to_lowercase().contains("unique") {
-            StatusCode::CONFLICT
+            warn!(email = %email, "Rejected create_user: email already in use");
+            // Return early with a JSON body — not expressible via StatusCode alone.
+            // Caller checks the Option<Response> sentinel below.
+            None::<()>
         } else {
-            StatusCode::INTERNAL_SERVER_ERROR
+            error!(error = %e, "Failed to create user");
+            Some(())
         }
-    })?;
+    });
+
+    let row = match row {
+        Ok(r) => r,
+        Err(None) => {
+            return Ok((
+                StatusCode::CONFLICT,
+                Json(json!({"error": "Email address is already in use."})),
+            ).into_response());
+        }
+        Err(Some(_)) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
     let id: i64 = row.get("id");
     let created_at: time::OffsetDateTime = row.get("created_at");
@@ -121,7 +137,7 @@ pub async fn create_user(
         email,
         role,
         created_at: created_at.to_string(),
-    }))
+    }).into_response())
 }
 
 pub async fn delete_user(

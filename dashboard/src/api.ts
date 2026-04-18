@@ -28,8 +28,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText)
-    throw new Error(`${res.status} ${text}`)
+    const text = await res.text().catch(() => '')
+    try {
+      const json = JSON.parse(text) as { error?: string }
+      if (json.error) throw new Error(json.error)
+    } catch (e) {
+      if (e instanceof SyntaxError === false) throw e
+    }
+    throw new Error(text || res.statusText || `Error ${res.status}`)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
