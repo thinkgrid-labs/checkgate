@@ -1,78 +1,91 @@
 ---
-title: "Self-Hosting Checkgate — Docker, AWS EC2 & ECS Deployment Guide"
+title: "Self-Hosting Checkgate — Docker & AWS Deployment Guide"
 description: "Deploy Checkgate on your own infrastructure using Docker Compose, AWS EC2, or ECS Fargate. Includes environment variable reference, load balancing tips, and upgrade instructions."
 ---
 
 # Self-Hosting
 
-Checkgate is designed to be self-hosted. All you need is Docker, PostgreSQL, and Redis.
+Checkgate is designed to be self-hosted. The all-in-one Docker image bundles PostgreSQL, Redis, the server, and the dashboard into a single container — no external services required.
 
 ## Docker Compose (Recommended)
 
-The easiest way to run Checkgate is with the provided Docker Compose files.
-
-### Slim (Server Only)
-
-Use this if you already have PostgreSQL and Redis:
-
-```yaml
-# docker-compose.yml
-services:
-  checkgate:
-    image: ghcr.io/thinkgrid-labs/checkgate:server
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgres://user:password@your-postgres:5432/checkgate
-      REDIS_URL: redis://your-redis:6379
-      SDK_KEY: your-secret-key
-```
+The simplest way to run Checkgate is with the provided `docker-compose.yml`:
 
 ```bash
 docker compose up -d
 ```
 
-### Full Stack (Batteries Included)
+This starts a single container that includes:
+- **PostgreSQL** — persistent flag and user storage
+- **Redis** — pub/sub for real-time multi-instance sync
+- **Checkgate server** — REST API + SSE stream on port `3000`
+- **React dashboard** — served at `http://localhost:3000`
 
-Includes PostgreSQL, Redis, and Checkgate:
+### Configuration
+
+Create a `.env` file in the project root:
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+SESSION_SECRET=your-random-64-char-secret   # Required in production
+POSTGRES_PASSWORD=strong-db-password        # Replaces default "checkgate"
+COOKIE_SECURE=true                          # Set false only for local HTTP development
 ```
 
-This brings up:
-- `checkgate` — server on port 3000
-- `postgres` — PostgreSQL on port 5432
-- `redis` — Redis on port 6379
+Then run:
+
+```bash
+docker compose up -d
+```
 
 ## Docker Images
 
-Two images are published per release:
+One image is published per release:
 
 | Image | Description |
 |-------|-------------|
-| `ghcr.io/thinkgrid-labs/checkgate:server` | Server binary only (~20MB) |
-| `ghcr.io/thinkgrid-labs/checkgate:full` | Server + dashboard static files |
+| `ghcr.io/thinkgrid-labs/checkgate:latest` | All-in-one: PostgreSQL + Redis + server + dashboard |
+| `ghcr.io/thinkgrid-labs/checkgate:<version>` | Pinned version (e.g. `1.2.0`) |
 
-Both images are multi-architecture: `linux/amd64` and `linux/arm64`.
+The image is multi-architecture: `linux/amd64` and `linux/arm64`.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgres://checkgate:password@localhost/checkgate` | PostgreSQL connection string |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
-| `SDK_KEY` | _(unset)_ | API authentication key. If unset, auth is disabled |
-| `PUBLIC_DIR` | `public` | Directory to serve the dashboard static files from |
+| `SESSION_SECRET` | _(insecure dev key)_ | Secret for encrypting session cookies. Use a random ≥32-char string in production. |
+| `DATABASE_URL` | `postgres://checkgate:password@localhost/checkgate` | PostgreSQL connection string (used when not using bundled PG) |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection string (used when not using bundled Redis) |
+| `POSTGRES_PASSWORD` | `checkgate` | Password for the bundled PostgreSQL instance |
+| `POSTGRES_USER` | `checkgate` | Username for the bundled PostgreSQL instance |
+| `POSTGRES_DB` | `checkgate` | Database name for the bundled PostgreSQL instance |
+| `COOKIE_SECURE` | `true` | Set `false` for local HTTP development. Controls the `Secure` cookie flag. |
+| `SDK_KEY` | _(unset)_ | Legacy env var: adds an extra accepted SDK key without a DB entry |
+| `PUBLIC_DIR` | `public` | Directory to serve dashboard static files from |
+| `PORT` | `3000` | Port the server listens on |
+| `DB_MAX_CONNECTIONS` | `10` | PostgreSQL connection pool size |
 | `RUST_LOG` | `info` | Log level (`error`, `warn`, `info`, `debug`, `trace`) |
 
 ### Security
 
-Always set `SDK_KEY` in production. Without it, anyone can read and modify your flags.
+Always set `SESSION_SECRET` in production. Without it, session cookies use a hardcoded dev key that is public knowledge — anyone can forge sessions.
 
 ```bash
-# Generate a secure key
+# Generate a secure session secret
 openssl rand -hex 32
+```
+
+SDK keys are managed through the dashboard Settings page. The first key is auto-generated on first boot. Additional keys can be created and revoked without restarting the server.
+
+## External PostgreSQL and Redis
+
+To use your own PostgreSQL and Redis instead of the bundled ones, run the image directly and pass the connection strings:
+
+```bash
+docker run -d -p 3000:3000 \
+  -e DATABASE_URL="postgres://user:password@your-postgres:5432/checkgate" \
+  -e REDIS_URL="redis://your-redis:6379" \
+  -e SESSION_SECRET="your-secret" \
+  ghcr.io/thinkgrid-labs/checkgate:latest
 ```
 
 ## AWS
@@ -85,16 +98,18 @@ openssl rand -hex 32
    sudo yum update -y && sudo yum install -y docker
    sudo systemctl start docker
    ```
-3. Set up RDS PostgreSQL and ElastiCache Redis
+3. Set up RDS PostgreSQL and ElastiCache Redis (optional — use the bundled versions for simpler setups)
 4. Create a `.env` file:
    ```bash
    DATABASE_URL=postgres://user:pass@rds-endpoint:5432/checkgate
    REDIS_URL=redis://elasticache-endpoint:6379
-   SDK_KEY=your-secret-key
+   SESSION_SECRET=your-random-secret
+   COOKIE_SECURE=true
    ```
 5. Run:
    ```bash
-   docker run -d --env-file .env -p 3000:3000 ghcr.io/thinkgrid-labs/checkgate:full
+   docker run -d --env-file .env -p 3000:3000 \
+     ghcr.io/thinkgrid-labs/checkgate:latest
    ```
 
 ### ECS (Fargate)
@@ -111,12 +126,13 @@ A basic task definition:
   "containerDefinitions": [
     {
       "name": "checkgate",
-      "image": "ghcr.io/thinkgrid-labs/checkgate:full",
+      "image": "ghcr.io/thinkgrid-labs/checkgate:latest",
       "portMappings": [{"containerPort": 3000}],
       "environment": [
         {"name": "DATABASE_URL", "value": "postgres://..."},
         {"name": "REDIS_URL", "value": "redis://..."},
-        {"name": "SDK_KEY", "value": "your-secret-key"}
+        {"name": "SESSION_SECRET", "value": "your-random-secret"},
+        {"name": "COOKIE_SECURE", "value": "true"}
       ]
     }
   ]
@@ -131,22 +147,28 @@ Checkgate is stateless — the in-memory flag store is rebuilt from PostgreSQL o
 - **Protocol**: HTTP/1.1 (SSE is not compatible with HTTP/2 connection multiplexing on ALB)
 - **Stickiness**: Enabled (duration-based, any duration)
 
-Or use **Redis pub/sub fan-out** (built-in): all instances subscribe to Redis and will forward updates to their connected SDK clients regardless of which instance received the API write.
+Or rely on **Redis pub/sub fan-out** (built-in): all instances subscribe to Redis and will forward updates to their connected SDK clients regardless of which instance received the API write.
 
 ## Health Checks
 
-The server does not expose a dedicated `/health` endpoint in the current release. Use a TCP health check on port 3000, or check the root path (`GET /`) which serves the dashboard.
+The server exposes a health check endpoint:
+
+```http
+GET /health
+```
+
+Returns `200 OK` with body `OK`. Use this for load balancer and container health checks (as configured in the Dockerfile's `HEALTHCHECK` instruction).
 
 ## Upgrading
 
-Checkgate uses PostgreSQL schema migrations inline at startup (`CREATE TABLE IF NOT EXISTS`). To upgrade:
+Checkgate uses [sqlx migrations](https://docs.rs/sqlx/latest/sqlx/macro.migrate.html) that run automatically on startup. To upgrade:
 
 ```bash
 docker pull ghcr.io/thinkgrid-labs/checkgate:latest
 docker compose up -d --force-recreate
 ```
 
-No downtime migrations are required for current schema changes.
+The server applies any new migrations before accepting traffic. Existing data is preserved.
 
 ## Backup
 
@@ -156,4 +178,4 @@ Back up your PostgreSQL database using standard tooling:
 pg_dump -h localhost -U checkgate checkgate > checkgate-backup.sql
 ```
 
-Redis is used only for pub/sub and does not need to be backed up.
+Redis is used only for pub/sub message passing and does not need to be backed up — no durable state is stored there.

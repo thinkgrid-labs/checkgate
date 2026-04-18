@@ -17,6 +17,28 @@ vi.mock('./api', () => ({
   }
 }))
 
+vi.mock('./context/EnvironmentContext', () => ({
+  EnvironmentProvider: ({ children }: any) => <div>{children}</div>,
+  useEnvironment: () => ({
+    environments: [],
+    activeEnv: null,
+    setActiveEnv: vi.fn(),
+    loading: false,
+    reload: vi.fn(),
+  }),
+}))
+
+vi.mock('./context/ProjectContext', () => ({
+  ProjectProvider: ({ children }: any) => <div>{children}</div>,
+  useProject: () => ({
+    projects: [],
+    activeProject: null,
+    setActiveProject: vi.fn(),
+    loading: false,
+    reload: vi.fn(),
+  }),
+}))
+
 const mockUseAuth = vi.mocked(useAuth)
 const mockApiListFlags = vi.mocked(api.listFlags)
 

@@ -1,5 +1,5 @@
 import { Trash2, Plus } from 'lucide-react'
-import type { TargetingRule, Operator } from '../types'
+import type { FlagType, FlagValue, TargetingRule, Operator } from '../types'
 
 const OPERATORS: { value: Operator; label: string }[] = [
   { value: 'equals', label: 'equals' },
@@ -18,9 +18,30 @@ const selectClass =
 interface RuleEditorProps {
   rules: TargetingRule[]
   onChange: (rules: TargetingRule[]) => void
+  flagType?: FlagType
 }
 
-export default function RuleEditor({ rules, onChange }: RuleEditorProps) {
+function parseVariant(raw: string, flagType: FlagType): FlagValue {
+  if (raw.trim() === '') return null
+  if (flagType === 'integer') {
+    const n = parseInt(raw, 10)
+    return isNaN(n) ? null : n
+  }
+  if (flagType === 'json') {
+    try { return JSON.parse(raw) } catch { return null }
+  }
+  return raw
+}
+
+function variantToString(v: FlagValue): string {
+  if (v == null) return ''
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v)
+}
+
+export default function RuleEditor({ rules, onChange, flagType = 'boolean' }: RuleEditorProps) {
+  const isVariant = flagType !== 'boolean'
+
   function addRule() {
     onChange([...rules, { attribute: '', operator: 'equals', values: [''] }])
   }
@@ -36,6 +57,11 @@ export default function RuleEditor({ rules, onChange }: RuleEditorProps) {
   function updateValues(i: number, raw: string) {
     const values = raw.split(',').map(v => v.trim()).filter(Boolean)
     updateRule(i, { values: values.length ? values : [''] })
+  }
+
+  function updateVariant(i: number, raw: string) {
+    const variant = raw.trim() === '' ? undefined : parseVariant(raw, flagType)
+    updateRule(i, { variant })
   }
 
   return (
@@ -81,6 +107,31 @@ export default function RuleEditor({ rules, onChange }: RuleEditorProps) {
               className={inputClass}
             />
           </div>
+
+          {isVariant && (
+            <div className="flex-1 min-w-32">
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                Return value <span className="text-gray-400">(optional)</span>
+              </label>
+              {flagType === 'json' ? (
+                <textarea
+                  rows={1}
+                  value={variantToString(rule.variant ?? null)}
+                  onChange={e => updateVariant(i, e.target.value)}
+                  placeholder='{"key":"val"}'
+                  className={`${inputClass} resize-none font-mono text-xs`}
+                />
+              ) : (
+                <input
+                  type={flagType === 'integer' ? 'number' : 'text'}
+                  value={variantToString(rule.variant ?? null)}
+                  onChange={e => updateVariant(i, e.target.value)}
+                  placeholder={flagType === 'integer' ? '0' : 'value'}
+                  className={`${inputClass} ${flagType === 'string' ? '' : 'font-mono'}`}
+                />
+              )}
+            </div>
+          )}
 
           <button
             type="button"

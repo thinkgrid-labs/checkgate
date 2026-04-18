@@ -14,7 +14,7 @@ use axum::{
 use axum_extra::extract::cookie::Key;
 use checkgate_core::evaluator::Flag;
 use checkgate_core::store::FlagStore;
-use rand::RngCore;
+use rand::RngExt as _;
 use rate_limit::new_rate_limiter;
 use sqlx::{Row, postgres::PgPoolOptions};
 use state::SdkKeyEntry;
@@ -104,13 +104,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── SDK keys (DB-backed) ──────────────────────────────────────────────────
 
-    let rows = sqlx::query("SELECT id, name, value FROM sdk_keys ORDER BY id ASC")
-        .fetch_all(&db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to load SDK keys");
-            e
-        })?;
+    let rows =
+        sqlx::query("SELECT id, name, value, environment_id::text FROM sdk_keys ORDER BY id ASC")
+            .fetch_all(&db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to load SDK keys");
+                e
+            })?;
 
     let mut sdk_keys_data: Vec<SdkKeyEntry> = rows
         .iter()
@@ -118,17 +119,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id: r.get("id"),
             name: r.get("name"),
             value: r.get("value"),
+            environment_id: r.get("environment_id"),
         })
         .collect();
 
     if sdk_keys_data.is_empty() {
         let mut bytes = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill(&mut bytes);
         let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
         let key_value = format!("sk_live_{hex}");
 
         let row = sqlx::query(
-            "INSERT INTO sdk_keys (name, value) VALUES ('Default', $1) RETURNING id, name, value",
+            "INSERT INTO sdk_keys (name, value, environment_id) \
+             VALUES ('Default', $1, (SELECT id FROM environments WHERE is_default = true LIMIT 1)) \
+             RETURNING id, name, value, environment_id::text",
         )
         .bind(&key_value)
         .fetch_one(&db)
@@ -143,6 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id: row.get("id"),
             name: row.get("name"),
             value: row.get("value"),
+            environment_id: row.get("environment_id"),
         });
     } else {
         info!(count = sdk_keys_data.len(), "SDK keys loaded from database");
@@ -160,6 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id: -1,
             name: "env:SDK_KEY".into(),
             value: env_key,
+            environment_id: String::new(), // env var keys have no environment scope
         });
     }
 
@@ -364,24 +370,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Protected write: additionally requires admin role.
     //
     // Layer execution order for a write request (outermost → innermost):
-    //   cors → rate_limit → csrf → require_auth → require_admin → handler
+    //   cors → rate_limit → csrf → require_auth → require_editor/require_admin → handler
 
     let auth_routes = api::auth_router();
     let setup_routes = api::setup_router();
 
-    // Write routes wrapped with require_admin (runs after require_auth).
-    let write_api = api::write_router().layer(middleware::from_fn_with_state(
+    // Flag write routes: editors and admins can create/edit/delete flags.
+    let editor_write_api = api::editor_write_router().layer(middleware::from_fn_with_state(
+        app_state.clone(),
+        auth::require_editor,
+    ));
+
+    // Admin-only write routes: environments, SDK keys, users.
+    let admin_write_api = api::admin_write_router().layer(middleware::from_fn_with_state(
         app_state.clone(),
         auth::require_admin,
     ));
 
-    // All API routes: reads + writes, body limit applied to both.
+    // Standard API routes (65 KB body limit).
     let api_routes = api::read_router()
-        .merge(write_api)
+        .merge(editor_write_api)
+        .merge(admin_write_api)
         .layer(DefaultBodyLimit::max(65_536));
+
+    // Impression ingest — kept separate so its 256 KB body limit is not overridden
+    // by the smaller limit applied to api_routes above.
+    let ingest_routes = api::ingest_router().layer(DefaultBodyLimit::max(256 * 1024));
 
     let protected = Router::new()
         .nest("/api", api_routes)
+        .nest("/api", ingest_routes)
         .route("/stream", get(stream::sse_handler))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
@@ -394,6 +412,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api", setup_routes)
         .merge(protected)
         .layer(trace_layer)
+        .layer(middleware::from_fn(api::security_headers))
         .layer(middleware::from_fn(api::csrf_protection))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),

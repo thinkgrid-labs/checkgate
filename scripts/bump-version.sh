@@ -32,6 +32,10 @@ for pkg in nodejs web react-native; do
   echo "  updated sdks/$pkg/package.json"
 done
 
+# ---Dashboard ---
+sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$ROOT/dashboard/package.json"
+echo "  updated dashboard/package.json"
+
 # --- Flutter / Dart ---
 sed -i "s/^version: .*/version: $VERSION/" "$ROOT/sdks/flutter/dart/pubspec.yaml"
 echo "  updated sdks/flutter/dart/pubspec.yaml"

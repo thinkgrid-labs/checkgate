@@ -10,10 +10,26 @@ use constant_time_eq::constant_time_eq;
 use serde::Deserialize;
 use tracing::warn;
 
-/// Minimal view of the session cookie — only role is needed for access checks.
+/// Minimal view of the session cookie — only role is needed for middleware access checks.
 #[derive(Deserialize)]
-struct SessionClaims {
+struct RoleClaims {
     role: String,
+}
+
+/// Full session claims — used by handlers that need the caller's email/role.
+#[derive(Deserialize, Clone)]
+pub(crate) struct SessionClaims {
+    pub email: String,
+    #[allow(dead_code)]
+    pub name: String,
+    pub role: String,
+}
+
+/// Extract session claims from the private cookie jar.
+/// Returns `None` if the request used SDK key auth (no session cookie present).
+pub(crate) fn get_session_claims(jar: &PrivateCookieJar) -> Option<SessionClaims> {
+    jar.get("lg_session")
+        .and_then(|c| serde_json::from_str::<SessionClaims>(c.value()).ok())
 }
 
 /// Validates a request using either:
@@ -137,7 +153,7 @@ pub async fn require_admin(
     // Session cookie: must carry role=admin (set from DB on login).
     let jar = PrivateCookieJar::from_headers(req.headers(), state.session_key.clone());
     if let Some(cookie) = jar.get("lg_session")
-        && let Ok(claims) = serde_json::from_str::<SessionClaims>(cookie.value())
+        && let Ok(claims) = serde_json::from_str::<RoleClaims>(cookie.value())
     {
         if claims.role == "admin" {
             return Ok(next.run(req).await);
@@ -152,5 +168,65 @@ pub async fn require_admin(
     }
 
     // Reached only if require_auth somehow didn't run first.
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+/// Requires editor-level access (admin or editor role).
+///
+/// SDK key auth is treated as admin-equivalent (machine credentials).
+/// Session-based auth passes if `role` is `"admin"` or `"editor"`.
+/// Viewers get 403. Use this middleware for flag write routes.
+pub async fn require_editor(
+    State(state): State<AppState>,
+    req: Request<axum::body::Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let key_values: Vec<String> = {
+        let keys = state.sdk_keys.read().await;
+        keys.iter().map(|e| e.value.clone()).collect()
+    };
+
+    // SDK key via Bearer header → admin-equivalent.
+    let header_key = req
+        .headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    if let Some(key) = header_key
+        && key_values
+            .iter()
+            .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
+    {
+        return Ok(next.run(req).await);
+    }
+
+    // SDK key via query param → admin-equivalent.
+    let query = req.uri().query().unwrap_or("");
+    if let Some(key) = query.split('&').find_map(|p| p.strip_prefix("sdk_key="))
+        && key_values
+            .iter()
+            .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
+    {
+        return Ok(next.run(req).await);
+    }
+
+    // Session cookie: admin or editor.
+    let jar = PrivateCookieJar::from_headers(req.headers(), state.session_key.clone());
+    if let Some(cookie) = jar.get("lg_session")
+        && let Ok(claims) = serde_json::from_str::<RoleClaims>(cookie.value())
+    {
+        if claims.role == "admin" || claims.role == "editor" {
+            return Ok(next.run(req).await);
+        }
+        warn!(
+            method = %req.method(),
+            path = %req.uri().path(),
+            role = %claims.role,
+            "Forbidden: editor or admin role required"
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     Err(StatusCode::UNAUTHORIZED)
 }

@@ -1,43 +1,99 @@
-# 1. Builder Stage: Compile the Rust Axum Server
-FROM rust:1.75-bookworm as builder
+# =============================================================================
+# Checkgate — all-in-one image
+#
+# Bundles: PostgreSQL 16 + Redis 7 + Checkgate server + React dashboard.
+# Perfect for demos, staging, or single-node self-hosted deployments.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1 — build dashboard
+# ---------------------------------------------------------------------------
+FROM node:22-slim AS dashboard-builder
+
+RUN npm install -g pnpm@10
+
+WORKDIR /app/dashboard
+COPY dashboard/package.json dashboard/pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+
+COPY dashboard/ .
+RUN pnpm build
+# → emits to ../server/public which maps to /app/server/public
+
+# ---------------------------------------------------------------------------
+# Stage 2 — build Rust server
+# ---------------------------------------------------------------------------
+FROM rust:1.88-slim AS server-builder
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Copy the entire workspace (needed because server depends on core)
-COPY . .
+# Cache dependency layer
+COPY Cargo.toml Cargo.lock ./
+COPY core/Cargo.toml core/Cargo.toml
+COPY server/Cargo.toml server/Cargo.toml
+COPY sdks/nodejs/Cargo.toml sdks/nodejs/Cargo.toml
+COPY sdks/web/Cargo.toml sdks/web/Cargo.toml
+COPY sdks/flutter/dart/rust/Cargo.toml sdks/flutter/dart/rust/Cargo.toml
+COPY sdks/react-native/Cargo.toml sdks/react-native/Cargo.toml
 
-# Build the server binary in release mode
-RUN cd server && cargo build --release
+RUN mkdir -p core/src server/src sdks/nodejs/src sdks/web/src sdks/flutter/dart/rust/src sdks/react-native/src && \
+    echo "fn main(){}" > server/src/main.rs && \
+    echo "" > core/src/lib.rs && \
+    echo "" > sdks/nodejs/src/lib.rs && \
+    echo "" > sdks/web/src/lib.rs && \
+    echo "" > sdks/flutter/dart/rust/src/lib.rs && \
+    echo "" > sdks/react-native/src/lib.rs
 
-# 2. Runtime Stage: Tiny Debian image with just the binary
+RUN cargo build --release -p server 2>/dev/null || true
+
+COPY core/ core/
+COPY server/ server/
+
+# Touch all .rs files so cargo detects the source change and recompiles the server crate.
+# Without this, Docker COPY preserves the original mtime and cargo may skip recompilation.
+RUN find core/src server/src -name "*.rs" | xargs touch && \
+    cargo build --release -p server
+
+# ---------------------------------------------------------------------------
+# Stage 3 — all-in-one runtime
+# ---------------------------------------------------------------------------
 FROM debian:bookworm-slim
-WORKDIR /app
 
-# Create a non-root system user for security
-RUN groupadd -r checkgate && useradd -r -g checkgate checkgate
-
-# Install runtime dependencies (OpenSSL 3) and curl for healthchecks
+# Install PostgreSQL, Redis, and runtime libs in one layer
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl3 ca-certificates curl && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libssl3 \
+        postgresql \
+        postgresql-client \
+        redis-server \
+        curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the compiled binary from the builder
-COPY --from=builder /app/target/release/server /usr/local/bin/checkgate-server
+WORKDIR /app
 
-# Ensure the application user owns the work directory (if needed for temp files)
-# chown -R checkgate:checkgate /app
+COPY --from=server-builder /app/target/release/server /usr/local/bin/checkgate-server
+COPY --from=dashboard-builder /app/server/public ./public
+COPY docker/entrypoint-full.sh /entrypoint.sh
 
-# Expose the Axum port
+RUN sed -i 's/\r//' /entrypoint.sh && chmod +x /entrypoint.sh && \
+    mkdir -p /var/lib/postgresql/data /var/log && \
+    chown -R postgres:postgres /var/lib/postgresql && \
+    touch /var/log/postgresql.log /var/log/redis.log && \
+    chown postgres:postgres /var/log/postgresql.log /var/log/redis.log
+
 EXPOSE 3000
 
-# Switch to non-root user
-USER checkgate
-
 # Allow orchestrators to monitor container health
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
-# Set environment variables (can be overridden at runtime)
-# ENV DATABASE_URL=postgres://user:pass@host/db
-# ENV REDIS_URL=redis://host:6379
+ENV PUBLIC_DIR=/app/public \
+    PGDATA=/var/lib/postgresql/data \
+    POSTGRES_USER=checkgate \
+    POSTGRES_PASSWORD=checkgate \
+    POSTGRES_DB=checkgate
 
-CMD ["checkgate-server"]
+ENTRYPOINT ["/entrypoint.sh"]

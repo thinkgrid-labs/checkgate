@@ -26,25 +26,29 @@ Checkgate uses Redis for inter-instance communication and real-time updates.
 
 ## Phase 2: Production Deployment
 
-For production environments, we recommend deploying the **Checkgate All-in-One Docker Image** (`checkgate:full`) to an orchestrator like AWS ECS (Fargate), AWS EC2, or Kubernetes.
+For production environments, we recommend deploying the **Checkgate Docker image** to an orchestrator like AWS ECS (Fargate), AWS EC2, or Kubernetes.
 
 ### Example: AWS ECS / EC2 Start
 ```bash
 docker run -d -p 3000:3000 \
   -e DATABASE_URL="postgres://user:pass@your-rds-endpoint:5432/checkgate" \
   -e REDIS_URL="redis://your-elasticache-endpoint:6379" \
-  -e SESSION_SECRET="A_SECURE_RANDOM_STRING_HERE" \
-  ghcr.io/thinkgrid-labs/checkgate:full
+  -e SESSION_SECRET="$(openssl rand -hex 32)" \
+  -e COOKIE_SECURE="true" \
+  ghcr.io/thinkgrid-labs/checkgate:latest
 ```
 
 ---
 
 ## Phase 3: The Dashboard Onboarding
 
-Once your Control Plane is accessible (e.g., at `https://flags.internal.com`), follow the **Emerald Setup Wizard**:
-1. **Admin Creation**: Set up the primary administrator account (stored in your RDS).
-2. **SDK Key Generation**: Generate a master SDK Key (`sk_live_...`). This key identifies your applications to the Control Plane.
-3. **Internal Verification**: Create your first flag and verify it appears in the dashboard.
+Once your Control Plane is accessible (e.g., at `https://flags.internal.com`), you will be redirected to the setup wizard at `/setup` on first visit:
+
+1. **Workspace name** — your company or team name, shown on the login page.
+2. **Admin account** — your name, work email, and a password (minimum 8 characters).
+3. **SDK key** — auto-generated on first boot; copy it now for use in your applications.
+
+After completing the wizard you are logged in as the first admin. Additional users can be invited from the **Users** page, and additional SDK keys can be created from **Settings**.
 
 ---
 

@@ -1,68 +1,35 @@
-# docker-compose.yml — server-only variant
+# docker-compose.yml — Checkgate all-in-one
 #
-# Runs the Checkgate server image alongside managed PostgreSQL and Redis
-# containers. Use this when you want Compose to own the dependencies but
-# still keep each service in its own container (12-factor style).
+# Runs a single container with PostgreSQL + Redis + Checkgate server +
+# React dashboard bundled inside. Ideal for demos, CI smoke tests, or
+# single-node self-hosted deployments.
 #
 # Usage:
 #   docker compose up -d
 #
-# Override SDK_KEY before starting in production:
-#   SDK_KEY=my-secret docker compose up -d
+# The dashboard is available at http://localhost:3000
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: checkgate-postgres
-    environment:
-      POSTGRES_USER: checkgate
-      POSTGRES_PASSWORD: checkgate
-      POSTGRES_DB: checkgate
-    ports:
-      - "5432:5432"
-    volumes:
-      - checkgate_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U checkgate -d checkgate"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    container_name: checkgate-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - checkgate_redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   checkgate:
     build:
       context: .
-      dockerfile: Dockerfile.server
-    image: checkgate:server
-    container_name: checkgate-server
+      dockerfile: Dockerfile
+    image: checkgate:latest
+    container_name: checkgate
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://checkgate:checkgate@postgres/checkgate
-      REDIS_URL: redis://redis:6379
+      POSTGRES_USER: checkgate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-checkgate}
+      POSTGRES_DB: checkgate
       SDK_KEY: ${SDK_KEY:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    volumes:
+      - checkgate_pgdata:/var/lib/postgresql/data
+      - checkgate_redis:/var/lib/redis
     restart: unless-stopped
 
 volumes:
-  checkgate_pg_data:
-  checkgate_redis_data:
+  checkgate_pgdata:
+  checkgate_redis:

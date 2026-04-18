@@ -1,27 +1,79 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Eye, EyeOff, LogIn } from 'lucide-react'
+import { Eye, EyeOff, LogIn, Clock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
-  const [sdkKey, setSdkKey] = useState('')
-  const [showKey, setShowKey] = useState(false)
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
+  const [workspaceName, setWorkspaceName] = useState('')
+  const [lockoutSeconds, setLockoutSeconds] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Fetch workspace name to personalise the page.
+  useEffect(() => {
+    fetch('/api/auth/workspace', { credentials: 'same-origin' })
+      .then(res => (res.ok ? (res.json() as Promise<{ workspace_name: string }>) : null))
+      .then(data => {
+        if (data?.workspace_name) setWorkspaceName(data.workspace_name)
+      })
+      .catch(() => {/* non-critical */})
+  }, [])
+
+  // Lockout countdown timer.
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return
+    timerRef.current = setInterval(() => {
+      setLockoutSeconds(s => {
+        if (s <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current)
+          return 0
+        }
+        return s - 1
+      })
+    }, 1000)
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [lockoutSeconds])
+
+  const isLocked = lockoutSeconds > 0
+
+  function formatLockout(seconds: number) {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return m > 0 ? `${m}m ${s}s` : `${s}s`
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (isLocked) return
     setError('')
+    setAttemptsRemaining(null)
     setLoading(true)
-    const result = await login(email.trim(), sdkKey.trim())
+    const result = await login(email.trim(), password)
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error ?? 'Login failed.')
-    } else {
+
+    if (result.ok) {
       navigate('/')
+      return
+    }
+
+    if (result.retryAfterSeconds != null) {
+      setLockoutSeconds(result.retryAfterSeconds)
+      setError('Too many failed attempts.')
+      return
+    }
+
+    setError(result.error ?? 'Login failed.')
+    if (result.attemptsRemaining != null) {
+      setAttemptsRemaining(result.attemptsRemaining)
     }
   }
 
@@ -63,12 +115,36 @@ export default function Login() {
         </div>
 
         <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-premium-xl border border-gray-50">
-          <h2 className="text-3xl font-display font-bold text-gray-900 tracking-tight mb-2 text-center sm:text-left">Welcome back</h2>
+          <h2 className="text-3xl font-display font-bold text-gray-900 tracking-tight mb-1 text-center sm:text-left">
+            Welcome back
+          </h2>
+          {workspaceName ? (
+            <p className="text-emerald-600 text-sm font-semibold mb-1 text-center sm:text-left">{workspaceName}</p>
+          ) : null}
           <p className="text-gray-400 text-sm mb-10 text-center sm:text-left font-medium">Sign in to your control plane.</p>
 
-          {error && (
+          {/* Lockout banner */}
+          {isLocked && (
+            <div className="mb-5 p-3.5 rounded-lg bg-amber-50 border border-amber-200 flex items-center gap-3">
+              <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+              <div>
+                <p className="text-amber-700 text-sm font-semibold">Account temporarily locked</p>
+                <p className="text-amber-600 text-xs mt-0.5">
+                  Try again in <span className="font-bold tabular-nums">{formatLockout(lockoutSeconds)}</span>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Error banner */}
+          {!isLocked && error && (
             <div className="mb-5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
-              {error}
+              <p>{error}</p>
+              {attemptsRemaining != null && attemptsRemaining > 0 && (
+                <p className="mt-1 text-xs text-red-500">
+                  {attemptsRemaining} attempt{attemptsRemaining !== 1 ? 's' : ''} remaining before lockout.
+                </p>
+              )}
             </div>
           )}
 
@@ -81,40 +157,44 @@ export default function Login() {
                 type="email"
                 required
                 autoComplete="email"
+                disabled={isLocked}
                 value={email}
-                onChange={e => { setEmail(e.target.value); setError('') }}
-                placeholder="jane@company.com"
-                className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                onChange={e => { setEmail(e.target.value); setError(''); setAttemptsRemaining(null) }}
+                placeholder="jane@acme.com"
+                className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                SDK Key
+                Password
               </label>
               <div className="relative">
                 <input
-                  type={showKey ? 'text' : 'password'}
+                  type={showPassword ? 'text' : 'password'}
+                  required
                   autoComplete="current-password"
-                  value={sdkKey}
-                  onChange={e => { setSdkKey(e.target.value); setError('') }}
-                  placeholder="sk_live_… (leave blank if auth is off)"
-                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 pr-10 text-gray-900 placeholder-gray-400 text-sm font-mono focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                  disabled={isLocked}
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setError(''); setAttemptsRemaining(null) }}
+                  placeholder="Your password"
+                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 pr-10 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowKey(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
-                  aria-label={showKey ? 'Hide key' : 'Show key'}
+                  onClick={() => setShowPassword(s => !s)}
+                  disabled={isLocked}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={loading || !email.trim()}
+              disabled={loading || isLocked || !email.trim() || !password}
               className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5 text-sm mt-4"
             >
               {loading ? (
@@ -122,7 +202,7 @@ export default function Login() {
               ) : (
                 <LogIn className="w-4 h-4" />
               )}
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? 'Signing in…' : isLocked ? `Locked (${formatLockout(lockoutSeconds)})` : 'Sign in'}
             </button>
           </form>
 

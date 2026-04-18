@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { api } from './api'
 import type { Flag } from './types'
 
+const ENV_ID = 'test-env-id'
+
 describe('api functions', () => {
   const originalFetch = globalThis.fetch
 
   beforeEach(() => {
-    // Clear out fetch mocks
     globalThis.fetch = vi.fn()
   })
 
@@ -14,7 +15,7 @@ describe('api functions', () => {
     globalThis.fetch = originalFetch
   })
 
-  const mockResponse = (data: any, status = 200, ok = true) => {
+  const mockResponse = (data: unknown, status = 200, ok = true) => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok,
       status,
@@ -29,11 +30,12 @@ describe('api functions', () => {
     ]
     mockResponse(mockFlags)
 
-    const result = await api.listFlags()
-    
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/flags', expect.objectContaining({
-      credentials: 'same-origin',
-    }))
+    const result = await api.listFlags(ENV_ID)
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `/api/environments/${ENV_ID}/flags`,
+      expect.objectContaining({ credentials: 'same-origin' }),
+    )
     expect(result).toEqual(mockFlags)
   })
 
@@ -41,15 +43,16 @@ describe('api functions', () => {
     const newFlag: Flag = { key: 'new-flag', is_enabled: false, rollout_percentage: null, description: null, rules: [] }
     mockResponse(newFlag)
 
-    await api.createFlag(newFlag)
-    
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/flags', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify(newFlag),
-      headers: expect.objectContaining({
-        'Content-Type': 'application/json',
+    await api.createFlag(ENV_ID, newFlag)
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `/api/environments/${ENV_ID}/flags`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(newFlag),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       }),
-    }))
+    )
   })
 
   it('throws an error on rejection', async () => {
@@ -60,6 +63,6 @@ describe('api functions', () => {
       text: () => Promise.resolve('Invalid JSON'),
     })
 
-    await expect(api.listFlags()).rejects.toThrow('400 Invalid JSON')
+    await expect(api.listFlags(ENV_ID)).rejects.toThrow('Invalid JSON')
   })
 })

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ToggleLeft, ToggleRight, ListFilter, Percent, Plus, ArrowRight } from 'lucide-react'
 import { api } from '../api'
 import type { Flag } from '../types'
+import { useEnvironment } from '../context/EnvironmentContext'
 
 interface StatCardProps {
   label: string
@@ -27,20 +28,22 @@ function StatCard({ label, value, icon: Icon, iconBg, iconColor }: StatCardProps
 }
 
 export default function Dashboard() {
+  const { activeEnv } = useEnvironment()
   const [flags, setFlags] = useState<Flag[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!activeEnv) return
     try {
       setError(null)
-      setFlags(await api.listFlags())
+      setFlags(await api.listFlags(activeEnv.id))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load flags')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeEnv])
 
   useEffect(() => { void load() }, [load])
 
