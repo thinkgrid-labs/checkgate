@@ -31,7 +31,7 @@ pub struct EnvFlagPath {
 /// Verifies the caller can access the project that owns `env_id`.
 /// Workspace admins and SDK key auth always pass.
 /// Others must be a project member.
-async fn check_env_access(
+pub(super) async fn check_env_access(
     db: &sqlx::PgPool,
     jar: &PrivateCookieJar,
     env_id: &str,
@@ -217,8 +217,36 @@ async fn create_flag(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let msg = json!({"type": "UPSERT", "env_id": env_id, "flag": payload}).to_string();
+    let actor_email = get_session_claims(&jar).map(|c| c.email);
+    super::audit::log_audit_event(
+        &state.db,
+        &env_id,
+        &payload.key,
+        actor_email.as_deref(),
+        "CREATE",
+        None,
+        Some(&data),
+        None,
+    )
+    .await;
+
+    let segment_map = super::segments::load_env_segments(&env_id, &state.db)
+        .await
+        .unwrap_or_default();
+    let expanded = super::segments::expand_flag_with_segments(payload.clone(), &segment_map);
+    state.store.upsert_flag(expanded.clone());
+    let msg = json!({"type": "UPSERT", "env_id": env_id, "flag": expanded}).to_string();
     publish_update(&state, &msg, "create_flag").await;
+
+    let wh_payload = super::webhooks::flag_event_payload(
+        "flag.created",
+        &env_id,
+        &payload.key,
+        Some(&data),
+        actor_email.as_deref(),
+        None,
+    );
+    crate::webhook_fire::fire_webhooks(state.clone(), env_id.clone(), wh_payload);
 
     info!(env_id = %env_id, "Flag created/replaced");
     Ok(Json(payload))
@@ -258,22 +286,47 @@ async fn delete_flag(
     Path(path): Path<EnvFlagPath>,
 ) -> Result<StatusCode, StatusCode> {
     check_env_access(&state.db, &jar, &path.env_id).await?;
-    let result = sqlx::query("DELETE FROM flags WHERE key = $1 AND environment_id = $2::uuid")
-        .bind(&path.key)
-        .bind(&path.env_id)
-        .execute(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "PostgreSQL delete failed");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
 
-    if result.rows_affected() == 0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
+    // RETURNING captures before_data for the audit log atomically with the delete.
+    let row = sqlx::query(
+        "DELETE FROM flags WHERE key = $1 AND environment_id = $2::uuid RETURNING data",
+    )
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "PostgreSQL delete failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let before_data: Option<serde_json::Value> = row.try_get("data").ok();
+    let actor_email = get_session_claims(&jar).map(|c| c.email);
+    super::audit::log_audit_event(
+        &state.db,
+        &path.env_id,
+        &path.key,
+        actor_email.as_deref(),
+        "DELETE",
+        before_data.as_ref(),
+        None,
+        None,
+    )
+    .await;
 
     let msg = json!({"type": "DELETE", "env_id": path.env_id, "key": path.key}).to_string();
     publish_update(&state, &msg, "delete_flag").await;
+
+    let wh_payload = super::webhooks::flag_event_payload(
+        "flag.deleted",
+        &path.env_id,
+        &path.key,
+        before_data.as_ref(),
+        actor_email.as_deref(),
+        None,
+    );
+    crate::webhook_fire::fire_webhooks(state.clone(), path.env_id.clone(), wh_payload);
 
     info!(env_id = %path.env_id, "Flag deleted");
     Ok(StatusCode::NO_CONTENT)
@@ -319,10 +372,11 @@ async fn patch_flag(
         StatusCode::NOT_FOUND
     })?;
 
-    let mut flag_val: serde_json::Value = rec.try_get("data").map_err(|e| {
+    let before_val: serde_json::Value = rec.try_get("data").map_err(|e| {
         error!(error = %e, "Failed to deserialize stored flag data");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    let mut flag_val = before_val.clone();
 
     if let (serde_json::Value::Object(map), serde_json::Value::Object(patch_map)) =
         (&mut flag_val, patch)
@@ -361,8 +415,36 @@ async fn patch_flag(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let msg = json!({"type": "UPSERT", "env_id": path.env_id, "flag": flag}).to_string();
+    let actor_email = get_session_claims(&jar).map(|c| c.email);
+    super::audit::log_audit_event(
+        &state.db,
+        &path.env_id,
+        &path.key,
+        actor_email.as_deref(),
+        "UPDATE",
+        Some(&before_val),
+        Some(&flag_val),
+        None,
+    )
+    .await;
+
+    let segment_map = super::segments::load_env_segments(&path.env_id, &state.db)
+        .await
+        .unwrap_or_default();
+    let expanded = super::segments::expand_flag_with_segments(flag.clone(), &segment_map);
+    state.store.upsert_flag(expanded.clone());
+    let msg = json!({"type": "UPSERT", "env_id": path.env_id, "flag": expanded}).to_string();
     publish_update(&state, &msg, "patch_flag").await;
+
+    let wh_payload = super::webhooks::flag_event_payload(
+        "flag.updated",
+        &path.env_id,
+        &path.key,
+        Some(&flag_val),
+        actor_email.as_deref(),
+        None,
+    );
+    crate::webhook_fire::fire_webhooks(state.clone(), path.env_id.clone(), wh_payload);
 
     info!(env_id = %path.env_id, "Flag patched");
     Ok(Json(flag))
@@ -386,6 +468,7 @@ async fn promote_flag(
         .and_then(|v| v.as_str())
         .ok_or(StatusCode::UNPROCESSABLE_ENTITY)?
         .to_string();
+    check_env_access(&state.db, &jar, &target_env_id).await?;
 
     let mut db_tx = state.db.begin().await.map_err(|e| {
         error!(error = %e, "Failed to begin transaction");
@@ -430,8 +513,37 @@ async fn promote_flag(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let msg = json!({"type": "UPSERT", "env_id": target_env_id, "flag": flag}).to_string();
+    let actor_email = get_session_claims(&jar).map(|c| c.email);
+    let promote_meta = serde_json::json!({"from_env_id": path.env_id, "to_env_id": target_env_id});
+    super::audit::log_audit_event(
+        &state.db,
+        &target_env_id,
+        &path.key,
+        actor_email.as_deref(),
+        "PROMOTE",
+        None,
+        Some(&flag_val),
+        Some(&promote_meta),
+    )
+    .await;
+
+    let segment_map = super::segments::load_env_segments(&target_env_id, &state.db)
+        .await
+        .unwrap_or_default();
+    let expanded = super::segments::expand_flag_with_segments(flag.clone(), &segment_map);
+    state.store.upsert_flag(expanded.clone());
+    let msg = json!({"type": "UPSERT", "env_id": target_env_id, "flag": expanded}).to_string();
     publish_update(&state, &msg, "promote_flag").await;
+
+    let wh_payload = super::webhooks::flag_event_payload(
+        "flag.promoted",
+        &target_env_id,
+        &path.key,
+        Some(&flag_val),
+        actor_email.as_deref(),
+        Some(&promote_meta),
+    );
+    crate::webhook_fire::fire_webhooks(state.clone(), target_env_id.clone(), wh_payload);
 
     info!(
         from_env = %path.env_id,
@@ -446,11 +558,10 @@ async fn promote_flag(
 // ---------------------------------------------------------------------------
 
 /// Publish a flag change event using the shared multiplexed connection from
-/// AppState. This avoids opening a new connection per write (the previous
-/// approach). If Redis is unavailable the DB write already succeeded so the
+/// AppState. If Redis is unavailable the DB write already succeeded so the
 /// request is not failed, but other instances may serve stale data until their
 /// next SSE reconnect.
-async fn publish_update(state: &AppState, msg: &str, op: &str) {
+pub(crate) async fn publish_update(state: &AppState, msg: &str, op: &str) {
     let mut conn = state.redis_conn.clone();
     if let Err(e) = conn.publish::<_, _, ()>("checkgate_updates", msg).await {
         warn!(

@@ -1,6 +1,6 @@
 ---
 title: "React Native SDK (JSI) — Feature Flags for iOS & Android"
-description: "Integrate Checkgate's React Native SDK using JSI and C FFI for synchronous, bridge-free feature flag evaluation on iOS and Android. Compatible with Expo Dev Client."
+description: "Integrate Checkgate's React Native SDK using JSI and C FFI for synchronous, in-process flag evaluation on iOS and Android — no bridge, no round-trip. Compatible with Expo Dev Client."
 ---
 
 # React Native SDK (JSI)

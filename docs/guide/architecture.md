@@ -1,6 +1,6 @@
 ---
 title: "Checkgate Architecture — Control Plane, Evaluation Core & SDK Design"
-description: "Deep dive into Checkgate's architecture: the project/environment hierarchy, the Axum-based control plane, the Rust evaluation core, per-environment SSE streams, and cross-platform SDK clients."
+description: "Deep dive into Checkgate's architecture: how the control plane, in-process evaluation core, and per-environment SSE stream work together to deliver flag decisions without a network round-trip."
 ---
 
 # Architecture

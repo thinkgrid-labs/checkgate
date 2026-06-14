@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, RotateCcw, Pencil, Trash2, ArrowUpRight } from 'lucide-react'
+import { Plus, Search, RotateCcw, Pencil, Trash2, ArrowUpRight, Copy, Check } from 'lucide-react'
 import { api } from '../api'
 import type { Flag, FlagType } from '../types'
 import { useEnvironment } from '../context/EnvironmentContext'
@@ -36,6 +36,34 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
           enabled ? 'translate-x-4' : 'translate-x-0.5'
         }`}
       />
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Copy-key button
+// ---------------------------------------------------------------------------
+
+function CopyKeyButton({ flagKey }: { flagKey: string }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    navigator.clipboard.writeText(flagKey).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 rounded-md text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+      aria-label="Copy key"
+      title="Copy flag key"
+    >
+      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
     </button>
   )
 }
@@ -135,13 +163,17 @@ function PromoteModal({ flag, onClose }: { flag: Flag; onClose: () => void }) {
 // Main page
 // ---------------------------------------------------------------------------
 
+type StatusFilter = 'all' | 'enabled' | 'disabled'
+
 export default function FlagList() {
   const { activeEnv } = useEnvironment()
   const [flags, setFlags] = useState<Flag[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [promotingFlag, setPromotingFlag] = useState<Flag | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     if (!activeEnv) return
@@ -159,6 +191,20 @@ export default function FlagList() {
     setLoading(true)
     void load()
   }, [load])
+
+  // '/' or Ctrl+K focuses the search box.
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   async function toggleEnabled(flag: Flag) {
     if (!activeEnv) return
@@ -181,12 +227,13 @@ export default function FlagList() {
     }
   }
 
-  const filtered = query.trim()
-    ? flags.filter(f =>
-        f.key.toLowerCase().includes(query.toLowerCase()) ||
-        f.description?.toLowerCase().includes(query.toLowerCase()),
-      )
-    : flags
+  const filtered = flags.filter(f => {
+    if (statusFilter === 'enabled' && !f.is_enabled) return false
+    if (statusFilter === 'disabled' && f.is_enabled) return false
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return f.key.toLowerCase().includes(q) || f.description?.toLowerCase().includes(q)
+  })
 
   return (
     <div className="w-full space-y-4">
@@ -199,12 +246,28 @@ export default function FlagList() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input
+            ref={searchRef}
             type="search"
-            placeholder="Search flags…"
+            placeholder="Search flags… (press /)"
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/40 shadow-premium transition-all"
           />
+        </div>
+
+        {/* Status filter */}
+        <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-xl text-xs font-semibold">
+          {(['all', 'enabled', 'disabled'] as StatusFilter[]).map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 rounded-lg capitalize transition-all ${
+                statusFilter === s ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
         </div>
 
         {/* Active env badge */}
@@ -296,6 +359,7 @@ export default function FlagList() {
                     </td>
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-all">
+                        <CopyKeyButton flagKey={flag.key} />
                         <button
                           onClick={() => setPromotingFlag(flag)}
                           className="p-1.5 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
@@ -329,8 +393,9 @@ export default function FlagList() {
 
         {!loading && !error && filtered.length > 0 && (
           <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400 bg-gray-50">
-            {filtered.length} flag{filtered.length !== 1 ? 's' : ''}
+            {filtered.length} of {flags.length} flag{flags.length !== 1 ? 's' : ''}
             {query && ` matching "${query}"`}
+            {statusFilter !== 'all' && ` · ${statusFilter} only`}
             {activeEnv && ` in ${activeEnv.name}`}
           </div>
         )}

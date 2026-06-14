@@ -308,19 +308,7 @@ async fn set_default_environment(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // Unset all defaults within the project.
-    sqlx::query(
-        "UPDATE environments SET is_default = false \
-         WHERE project_id = $1::uuid AND is_default = true",
-    )
-    .bind(&project_id)
-    .execute(&mut *db_tx)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "Failed to clear default environments");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
+    // Set the new default first so there is never a window with zero defaults.
     let row = sqlx::query(
         "UPDATE environments SET is_default = true WHERE id = $1::uuid \
          RETURNING id::text, name, slug, color, is_default, created_at::text",
@@ -333,6 +321,20 @@ async fn set_default_environment(
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Then clear all other defaults within the project.
+    sqlx::query(
+        "UPDATE environments SET is_default = false \
+         WHERE project_id = $1::uuid AND id != $2::uuid",
+    )
+    .bind(&project_id)
+    .bind(&env_id)
+    .execute(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to clear other default environments");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     db_tx.commit().await.map_err(|e| {
         error!(error = %e, "Failed to commit set-default transaction");

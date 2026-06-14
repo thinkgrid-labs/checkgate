@@ -1,11 +1,11 @@
 ---
 layout: home
-title: "Checkgate — Open-Source Self-Hosted Feature Flag Engine"
-description: "Sub-microsecond feature flag evaluation with zero network latency. Self-hosted, open-source alternative to LaunchDarkly. Native SDKs for Node.js, Web, React Native, and Flutter."
+title: "Checkgate — Feature Flags Without the Round-Trip."
+description: "Open-source, self-hosted feature flag engine that evaluates flags locally in sub-microseconds — no network call per evaluation. Native SDKs for Node.js, Web, React Native, and Flutter."
 hero:
   name: "Checkgate"
-  text: "Open-Source Feature Flags, Built for Speed."
-  tagline: "Sub-microsecond local evaluation. Zero evaluation latency. Complete data privacy. The ultimate self-hosted alternative for feature toggles."
+  text: "Feature Flags Without the Round-Trip."
+  tagline: "Flags evaluated in-process. Updates pushed in under 50 ms. No vendor, no round-trips, no latency tax."
   image:
     src: /checkgate_logo.png
     alt: Checkgate Logo

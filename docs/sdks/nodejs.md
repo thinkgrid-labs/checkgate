@@ -1,6 +1,6 @@
 ---
-title: "Node.js SDK (NAPI) — Sub-Microsecond Feature Flags for Node.js"
-description: "Install and use the Checkgate Node.js SDK powered by NAPI-RS. Evaluate feature flags synchronously at native speed in Express, Next.js, and any Node.js server."
+title: "Node.js SDK (NAPI) — In-Process Feature Flags for Node.js"
+description: "Install and use the Checkgate Node.js SDK powered by NAPI-RS. isEnabled() is a synchronous in-memory call — no network round-trip — in Express, Next.js, and any Node.js server."
 ---
 
 # Node.js SDK (NAPI)

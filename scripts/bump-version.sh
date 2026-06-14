@@ -21,32 +21,39 @@ fi
 
 echo "Bumping all packages to $VERSION"
 
+# BSD sed (macOS) requires an explicit backup extension with -i; passing '' means no backup file.
+SED_INPLACE() { sed -i '' "$@"; }
+
 # --- Rust workspace (source of truth) ---
-sed -i "s/^version = \".*\"$/version = \"$VERSION\"/" "$ROOT/Cargo.toml"
+SED_INPLACE "s/^version = \".*\"$/version = \"$VERSION\"/" "$ROOT/Cargo.toml"
 echo "  updated Cargo.toml [workspace.package]"
 
 # --- JS SDKs ---
 for pkg in nodejs web react-native; do
   FILE="$ROOT/sdks/$pkg/package.json"
-  sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$FILE"
+  SED_INPLACE "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$FILE"
   echo "  updated sdks/$pkg/package.json"
 done
 
-# ---Dashboard ---
-sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$ROOT/dashboard/package.json"
+# --- Dashboard ---
+SED_INPLACE "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$ROOT/dashboard/package.json"
 echo "  updated dashboard/package.json"
 
 # --- Flutter / Dart ---
-sed -i "s/^version: .*/version: $VERSION/" "$ROOT/sdks/flutter/dart/pubspec.yaml"
+SED_INPLACE "s/^version: .*/version: $VERSION/" "$ROOT/sdks/flutter/dart/pubspec.yaml"
 echo "  updated sdks/flutter/dart/pubspec.yaml"
 
 # --- Flutter CHANGELOG (prepend new entry) ---
 CHANGELOG="$ROOT/sdks/flutter/dart/CHANGELOG.md"
 TODAY="$(date +%Y-%m-%d)"
-ENTRY="## $VERSION\n\n- Release $VERSION.\n"
-sed -i "0,/^## /s//\n$ENTRY\n## /" "$CHANGELOG" 2>/dev/null || true
+ENTRY="## $VERSION ($TODAY)\n\n- Release $VERSION.\n"
+# Only prepend if the version heading isn't already present.
+if ! grep -q "^## $VERSION" "$CHANGELOG" 2>/dev/null; then
+  printf "%b\n" "$ENTRY" | cat - "$CHANGELOG" > /tmp/_cg_changelog && mv /tmp/_cg_changelog "$CHANGELOG"
+fi
 echo "  prepended $VERSION entry to sdks/flutter/dart/CHANGELOG.md (edit manually to add details)"
 
+echo ""
 echo "Done. All packages are now at $VERSION"
 echo ""
 echo "Next steps:"

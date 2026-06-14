@@ -321,9 +321,15 @@ async fn delete_project(
     let role = project_role(&state.db, &jar, &project_id).await?;
     assert_admin(&role)?;
 
-    // Prevent deleting the last project.
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects")
-        .fetch_one(&state.db)
+    // Wrap count + delete in a transaction with FOR UPDATE so that two concurrent
+    // delete requests cannot both pass the "last project" check simultaneously.
+    let mut tx = state.db.begin().await.map_err(|e| {
+        error!(error = %e, "Failed to begin delete transaction");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects FOR UPDATE")
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to count projects");
@@ -331,13 +337,14 @@ async fn delete_project(
         })?;
 
     if count <= 1 {
+        let _ = tx.rollback().await;
         warn!(project_id = %project_id, "Rejected delete: cannot delete the last project");
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     let result = sqlx::query("DELETE FROM projects WHERE id = $1::uuid")
         .bind(&project_id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to delete project");
@@ -345,8 +352,14 @@ async fn delete_project(
         })?;
 
     if result.rows_affected() == 0 {
+        let _ = tx.rollback().await;
         return Err(StatusCode::NOT_FOUND);
     }
+
+    tx.commit().await.map_err(|e| {
+        error!(error = %e, "Transaction commit failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     info!(project_id = %project_id, "Project deleted");
     Ok(StatusCode::NO_CONTENT)

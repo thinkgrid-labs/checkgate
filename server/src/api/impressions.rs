@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
+use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tracing::{error, info, warn};
@@ -186,9 +187,11 @@ async fn ingest_impressions(
 /// `total` always reflects the count matching the base filters (ignoring `since_id`).
 async fn list_impressions(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(env_id): Path<String>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<ImpressionListResponse>, StatusCode> {
+    super::flags::check_env_access(&state.db, &jar, &env_id).await?;
     let limit = q.limit.clamp(1, 200);
     let offset = q.offset.max(0);
 
@@ -258,8 +261,10 @@ async fn list_impressions(
 /// Returns per-flag aggregate counts: total evals, true/false split, unique users.
 async fn impression_stats(
     State(state): State<AppState>,
+    jar: PrivateCookieJar,
     Path(env_id): Path<String>,
 ) -> Result<Json<Vec<ImpressionStats>>, StatusCode> {
+    super::flags::check_env_access(&state.db, &jar, &env_id).await?;
     let rows = sqlx::query(
         "SELECT flag_key, \
                 COUNT(*) AS total, \

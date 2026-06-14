@@ -1,6 +1,6 @@
 ---
-title: "Web SDK (WebAssembly) — Feature Flags for Browsers with WASM"
-description: "Use the Checkgate Web SDK to evaluate feature flags in the browser with WebAssembly. Zero server round-trips — flags are evaluated locally at near-native speed with React and Vue support."
+title: "Web SDK (WebAssembly) — In-Browser Feature Flags with WASM"
+description: "Use the Checkgate Web SDK to evaluate feature flags inside the browser via WebAssembly — no server round-trip on every call. Includes React and Vue examples."
 ---
 
 # Web SDK (WebAssembly)

@@ -280,7 +280,7 @@ pub async fn create_key(
         id,
         name: name.clone(),
         value: value.clone(),
-        environment_id: req.environment_id.clone(),
+        environment_id: Some(req.environment_id.clone()),
     });
 
     info!(key_id = id, name = %name, environment_id = %req.environment_id, "SDK key created");

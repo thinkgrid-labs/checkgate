@@ -1,3 +1,4 @@
+use crate::auth::get_session_claims;
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -45,7 +46,18 @@ struct CallerClaims {
 // Handlers
 // ---------------------------------------------------------------------------
 
-pub async fn list_users(State(state): State<AppState>) -> Result<Json<Vec<UserInfo>>, StatusCode> {
+pub async fn list_users(
+    State(state): State<AppState>,
+    jar: PrivateCookieJar,
+) -> Result<Json<Vec<UserInfo>>, StatusCode> {
+    // SDK key auth (None from get_session_claims) is admin-equivalent.
+    // Session users must be admin — editors/viewers cannot enumerate all workspace accounts.
+    if let Some(claims) = get_session_claims(&jar)
+        && claims.role != "admin"
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let rows =
         sqlx::query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC")
             .fetch_all(&state.db)
