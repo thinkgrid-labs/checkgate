@@ -1,10 +1,15 @@
+pub mod audit;
 pub mod environments;
 pub mod flags;
+pub mod health;
 pub mod impressions;
 pub mod keys;
 pub mod projects;
+pub mod scheduled;
+pub mod segments;
 pub mod session;
 pub mod users;
+pub mod webhooks;
 
 use crate::state::AppState;
 use axum::{
@@ -42,6 +47,17 @@ pub async fn security_headers(req: Request<Body>, next: Next) -> Response {
         header::HeaderName::from_static("permissions-policy"),
         HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
     );
+    headers.insert(
+        header::HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+             img-src 'self' data:; connect-src 'self'",
+        ),
+    );
+    headers.insert(
+        header::HeaderName::from_static("strict-transport-security"),
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
     response
 }
 
@@ -65,7 +81,13 @@ pub async fn csrf_protection(req: Request<Body>, next: Next) -> Result<Response,
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v.starts_with("Bearer "));
 
-        if !has_bearer && req.headers().get("X-Checkgate-Request").is_none() {
+        let has_csrf_header = req
+            .headers()
+            .get("X-Checkgate-Request")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| !v.is_empty());
+
+        if !has_bearer && !has_csrf_header {
             warn!(
                 method = %method,
                 path = %req.uri().path(),
@@ -86,6 +108,11 @@ pub fn read_router() -> Router<AppState> {
         .merge(keys::read_router())
         .merge(users::read_router())
         .merge(projects::read_router())
+        .merge(audit::read_router())
+        .merge(segments::read_router())
+        .merge(webhooks::read_router())
+        .merge(scheduled::read_router())
+        .merge(health::read_router())
 }
 
 /// SDK ingest routes — any authenticated client; not admin-gated.
@@ -105,6 +132,21 @@ pub fn admin_write_router() -> Router<AppState> {
         .merge(keys::write_router())
         .merge(users::write_router())
         .merge(projects::write_router())
+}
+
+/// Segment write routes — require editor or admin role.
+pub fn segment_write_router() -> Router<AppState> {
+    segments::write_router()
+}
+
+/// Webhook write routes — admin only.
+pub fn webhook_write_router() -> Router<AppState> {
+    webhooks::write_router()
+}
+
+/// Scheduled change write routes — require editor or admin role.
+pub fn scheduled_write_router() -> Router<AppState> {
+    scheduled::write_router()
 }
 
 /// Public auth routes — mounted under `/api/auth` WITHOUT auth middleware.

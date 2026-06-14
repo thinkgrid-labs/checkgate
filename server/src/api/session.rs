@@ -113,6 +113,11 @@ pub(crate) fn hash_password(password: &str) -> Result<String, StatusCode> {
         })
 }
 
+/// Dummy Argon2id hash used when no real hash is available, so that the "user
+/// not found" and "wrong password" paths take the same time. Generated with
+/// default Argon2id parameters over an empty input; always fails verification.
+const DUMMY_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHRzb21lc2FsdA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
 fn verify_password(password: &str, hash: &str) -> bool {
     let Ok(parsed) = PasswordHash::new(hash) else {
         return false;
@@ -278,14 +283,21 @@ pub async fn login(
         })?;
 
     // ── Credential validation ─────────────────────────────────────────────────
-    // We validate both "user not found" and "wrong password" the same way to
-    // avoid timing-based user enumeration.
+    // Always call verify_password — even when the user doesn't exist or has no
+    // password hash — so that "user not found" and "wrong password" take the same
+    // time and cannot be distinguished by a timing side-channel.
     let auth_ok = match &row {
-        None => false,
+        None => {
+            verify_password(&req.password, DUMMY_HASH);
+            false
+        }
         Some(r) => {
             let hash: Option<String> = r.get("password_hash");
             match hash {
-                None => false,
+                None => {
+                    verify_password(&req.password, DUMMY_HASH);
+                    false
+                }
                 Some(h) => verify_password(&req.password, &h),
             }
         }

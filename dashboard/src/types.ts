@@ -8,6 +8,8 @@ export interface TargetingRule {
   attribute: string
   operator: Operator
   values: string[]
+  /** When set, this rule references a named segment instead of a concrete attribute check. */
+  segment_key?: string
   variant?: FlagValue
 }
 
@@ -45,6 +47,70 @@ export interface ImpressionStats {
   false_count: number
   unique_users: number
   last_seen: string | null
+}
+
+export interface AuditEntry {
+  id: number
+  environment_id: string
+  flag_key: string
+  actor_email: string | null
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PROMOTE'
+  before_data: Record<string, unknown> | null
+  after_data: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface Segment {
+  id: string
+  environment_id: string
+  name: string
+  key: string
+  description: string | null
+  rules: TargetingRule[]
+  created_at: string
+}
+
+export type SegmentPatch = { name?: string; description?: string; rules?: TargetingRule[] }
+
+export interface Webhook {
+  id: string
+  environment_id: string
+  name: string
+  url: string
+  has_secret: boolean
+  enabled: boolean
+  created_at: string
+}
+
+export type WebhookPatch = { name?: string; url?: string; secret?: string; enabled?: boolean }
+
+export interface WebhookDelivery {
+  id: number
+  webhook_id: string
+  event: string
+  status_code: number | null
+  response_body: string | null
+  error: string | null
+  delivered_at: string
+}
+
+export interface ScheduledChange {
+  id: string
+  environment_id: string
+  flag_key: string
+  scheduled_at: string
+  patch: Record<string, unknown>
+  executed_at: string | null
+  created_at: string
+}
+
+export interface ConnectedClient {
+  connection_id: string
+  environment_id: string | null
+  sdk_key_name: string | null
+  client_ip: string
+  connected_at: number
 }
 
 export type UserRole = 'admin' | 'editor' | 'viewer'

@@ -10,6 +10,11 @@ import {
   Activity,
   FolderKanban,
   Plus,
+  Tags,
+  History,
+  Webhook,
+  Wifi,
+  CalendarClock,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -20,7 +25,12 @@ import type { Project } from '../types'
 const NAV_ALL = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true, adminOnly: false },
   { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false, adminOnly: false },
+  { to: '/segments', icon: Tags, label: 'Segments', end: false, adminOnly: false },
+  { to: '/schedule', icon: CalendarClock, label: 'Scheduled', end: false, adminOnly: false },
   { to: '/impressions', icon: Activity, label: 'Impressions', end: false, adminOnly: false },
+  { to: '/audit', icon: History, label: 'Audit Log', end: false, adminOnly: false },
+  { to: '/sdk-health', icon: Wifi, label: 'SDK Health', end: false, adminOnly: false },
+  { to: '/webhooks', icon: Webhook, label: 'Webhooks', end: false, adminOnly: true },
   { to: '/environments', icon: Globe, label: 'Environments', end: false, adminOnly: true },
   { to: '/projects', icon: FolderKanban, label: 'Projects', end: false, adminOnly: true },
   { to: '/users', icon: Users, label: 'Users', end: false, adminOnly: true },

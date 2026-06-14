@@ -1,4 +1,17 @@
-import type { Flag, FlagPatch, ImpressionListResponse, ImpressionStats } from './types'
+import type {
+  AuditEntry,
+  ConnectedClient,
+  Flag,
+  FlagPatch,
+  ImpressionListResponse,
+  ImpressionStats,
+  ScheduledChange,
+  Segment,
+  SegmentPatch,
+  Webhook,
+  WebhookDelivery,
+  WebhookPatch,
+} from './types'
 
 export interface ApiUser {
   id: number
@@ -101,6 +114,120 @@ export const api = {
 
   impressionStats(envId: string): Promise<ImpressionStats[]> {
     return request(`/api/environments/${envId}/impressions/stats`)
+  },
+}
+
+export const auditApi = {
+  list(
+    envId: string,
+    opts: { flagKey?: string; limit?: number; offset?: number } = {},
+  ): Promise<AuditEntry[]> {
+    const params = new URLSearchParams()
+    if (opts.flagKey) params.set('flag_key', opts.flagKey)
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    if (opts.offset != null) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request(`/api/environments/${envId}/audit${qs ? `?${qs}` : ''}`)
+  },
+}
+
+export const segmentsApi = {
+  list(envId: string): Promise<Segment[]> {
+    return request(`/api/environments/${envId}/segments`)
+  },
+
+  get(envId: string, key: string): Promise<Segment> {
+    return request(`/api/environments/${envId}/segments/${encodeURIComponent(key)}`)
+  },
+
+  create(
+    envId: string,
+    data: { name: string; key: string; description?: string; rules?: Segment['rules'] },
+  ): Promise<Segment> {
+    return request(`/api/environments/${envId}/segments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  patch(envId: string, key: string, patch: SegmentPatch): Promise<Segment> {
+    return request(`/api/environments/${envId}/segments/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  },
+
+  delete(envId: string, key: string): Promise<void> {
+    return request(`/api/environments/${envId}/segments/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    })
+  },
+}
+
+export const webhooksApi = {
+  list(envId: string): Promise<Webhook[]> {
+    return request(`/api/environments/${envId}/webhooks`)
+  },
+
+  create(
+    envId: string,
+    data: { name: string; url: string; secret?: string; enabled?: boolean },
+  ): Promise<Webhook> {
+    return request(`/api/environments/${envId}/webhooks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  patch(envId: string, id: string, patch: WebhookPatch): Promise<Webhook> {
+    return request(`/api/environments/${envId}/webhooks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  },
+
+  delete(envId: string, id: string): Promise<void> {
+    return request(`/api/environments/${envId}/webhooks/${id}`, { method: 'DELETE' })
+  },
+
+  listDeliveries(envId: string, webhookId: string): Promise<WebhookDelivery[]> {
+    return request(`/api/environments/${envId}/webhooks/${webhookId}/deliveries`)
+  },
+}
+
+export const scheduledApi = {
+  list(envId: string): Promise<ScheduledChange[]> {
+    return request(`/api/environments/${envId}/scheduled-changes`)
+  },
+
+  listForFlag(envId: string, flagKey: string): Promise<ScheduledChange[]> {
+    return request(
+      `/api/environments/${envId}/flags/${encodeURIComponent(flagKey)}/scheduled-changes`,
+    )
+  },
+
+  create(
+    envId: string,
+    flagKey: string,
+    data: { scheduled_at: string; patch: Record<string, unknown> },
+  ): Promise<ScheduledChange> {
+    return request(
+      `/api/environments/${envId}/flags/${encodeURIComponent(flagKey)}/scheduled-changes`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  },
+
+  delete(envId: string, id: string): Promise<void> {
+    return request(`/api/environments/${envId}/scheduled-changes/${id}`, { method: 'DELETE' })
+  },
+}
+
+export const healthApi = {
+  connections(): Promise<ConnectedClient[]> {
+    return request('/api/health/connections')
   },
 }
 

@@ -2,9 +2,10 @@ use crate::hashing::murmurhash3_x86_32;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Operator {
+    #[default]
     Equals,
     NotEquals,
     Contains,
@@ -44,9 +45,18 @@ pub struct EvalResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TargetingRule {
+    /// Concrete rule fields. Defaults allow omitting them when `segment_key` is set.
+    #[serde(default)]
     pub attribute: String,
+    #[serde(default)]
     pub operator: Operator,
+    #[serde(default)]
     pub values: Vec<String>,
+    /// When set, this rule references a named segment. The server expands the segment's
+    /// rules inline before broadcasting to SDK clients, so the evaluator never sees this
+    /// field in production. It is preserved here for DB round-trips and dashboard display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment_key: Option<String>,
     /// Optional value returned when this rule matches (non-boolean flags).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<FlagValue>,
@@ -105,6 +115,17 @@ fn rule_matches(rule: &TargetingRule, user_context: &UserContext) -> bool {
     }
 }
 
+/// Returns the value to use when the flag is on but has no explicit default.
+/// Boolean flags fall back to `true` for backward compatibility with flags that
+/// predate `default_value`. Non-boolean flags fall back to `Null` to avoid
+/// returning a value of the wrong type.
+fn enabled_default(flag: &Flag) -> FlagValue {
+    match flag.flag_type {
+        FlagType::Boolean => FlagValue::Bool(true),
+        _ => FlagValue::Null,
+    }
+}
+
 fn disabled_result(flag: &Flag) -> EvalResult {
     EvalResult {
         enabled: false,
@@ -129,7 +150,7 @@ pub fn evaluate_variant(flag: &Flag, user_context: &UserContext) -> EvalResult {
                 .variant
                 .clone()
                 .or_else(|| flag.default_value.clone())
-                .unwrap_or(FlagValue::Bool(true));
+                .unwrap_or_else(|| enabled_default(flag));
             return EvalResult {
                 enabled: true,
                 value,
@@ -153,7 +174,10 @@ pub fn evaluate_variant(flag: &Flag, user_context: &UserContext) -> EvalResult {
 
     EvalResult {
         enabled: true,
-        value: flag.default_value.clone().unwrap_or(FlagValue::Bool(true)),
+        value: flag
+            .default_value
+            .clone()
+            .unwrap_or_else(|| enabled_default(flag)),
     }
 }
 
@@ -231,6 +255,7 @@ mod tests {
                 operator: Operator::NotEquals,
                 values: vec!["evil_corp".into()],
                 variant: None,
+                segment_key: None,
             }],
         );
         let ctx = UserContext {
@@ -251,6 +276,7 @@ mod tests {
                 operator: Operator::NotEquals,
                 values: vec!["evil_corp".into()],
                 variant: None,
+                segment_key: None,
             }],
         );
         let mut attrs = HashMap::new();
@@ -283,6 +309,7 @@ mod tests {
                 operator: Operator::EndsWith,
                 values: vec!["@checkgate.com".into()],
                 variant: None,
+                segment_key: None,
             }],
         );
         let mut attrs = HashMap::new();
@@ -348,6 +375,7 @@ mod tests {
                 operator: Operator::Equals,
                 values: vec!["enterprise".into()],
                 variant: Some(FlagValue::Str("v3".into())),
+                segment_key: None,
             }],
             flag_type: FlagType::String,
             default_value: Some(FlagValue::Str("v2".into())),

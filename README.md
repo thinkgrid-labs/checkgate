@@ -2,7 +2,7 @@
   <img src="assets/checkgate_logo.png" width="160" alt="Checkgate Logo">
 </p>
 
-# Checkgate — Open-Source Feature Flags, Built for Speed.
+# Checkgate — Feature Flags Without the Round-Trip.
 
 [![CI](https://github.com/ThinkGrid-Labs/checkgate/actions/workflows/ci.yml/badge.svg)](https://github.com/ThinkGrid-Labs/checkgate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,7 +10,7 @@
 [![npm @checkgate/web](https://img.shields.io/npm/v/@checkgate/web?label=npm%20web)](https://www.npmjs.com/package/@checkgate/web)
 [![npm @checkgate/react-native](https://img.shields.io/npm/v/@checkgate/react-native?label=npm%20react-native)](https://www.npmjs.com/package/@checkgate/react-native)
 
-**Checkgate is a blazing-fast, open-source feature flag engine designed for teams who refuse to compromise on performance or privacy.** By evaluating feature toggles locally in sub-microseconds, Checkgate completely eliminates network latency, expensive API round-trips, and SaaS vendor lock-in. 
+**Checkgate is an open-source feature flag engine that evaluates flags locally — no network call, no latency, no SaaS vendor.** Every flag decision happens inside your process in sub-microseconds, while a persistent SSE stream keeps every SDK instance in sync within 50 ms of a change.
 
 It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), browsers (WebAssembly), React Native (JSI), and Flutter (FFI). A persistent SSE stream propagates flag changes to every connected SDK instance in under 50 ms.
 

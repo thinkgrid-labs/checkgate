@@ -5,15 +5,20 @@ import { EnvironmentProvider } from './context/EnvironmentContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
+import AuditLog from './pages/AuditLog'
 import Dashboard from './pages/Dashboard'
 import FlagList from './pages/FlagList'
 import FlagEditor from './pages/FlagEditor'
+import Scheduled from './pages/Scheduled'
+import SdkHealth from './pages/SdkHealth'
+import Segments from './pages/Segments'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import Environments from './pages/Environments'
 import Impressions from './pages/Impressions'
 import Projects from './pages/Projects'
 import ProjectSettings from './pages/ProjectSettings'
+import Webhooks from './pages/Webhooks'
 
 function RequireAuth({ children }: { readonly children: React.ReactNode }) {
   const { session, sessionLoading, isSetupComplete } = useAuth()
@@ -58,7 +63,12 @@ export default function App() {
                     <Route path="/flags" element={<FlagList />} />
                     <Route path="/flags/new" element={<FlagEditor />} />
                     <Route path="/flags/:key/edit" element={<FlagEditor />} />
+                    <Route path="/segments" element={<Segments />} />
+                    <Route path="/schedule" element={<Scheduled />} />
                     <Route path="/impressions" element={<Impressions />} />
+                    <Route path="/audit" element={<AuditLog />} />
+                    <Route path="/sdk-health" element={<SdkHealth />} />
+                    <Route path="/webhooks" element={<Webhooks />} />
                     <Route path="/environments" element={<Environments />} />
                     <Route path="/projects" element={<Projects />} />
                     <Route path="/projects/:projectId" element={<ProjectSettings />} />

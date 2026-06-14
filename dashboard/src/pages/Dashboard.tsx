@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { ToggleLeft, ToggleRight, ListFilter, Percent, Plus, ArrowRight } from 'lucide-react'
-import { api } from '../api'
-import type { Flag } from '../types'
+import { ToggleLeft, ToggleRight, ListFilter, CalendarClock, Plus, ArrowRight } from 'lucide-react'
+import { api, scheduledApi } from '../api'
+import type { Flag, ScheduledChange } from '../types'
 import { useEnvironment } from '../context/EnvironmentContext'
 
 interface StatCardProps {
@@ -30,6 +30,7 @@ function StatCard({ label, value, icon: Icon, iconBg, iconColor }: StatCardProps
 export default function Dashboard() {
   const { activeEnv } = useEnvironment()
   const [flags, setFlags] = useState<Flag[]>([])
+  const [pendingChanges, setPendingChanges] = useState<ScheduledChange[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,7 +38,12 @@ export default function Dashboard() {
     if (!activeEnv) return
     try {
       setError(null)
-      setFlags(await api.listFlags(activeEnv.id))
+      const [flagData, schedData] = await Promise.all([
+        api.listFlags(activeEnv.id),
+        scheduledApi.list(activeEnv.id).catch(() => [] as ScheduledChange[]),
+      ])
+      setFlags(flagData)
+      setPendingChanges(schedData.filter(c => !c.executed_at))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load flags')
     } finally {
@@ -49,7 +55,6 @@ export default function Dashboard() {
 
   const enabled = flags.filter(f => f.is_enabled).length
   const withRules = flags.filter(f => f.rules.length > 0).length
-  const withRollout = flags.filter(f => f.rollout_percentage != null).length
 
   return (
     <div className="w-full space-y-6">
@@ -58,7 +63,15 @@ export default function Dashboard() {
         <StatCard label="Total flags" value={loading ? '—' : flags.length} icon={ToggleLeft} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
         <StatCard label="Enabled" value={loading ? '—' : enabled} icon={ToggleRight} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
         <StatCard label="With rules" value={loading ? '—' : withRules} icon={ListFilter} iconBg="bg-amber-50" iconColor="text-amber-600" />
-        <StatCard label="Partial rollout" value={loading ? '—' : withRollout} icon={Percent} iconBg="bg-sky-50" iconColor="text-sky-600" />
+        <Link to="/schedule" className="block hover:no-underline">
+          <StatCard
+            label="Scheduled changes"
+            value={loading ? '—' : pendingChanges.length}
+            icon={CalendarClock}
+            iconBg="bg-indigo-50"
+            iconColor="text-indigo-600"
+          />
+        </Link>
       </div>
 
       {/* Flags table */}
@@ -132,6 +145,39 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Upcoming scheduled changes */}
+      {!loading && pendingChanges.length > 0 && (
+        <div className="premium-card border-none shadow-premium-lg">
+          <div className="flex items-center justify-between px-8 py-5 border-b border-gray-50 bg-white">
+            <h2 className="text-gray-900 font-display font-bold text-base">Upcoming scheduled changes</h2>
+            <Link
+              to="/schedule"
+              className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 text-sm font-bold transition-colors"
+            >
+              View all <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {pendingChanges.slice(0, 5).map(sc => (
+              <div key={sc.id} className="flex items-center gap-4 px-8 py-4 hover:bg-indigo-50/20 transition-colors">
+                <CalendarClock className="w-4 h-4 text-indigo-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-sm font-semibold text-emerald-600">{sc.flag_key}</span>
+                  <span className="text-gray-400 text-xs ml-2">
+                    {Object.entries(sc.patch)
+                      .map(([k, v]) => `${k} → ${JSON.stringify(v)}`)
+                      .join(', ')}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-400 shrink-0 tabular-nums">
+                  {new Date(sc.scheduled_at).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -25,6 +25,20 @@ pub(crate) struct SessionClaims {
     pub role: String,
 }
 
+/// Extract the SDK key from a request — Bearer header takes priority over the
+/// `?sdk_key=` query param fallback used by browser EventSource clients.
+/// Returns `None` if neither is present.
+fn extract_sdk_key<'a>(headers: &'a axum::http::HeaderMap, query: &'a str) -> Option<&'a str> {
+    if let Some(bearer) = headers
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+    {
+        return Some(bearer);
+    }
+    query.split('&').find_map(|p| p.strip_prefix("sdk_key="))
+}
+
 /// Extract session claims from the private cookie jar.
 /// Returns `None` if the request used SDK key auth (no session cookie present).
 pub(crate) fn get_session_claims(jar: &PrivateCookieJar) -> Option<SessionClaims> {
@@ -68,28 +82,9 @@ pub async fn require_auth(
         return Ok(next.run(req).await);
     }
 
-    // ── 2. Authorization: Bearer <key> (SDK clients) ──────────────────────────
-    let header_key = req
-        .headers()
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-
-    if let Some(key) = header_key
-        && key_values
-            .iter()
-            .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-    {
-        return Ok(next.run(req).await);
-    }
-
-    // ── 3. ?sdk_key= query param (browser EventSource fallback) ──────────────
+    // ── 2 & 3. Bearer token or ?sdk_key= query param ────────────────────────
     let query = req.uri().query().unwrap_or("");
-    let query_key = query
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("sdk_key="));
-
-    if let Some(key) = query_key
+    if let Some(key) = extract_sdk_key(req.headers(), query)
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
@@ -125,24 +120,9 @@ pub async fn require_admin(
         keys.iter().map(|e| e.value.clone()).collect()
     };
 
-    // SDK key via Bearer header → admin.
-    let header_key = req
-        .headers()
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-
-    if let Some(key) = header_key
-        && key_values
-            .iter()
-            .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-    {
-        return Ok(next.run(req).await);
-    }
-
-    // SDK key via query param → admin.
+    // SDK key (Bearer or query param) → admin-equivalent.
     let query = req.uri().query().unwrap_or("");
-    if let Some(key) = query.split('&').find_map(|p| p.strip_prefix("sdk_key="))
+    if let Some(key) = extract_sdk_key(req.headers(), query)
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
@@ -186,24 +166,9 @@ pub async fn require_editor(
         keys.iter().map(|e| e.value.clone()).collect()
     };
 
-    // SDK key via Bearer header → admin-equivalent.
-    let header_key = req
-        .headers()
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-
-    if let Some(key) = header_key
-        && key_values
-            .iter()
-            .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))
-    {
-        return Ok(next.run(req).await);
-    }
-
-    // SDK key via query param → admin-equivalent.
+    // SDK key (Bearer or query param) → admin-equivalent.
     let query = req.uri().query().unwrap_or("");
-    if let Some(key) = query.split('&').find_map(|p| p.strip_prefix("sdk_key="))
+    if let Some(key) = extract_sdk_key(req.headers(), query)
         && key_values
             .iter()
             .any(|expected| constant_time_eq(key.as_bytes(), expected.as_bytes()))

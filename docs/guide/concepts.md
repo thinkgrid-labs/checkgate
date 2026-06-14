@@ -1,6 +1,6 @@
 ---
-title: "Core Concepts — Projects, Environments, Flags, Targeting, Rollouts & Evaluation Stream"
-description: "Understand Checkgate's core building blocks: the workspace/project/environment hierarchy, feature flag schema, targeting rule operators, deterministic rollout hashing, user context, impression tracking, the evaluation stream, and the SSE update channel."
+title: "Core Concepts — Projects, Environments, Flags, Targeting & Rollouts"
+description: "Understand Checkgate's building blocks: the workspace/project/environment hierarchy, flag schema, targeting rule operators, deterministic rollout hashing, user context, impression tracking, and the SSE update channel."
 ---
 
 # Core Concepts

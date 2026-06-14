@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Save } from 'lucide-react'
-import { api } from '../api'
-import type { Flag, FlagType, FlagValue, TargetingRule } from '../types'
+import { ArrowLeft, Save, Trash2 } from 'lucide-react'
+import { api, scheduledApi, segmentsApi } from '../api'
+import type { Flag, FlagType, FlagValue, ScheduledChange, Segment, TargetingRule } from '../types'
 import RuleEditor from '../components/RuleEditor'
 import { useEnvironment } from '../context/EnvironmentContext'
 
@@ -130,6 +130,16 @@ export default function FlagEditor() {
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [segments, setSegments] = useState<Segment[]>([])
+  const [scheduledChanges, setScheduledChanges] = useState<ScheduledChange[]>([])
+  const [scheduleAt, setScheduleAt] = useState('')
+  const [scheduleAction, setScheduleAction] = useState<'enable' | 'disable'>('enable')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+
+  useEffect(() => {
+    if (!activeEnv) return
+    segmentsApi.list(activeEnv.id).then(setSegments).catch(() => {/* non-fatal */})
+  }, [activeEnv])
 
   useEffect(() => {
     if (!key || !activeEnv) return
@@ -140,7 +150,39 @@ export default function FlagEditor() {
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load flag'))
       .finally(() => setLoading(false))
+    scheduledApi.listForFlag(activeEnv.id, key)
+      .then(setScheduledChanges)
+      .catch(() => {/* non-fatal */})
   }, [key, activeEnv])
+
+  async function handleSchedule(e: React.FormEvent) {
+    e.preventDefault()
+    if (!activeEnv || !key) return
+    setScheduleSaving(true)
+    try {
+      const patch: Record<string, unknown> = { is_enabled: scheduleAction === 'enable' }
+      const created = await scheduledApi.create(activeEnv.id, key, {
+        scheduled_at: new Date(scheduleAt).toISOString(),
+        patch,
+      })
+      setScheduledChanges(prev => [...prev, created])
+      setScheduleAt('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
+
+  async function cancelScheduledChange(id: string) {
+    if (!activeEnv || !confirm('Cancel this scheduled change?')) return
+    try {
+      await scheduledApi.delete(activeEnv.id, id)
+      setScheduledChanges(prev => prev.filter(c => c.id !== id))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   function setField<K extends keyof Flag>(field: K, value: Flag[K]) {
     setFlag(prev => ({ ...prev, [field]: value }))
@@ -347,8 +389,77 @@ export default function FlagEditor() {
             rules={flag.rules as TargetingRule[]}
             onChange={rules => setField('rules', rules)}
             flagType={flagType}
+            segments={segments}
           />
         </SectionCard>
+
+        {isEdit && key && (
+          <SectionCard title="Scheduled changes">
+            <div className="space-y-4">
+              {scheduledChanges.filter(c => !c.executed_at).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Pending
+                  </p>
+                  {scheduledChanges
+                    .filter(c => !c.executed_at)
+                    .map(sc => (
+                      <div
+                        key={sc.id}
+                        className="flex items-center justify-between gap-3 bg-indigo-50 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <span className="text-indigo-700">
+                          <strong>{sc.patch.is_enabled ? 'Enable' : 'Disable'}</strong>
+                          {' at '}
+                          {new Date(sc.scheduled_at).toLocaleString()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void cancelScheduledChange(sc.id)}
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              <form onSubmit={e => void handleSchedule(e)} className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Action</label>
+                  <select
+                    value={scheduleAction}
+                    onChange={e => setScheduleAction(e.target.value as 'enable' | 'disable')}
+                    className={selectClass + ' w-auto'}
+                  >
+                    <option value="enable">Enable flag</option>
+                    <option value="disable">Disable flag</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    At (local time)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={scheduleAt}
+                    onChange={e => setScheduleAt(e.target.value)}
+                    className={inputClass + ' w-auto'}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={scheduleSaving || !scheduleAt}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-all"
+                >
+                  {scheduleSaving ? 'Scheduling…' : 'Schedule'}
+                </button>
+              </form>
+            </div>
+          </SectionCard>
+        )}
 
         <div className="flex items-center gap-3">
           <button

@@ -1,3 +1,3 @@
 pub mod evaluator;
-pub mod hashing;
+pub(crate) mod hashing;
 pub mod store;

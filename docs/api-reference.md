@@ -1,6 +1,6 @@
 ---
 title: "REST API Reference — Checkgate Feature Flag Management API"
-description: "Complete REST API reference for Checkgate. Manage projects, environments, feature flags, users, and SDK keys via CRUD endpoints. Connect to the SSE stream for real-time updates."
+description: "Complete REST API reference for Checkgate. Manage projects, environments, flags, users, and SDK keys via CRUD endpoints. Connect to the SSE stream to push flag changes to SDK clients in under 50 ms."
 ---
 
 # REST API Reference

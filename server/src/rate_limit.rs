@@ -22,11 +22,21 @@ pub async fn rate_limit(
     req: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    match state.rate_limiter.check_key(&addr.ip()) {
+    // Prefer the first address in X-Forwarded-For so that rate limiting works
+    // correctly behind a reverse proxy. Fall back to the direct TCP peer.
+    let client_ip: IpAddr = req
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or_else(|| addr.ip());
+
+    match state.rate_limiter.check_key(&client_ip) {
         Ok(_) => Ok(next.run(req).await),
         Err(_) => {
             tracing::warn!(
-                client_ip = %addr.ip(),
+                client_ip = %client_ip,
                 path = %req.uri().path(),
                 "Rate limit exceeded"
             );

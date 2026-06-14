@@ -10,13 +10,8 @@ use std::io::Cursor;
 /// skewing rollout distribution. The `debug_assert` catches this in testing.
 pub fn murmurhash3_x86_32(key: &[u8], seed: u32) -> u32 {
     let mut cursor = Cursor::new(key);
-    murmur3::murmur3_32(&mut cursor, seed).unwrap_or_else(|_| {
-        debug_assert!(
-            false,
-            "murmur3_32 returned an error on in-memory Cursor — this should be unreachable"
-        );
-        0
-    })
+    murmur3::murmur3_32(&mut cursor, seed)
+        .expect("murmur3_32 on in-memory Cursor<&[u8]> is infallible")
 }
 
 #[cfg(test)]
