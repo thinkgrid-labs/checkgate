@@ -62,13 +62,16 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sign the image with Cosign
         run: |
-          cosign sign --yes ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          cosign sign --yes ${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
