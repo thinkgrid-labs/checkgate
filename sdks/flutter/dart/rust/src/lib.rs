@@ -169,7 +169,7 @@ pub unsafe extern "C" fn checkgate_is_enabled_ctx(
         None => return 0,
     };
     let ctx = unsafe { &*ctx };
-    if evaluate(flag.as_ref(), &ctx.inner) {
+    if evaluate(flag.as_ref(), &ctx.inner, &STORE) {
         1
     } else {
         0
@@ -236,7 +236,11 @@ pub unsafe extern "C" fn checkgate_get_variant(
         key: user_key,
         attributes,
     };
-    alloc_cstring(eval_result_to_json(evaluate_variant(flag.as_ref(), &ctx)))
+    alloc_cstring(eval_result_to_json(evaluate_variant(
+        flag.as_ref(),
+        &ctx,
+        &STORE,
+    )))
 }
 
 /// Evaluate a flag and return a heap-allocated JSON string of just the variant value.
@@ -270,7 +274,7 @@ pub unsafe extern "C" fn checkgate_get_value(
         key: user_key,
         attributes,
     };
-    alloc_cstring(value_to_json(evaluate_variant(flag.as_ref(), &ctx)))
+    alloc_cstring(value_to_json(evaluate_variant(flag.as_ref(), &ctx, &STORE)))
 }
 
 /// Free a string returned by `checkgate_get_variant` or `checkgate_get_value`.
@@ -326,5 +330,9 @@ pub unsafe extern "C" fn checkgate_is_enabled(
         key: user_key,
         attributes,
     };
-    if evaluate(flag.as_ref(), &ctx) { 1 } else { 0 }
+    if evaluate(flag.as_ref(), &ctx, &STORE) {
+        1
+    } else {
+        0
+    }
 }

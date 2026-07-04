@@ -27,11 +27,13 @@ static string jsi_to_json(Runtime &runtime, const Value &val) {
 // ---------------------------------------------------------------------------
 // installCheckgateJSI
 //
-// Installs the __CheckgateInternal global on the JS runtime with four methods:
-//   upsertFlag(key, isEnabled, rolloutPct, rulesArray)
+// Installs the __CheckgateInternal global on the JS runtime with these methods:
+//   upsertFlag(key, isEnabled, rolloutPct, rulesArray)   [legacy, boolean flags]
+//   upsertFlagV2(flagObject)                             [multi-variant flags]
 //   deleteFlag(key)
 //   clearStore()
 //   isEnabled(flagKey, userKey, attributesObject) -> bool
+//   getVariant(flagKey, userKey, attributesObject) -> string (JSON)
 // ---------------------------------------------------------------------------
 void installCheckgateJSI(Runtime &jsiRuntime) {
 
@@ -61,6 +63,21 @@ void installCheckgateJSI(Runtime &jsiRuntime) {
 
         checkgate_upsert_flag(key.c_str(), isEnabled, rollout, rulesJson.c_str());
 
+        return Value::undefined();
+      });
+
+  // -- upsertFlagV2 ---------------------------------------------------------
+  // Accepts the full flag object (flag_type, default/disabled values, per-rule
+  // variants) so multi-variant flags evaluate correctly via getVariant.
+  auto upsertFlagV2 = Function::createFromHostFunction(
+      jsiRuntime, PropNameID::forAscii(jsiRuntime, "upsertFlagV2"), 1,
+      [](Runtime &runtime, const Value & /*thisValue*/, const Value *arguments,
+         size_t count) -> Value {
+        if (count < 1 || !arguments[0].isObject()) {
+          throw JSError(runtime, "[Checkgate] upsertFlagV2: expected (flag: object)");
+        }
+        string flagJson = jsi_to_json(runtime, arguments[0]);
+        checkgate_upsert_flag_v2(flagJson.c_str());
         return Value::undefined();
       });
 
@@ -111,12 +128,41 @@ void installCheckgateJSI(Runtime &jsiRuntime) {
         return Value(result != 0);
       });
 
+  // -- getVariant -----------------------------------------------------------
+  // Returns the full evaluation `{enabled, value}` as a JSON string; the JS
+  // wrapper JSON.parses it. Returns the string "null" if the flag is missing.
+  auto getVariant = Function::createFromHostFunction(
+      jsiRuntime, PropNameID::forAscii(jsiRuntime, "getVariant"), 3,
+      [](Runtime &runtime, const Value & /*thisValue*/, const Value *arguments,
+         size_t count) -> Value {
+        if (count < 2 || !arguments[0].isString() || !arguments[1].isString()) {
+          throw JSError(runtime, "[Checkgate] getVariant: expected (flagKey: string, userKey: string, attributes?: object)");
+        }
+
+        string flagKey = arguments[0].getString(runtime).utf8(runtime);
+        string userKey = arguments[1].getString(runtime).utf8(runtime);
+
+        string attrsJson = "{}";
+        if (count > 2 && !arguments[2].isNull() && !arguments[2].isUndefined()) {
+          attrsJson = jsi_to_json(runtime, arguments[2]);
+        }
+
+        char *raw = checkgate_get_variant(
+            flagKey.c_str(), userKey.c_str(), attrsJson.c_str());
+        string json = raw ? string(raw) : "null";
+        checkgate_free_string(raw);
+
+        return String::createFromUtf8(runtime, json);
+      });
+
   // -- Bind to global.__CheckgateInternal -----------------------------------
   Object checkgateModule = Object(jsiRuntime);
-  checkgateModule.setProperty(jsiRuntime, "upsertFlag", move(upsertFlag));
-  checkgateModule.setProperty(jsiRuntime, "deleteFlag", move(deleteFlag));
-  checkgateModule.setProperty(jsiRuntime, "clearStore", move(clearStore));
-  checkgateModule.setProperty(jsiRuntime, "isEnabled",  move(isEnabled));
+  checkgateModule.setProperty(jsiRuntime, "upsertFlag",   move(upsertFlag));
+  checkgateModule.setProperty(jsiRuntime, "upsertFlagV2", move(upsertFlagV2));
+  checkgateModule.setProperty(jsiRuntime, "deleteFlag",   move(deleteFlag));
+  checkgateModule.setProperty(jsiRuntime, "clearStore",   move(clearStore));
+  checkgateModule.setProperty(jsiRuntime, "isEnabled",    move(isEnabled));
+  checkgateModule.setProperty(jsiRuntime, "getVariant",   move(getVariant));
 
   jsiRuntime.global().setProperty(jsiRuntime, "__CheckgateInternal",
                                   move(checkgateModule));

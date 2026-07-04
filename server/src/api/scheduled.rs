@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::{delete, get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::Row;
@@ -71,7 +70,7 @@ pub fn write_router() -> Router<AppState> {
 
 async fn list_scheduled(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
 ) -> Result<Json<Vec<ScheduledChange>>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -95,7 +94,7 @@ async fn list_scheduled(
 
 async fn list_scheduled_for_flag(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, key)): Path<(String, String)>,
 ) -> Result<Json<Vec<ScheduledChange>>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -121,7 +120,7 @@ async fn list_scheduled_for_flag(
 
 async fn create_scheduled(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, key)): Path<(String, String)>,
     Json(body): Json<CreateBody>,
 ) -> Result<Json<ScheduledChange>, StatusCode> {
@@ -176,7 +175,7 @@ async fn create_scheduled(
 
 async fn delete_scheduled(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, id)): Path<(String, String)>,
 ) -> Result<StatusCode, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;

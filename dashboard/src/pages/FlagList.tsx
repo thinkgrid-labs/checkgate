@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, RotateCcw, Pencil, Trash2, ArrowUpRight, Copy, Check } from 'lucide-react'
+import { Plus, Search, RotateCcw, Pencil, Trash2, ArrowUpRight, Copy, Check, Archive, ArchiveRestore } from 'lucide-react'
 import { api } from '../api'
 import type { Flag, FlagType } from '../types'
 import { useEnvironment } from '../context/EnvironmentContext'
@@ -172,6 +172,7 @@ export default function FlagList() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [showArchived, setShowArchived] = useState(false)
   const [promotingFlag, setPromotingFlag] = useState<Flag | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -179,13 +180,13 @@ export default function FlagList() {
     if (!activeEnv) return
     try {
       setError(null)
-      setFlags(await api.listFlags(activeEnv.id))
+      setFlags(await api.listFlags(activeEnv.id, { includeArchived: showArchived }))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load flags')
     } finally {
       setLoading(false)
     }
-  }, [activeEnv])
+  }, [activeEnv, showArchived])
 
   useEffect(() => {
     setLoading(true)
@@ -209,8 +210,12 @@ export default function FlagList() {
   async function toggleEnabled(flag: Flag) {
     if (!activeEnv) return
     try {
-      const updated = await api.patchFlag(activeEnv.id, flag.key, { is_enabled: !flag.is_enabled })
-      setFlags(prev => prev.map(f => (f.key === flag.key ? updated : f)))
+      const result = await api.patchFlag(activeEnv.id, flag.key, { is_enabled: !flag.is_enabled })
+      if (result.applied) {
+        setFlags(prev => prev.map(f => (f.key === flag.key ? result.flag : f)))
+      } else {
+        alert(`${activeEnv.name} requires approval — the change to "${flag.key}" was queued for review instead of applied.`)
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Update failed')
     }
@@ -224,6 +229,23 @@ export default function FlagList() {
       setFlags(prev => prev.filter(f => f.key !== key))
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }
+
+  async function toggleArchived(flag: Flag) {
+    if (!activeEnv) return
+    try {
+      const updated = flag.archived_at
+        ? await api.unarchiveFlag(activeEnv.id, flag.key)
+        : await api.archiveFlag(activeEnv.id, flag.key)
+      // Archiving hides the flag from the default (non-archived) view.
+      setFlags(prev =>
+        !showArchived && !flag.archived_at
+          ? prev.filter(f => f.key !== flag.key)
+          : prev.map(f => (f.key === flag.key ? updated : f)),
+      )
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Update failed')
     }
   }
 
@@ -269,6 +291,15 @@ export default function FlagList() {
             </button>
           ))}
         </div>
+
+        <button
+          onClick={() => setShowArchived(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            showArchived ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Archive className="w-3.5 h-3.5" /> {showArchived ? 'Hide archived' : 'Show archived'}
+        </button>
 
         {/* Active env badge */}
         {activeEnv && (
@@ -332,10 +363,27 @@ export default function FlagList() {
               </thead>
               <tbody className="divide-y divide-gray-50/50">
                 {filtered.map(flag => (
-                  <tr key={flag.key} className="group hover:bg-emerald-50/20 transition-all">
+                  <tr
+                    key={flag.key}
+                    className={`group hover:bg-emerald-50/20 transition-all ${flag.archived_at ? 'opacity-50' : ''}`}
+                  >
                     <td className="px-8 py-5">
                       <span className="font-mono text-emerald-600 font-semibold text-sm">{flag.key}</span>
                       <TypeBadge flagType={flag.flag_type} />
+                      {flag.archived_at && (
+                        <span className="inline-flex items-center gap-1 ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-gray-100 text-gray-500 ring-1 ring-gray-200">
+                          <Archive className="w-2.5 h-2.5" /> Archived
+                        </span>
+                      )}
+                      {flag.tags && flag.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {flag.tags.map(t => (
+                            <span key={t} className="px-1.5 py-0.5 bg-gray-50 text-gray-500 rounded text-[9px] font-medium">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-8 py-5 hidden md:table-cell">
                       <span className="text-gray-500 truncate max-w-xs block text-xs">
@@ -375,6 +423,14 @@ export default function FlagList() {
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </Link>
+                        <button
+                          onClick={() => void toggleArchived(flag)}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                          aria-label={flag.archived_at ? 'Unarchive flag' : 'Archive flag'}
+                          title={flag.archived_at ? 'Unarchive' : 'Archive'}
+                        >
+                          {flag.archived_at ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                        </button>
                         <button
                           onClick={() => void handleDelete(flag.key)}
                           className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"

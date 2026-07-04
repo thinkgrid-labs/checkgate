@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Search, ChevronLeft, ChevronRight, Plus, Minus, ArrowUpRight } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Plus, Minus, ArrowUpRight, Archive, ArchiveRestore } from 'lucide-react'
 import { auditApi } from '../api'
 import type { AuditEntry } from '../types'
 import { useEnvironment, type Environment } from '../context/EnvironmentContext'
 
 const ACTION_STYLES: Record<AuditEntry['action'], { label: string; cls: string }> = {
-  CREATE:  { label: 'Created',  cls: 'bg-emerald-50 text-emerald-700 ring-emerald-100' },
-  UPDATE:  { label: 'Updated',  cls: 'bg-blue-50   text-blue-700   ring-blue-100'   },
-  DELETE:  { label: 'Deleted',  cls: 'bg-red-50    text-red-700    ring-red-100'    },
-  PROMOTE: { label: 'Promoted', cls: 'bg-violet-50 text-violet-700 ring-violet-100' },
+  CREATE:     { label: 'Created',     cls: 'bg-emerald-50 text-emerald-700 ring-emerald-100' },
+  UPDATE:     { label: 'Updated',     cls: 'bg-blue-50   text-blue-700   ring-blue-100'   },
+  DELETE:     { label: 'Deleted',     cls: 'bg-red-50    text-red-700    ring-red-100'    },
+  PROMOTE:    { label: 'Promoted',    cls: 'bg-violet-50 text-violet-700 ring-violet-100' },
+  ARCHIVE:    { label: 'Archived',    cls: 'bg-gray-100  text-gray-600   ring-gray-200'   },
+  UNARCHIVE:  { label: 'Unarchived',  cls: 'bg-amber-50  text-amber-700  ring-amber-100'  },
 }
 
 function ActionBadge({ action }: { action: AuditEntry['action'] }) {
@@ -23,9 +25,11 @@ function ActionBadge({ action }: { action: AuditEntry['action'] }) {
 }
 
 function ActionIcon({ action }: { action: AuditEntry['action'] }) {
-  if (action === 'CREATE')  return <Plus className="w-3.5 h-3.5 text-emerald-500" />
-  if (action === 'DELETE')  return <Minus className="w-3.5 h-3.5 text-red-500" />
-  if (action === 'PROMOTE') return <ArrowUpRight className="w-3.5 h-3.5 text-violet-500" />
+  if (action === 'CREATE')    return <Plus className="w-3.5 h-3.5 text-emerald-500" />
+  if (action === 'DELETE')    return <Minus className="w-3.5 h-3.5 text-red-500" />
+  if (action === 'PROMOTE')   return <ArrowUpRight className="w-3.5 h-3.5 text-violet-500" />
+  if (action === 'ARCHIVE')   return <Archive className="w-3.5 h-3.5 text-gray-500" />
+  if (action === 'UNARCHIVE') return <ArchiveRestore className="w-3.5 h-3.5 text-amber-500" />
   return (
     <span className="w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold text-blue-500">
       ~

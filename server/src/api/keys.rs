@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::{AppState, SdkKeyEntry};
 use axum::{
     Json, Router,
@@ -11,6 +11,14 @@ use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tracing::{error, info};
+
+/// Formats a timestamp as RFC 3339 for JSON responses. `OffsetDateTime`'s
+/// `Display`/`to_string()` uses a proprietary space-separated, triple-colon-offset
+/// format that JavaScript's `Date` cannot parse.
+fn format_rfc3339(dt: time::OffsetDateTime) -> String {
+    dt.format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_else(|_| dt.to_string())
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,7 +78,7 @@ fn prefix_of(key: &str) -> String {
 
 async fn can_access_project(
     db: &sqlx::PgPool,
-    jar: &PrivateCookieJar,
+    jar: &AuthContext,
     project_id: &str,
 ) -> Result<(), StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
@@ -101,7 +109,7 @@ async fn can_access_project(
 
 async fn can_admin_project(
     db: &sqlx::PgPool,
-    jar: &PrivateCookieJar,
+    jar: &AuthContext,
     project_id: &str,
 ) -> Result<(), StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
@@ -178,7 +186,7 @@ pub async fn get_setup_key(
         prefix,
         environment_id: row.get("environment_id"),
         environment_name: row.get("env_name"),
-        created_at: created_at.to_string(),
+        created_at: format_rfc3339(created_at),
     }))
 }
 
@@ -188,7 +196,7 @@ pub async fn get_setup_key(
 
 pub async fn list_keys(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
 ) -> Result<Json<Vec<SdkKeyInfo>>, StatusCode> {
     can_access_project(&state.db, &jar, &project_id).await?;
@@ -219,7 +227,7 @@ pub async fn list_keys(
                 prefix: prefix_of(&value),
                 environment_id: row.get("environment_id"),
                 environment_name: row.get("env_name"),
-                created_at: created_at.to_string(),
+                created_at: format_rfc3339(created_at),
             }
         })
         .collect();
@@ -229,7 +237,7 @@ pub async fn list_keys(
 
 pub async fn create_key(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
     Json(req): Json<CreateKeyRequest>,
 ) -> Result<Json<NewKeyResponse>, StatusCode> {
@@ -292,13 +300,13 @@ pub async fn create_key(
         prefix,
         environment_id: req.environment_id,
         environment_name: env_name,
-        created_at: created_at.to_string(),
+        created_at: format_rfc3339(created_at),
     }))
 }
 
 pub async fn revoke_key(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((project_id, key_id)): Path<(String, i64)>,
 ) -> Result<StatusCode, StatusCode> {
     can_admin_project(&state.db, &jar, &project_id).await?;

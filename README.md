@@ -29,6 +29,40 @@ It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), brows
 
 ---
 
+## Screenshots
+
+*Dashboard shown with example data for a fictional company, Vantage Robotics.*
+
+**Dashboard overview** — flag counts, rollout status, and recent activity at a glance.
+
+![Dashboard overview](assets/screenshots/01-dashboard.png)
+
+**Feature flags** — tags, types, rollout percentage, and one-click enable/disable per environment.
+
+![Feature flags list](assets/screenshots/02-feature-flags.png)
+
+**Flag editor** — targeting rules, tags, ownership, and prerequisite (dependent) flags.
+
+![Flag editor](assets/screenshots/03-flag-editor.png)
+
+**Change requests** — require a second reviewer before a flag change takes effect in sensitive environments; self-approval is blocked.
+
+![Change requests](assets/screenshots/04-change-requests.png)
+
+**Cross-environment diff** — see what's different between environments before promoting, with a one-click sync.
+
+![Compare environments](assets/screenshots/05-environment-diff.png)
+
+**Personal access tokens** — scoped, revocable API credentials for CI/CD and Terraform, as an alternative to admin-equivalent SDK keys.
+
+![Personal access tokens](assets/screenshots/06-settings-tokens.png)
+
+**Environments** — isolate configuration across Production, Staging, UAT, and Development, with per-environment approval gates.
+
+![Environments](assets/screenshots/07-environments.png)
+
+---
+
 ## Documentation
 
 | Topic | Link |

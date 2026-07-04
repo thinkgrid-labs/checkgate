@@ -61,8 +61,14 @@ Prefix with `fix:`, `feat:`, `docs:`, `refactor:`, `test:`, or `ci:`.
 cargo test --workspace
 
 # Node.js SDK (requires a build first)
-cd sdks/nodejs && npm install && npm run build
+cd sdks/nodejs && npm install && npm run build:debug
 ```
+
+> All four build scripts (`build`, `build:debug`, `build:zig`, `build:cross`) generate the
+> platform-specific `checkgate.*.node` binary plus a `native-binding.js`/`native-binding.d.ts`
+> dispatch loader — never `index.js`/`index.d.ts`. Those two are hand-written and wrap the native
+> binding (see `sdks/nodejs/index.js`), which `require()`s `./native-binding.js`; they're not
+> NAPI-RS auto-generated files, and no build script touches them.
 
 ## Submitting a PR
 

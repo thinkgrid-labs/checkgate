@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Globe, Plus, Trash2, Star, AlertCircle, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Globe, GitCompare, Plus, Trash2, Star, AlertCircle, X, ShieldCheck, Shield } from 'lucide-react'
 import { useEnvironment, type Environment } from '../context/EnvironmentContext'
 import { useAuth } from '../context/AuthContext'
+import { useProject } from '../context/ProjectContext'
 
 // ---------------------------------------------------------------------------
 // Color picker options
@@ -24,6 +26,7 @@ const COLORS = [
 
 function CreateEnvironmentForm({ onDone }: { onDone: () => void }) {
   const { reload } = useEnvironment()
+  const { activeProject } = useProject()
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [slugTouched, setSlugTouched] = useState(false)
@@ -42,10 +45,10 @@ function CreateEnvironmentForm({ onDone }: { onDone: () => void }) {
 
   async function handleCreate() {
     setError('')
-    if (!name.trim() || !slug.trim()) return
+    if (!name.trim() || !slug.trim() || !activeProject) return
     setSaving(true)
     try {
-      const res = await fetch('/api/environments', {
+      const res = await fetch(`/api/projects/${activeProject.id}/environments`, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-Checkgate-Request': '1' },
@@ -145,10 +148,11 @@ function CreateEnvironmentForm({ onDone }: { onDone: () => void }) {
 // Environment row
 // ---------------------------------------------------------------------------
 
-function EnvRow({ env, onDelete, onSetDefault }: {
+function EnvRow({ env, onDelete, onSetDefault, onToggleApproval }: {
   env: Environment
   onDelete: (id: string) => void
   onSetDefault: (id: string) => void
+  onToggleApproval: (id: string, next: boolean) => void
 }) {
   const { session } = useAuth()
   const isAdmin = session?.user.role === 'admin'
@@ -167,6 +171,11 @@ function EnvRow({ env, onDelete, onSetDefault }: {
               default
             </span>
           )}
+          {env.require_approval && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold rounded uppercase tracking-wide border border-amber-100">
+              <ShieldCheck className="w-2.5 h-2.5" /> approval required
+            </span>
+          )}
         </div>
         <p className="text-xs text-gray-400 font-mono">{env.slug}</p>
       </div>
@@ -174,6 +183,17 @@ function EnvRow({ env, onDelete, onSetDefault }: {
       {/* Actions */}
       {isAdmin && (
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onToggleApproval(env.id, !env.require_approval)}
+            title={env.require_approval ? 'Disable approval requirement' : 'Require approval for flag changes'}
+            className={`p-1.5 rounded-lg transition-colors ${
+              env.require_approval
+                ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50'
+                : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50'
+            }`}
+          >
+            {env.require_approval ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
+          </button>
           {!env.is_default && (
             <button
               onClick={() => onSetDefault(env.id)}
@@ -204,14 +224,16 @@ function EnvRow({ env, onDelete, onSetDefault }: {
 export default function Environments() {
   const { environments, reload } = useEnvironment()
   const { session } = useAuth()
+  const { activeProject } = useProject()
   const isAdmin = session?.user.role === 'admin'
   const [showCreate, setShowCreate] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
   async function handleDelete(id: string) {
+    if (!activeProject) return
     if (!confirm('Delete this environment? All flags scoped to it will also be deleted.')) return
     setDeleteError('')
-    const res = await fetch(`/api/environments/${id}`, {
+    const res = await fetch(`/api/projects/${activeProject.id}/environments/${id}`, {
       method: 'DELETE',
       credentials: 'same-origin',
       headers: { 'X-Checkgate-Request': '1' },
@@ -228,10 +250,22 @@ export default function Environments() {
   }
 
   async function handleSetDefault(id: string) {
-    const res = await fetch(`/api/environments/${id}/default`, {
+    if (!activeProject) return
+    const res = await fetch(`/api/projects/${activeProject.id}/environments/${id}/default`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'X-Checkgate-Request': '1' },
+    })
+    if (res.ok) await reload()
+  }
+
+  async function handleToggleApproval(id: string, next: boolean) {
+    if (!activeProject) return
+    const res = await fetch(`/api/projects/${activeProject.id}/environments/${id}/require-approval`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Checkgate-Request': '1' },
+      body: JSON.stringify({ require_approval: next }),
     })
     if (res.ok) await reload()
   }
@@ -248,14 +282,24 @@ export default function Environments() {
             <h2 className="text-gray-900 font-display font-bold text-sm tracking-tight">Environments</h2>
             <p className="text-gray-400 text-xs mt-0.5">Isolate flag configurations across production, staging, UAT, and development.</p>
           </div>
-          {isAdmin && !showCreate && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm shadow-emerald-200"
-            >
-              <Plus className="w-3.5 h-3.5" /> New
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {environments.length >= 2 && (
+              <Link
+                to="/environments/diff"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-lg transition-all"
+              >
+                <GitCompare className="w-3.5 h-3.5" /> Compare
+              </Link>
+            )}
+            {isAdmin && !showCreate && (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm shadow-emerald-200"
+              >
+                <Plus className="w-3.5 h-3.5" /> New
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="p-6 space-y-3">
@@ -275,6 +319,7 @@ export default function Environments() {
               env={env}
               onDelete={id => void handleDelete(id)}
               onSetDefault={id => void handleSetDefault(id)}
+              onToggleApproval={(id, next) => void handleToggleApproval(id, next)}
             />
           ))}
 

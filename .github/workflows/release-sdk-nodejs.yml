@@ -73,14 +73,15 @@ jobs:
         working-directory: sdks/nodejs
         shell: bash
         run: |
+          JS_FLAGS="--js native-binding.js --dts native-binding.d.ts"
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
             # Satisfy host-side NAPI-RS linker check (will use real linker inside Docker)
             sudo ln -s /usr/bin/true /usr/bin/aarch64-linux-musl-gcc
-            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
+            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross $JS_FLAGS
           elif [ "${{ matrix.cross }}" = "true" ]; then
-            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross
+            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross $JS_FLAGS
           else
-            npx napi build --platform --release --target ${{ matrix.target }}
+            npx napi build --platform --release --target ${{ matrix.target }} $JS_FLAGS
           fi
 
       - name: Upload artifact
@@ -88,6 +89,23 @@ jobs:
         with:
           name: node-${{ matrix.target }}
           path: sdks/nodejs/${{ matrix.artifact }}
+          if-no-files-found: error
+
+      # The generated JS dispatch loader (native-binding.js/.d.ts) is
+      # platform-agnostic — it bundles runtime branches for every supported
+      # OS/arch/libc, not just the one that produced it (verified by
+      # inspecting its output). Upload it once, from whichever build happens
+      # to run first, for the publish job to assemble alongside all six
+      # `.node` binaries. Named `node-*` so it's picked up by the same
+      # download pattern as the per-target artifacts below.
+      - name: Upload JS dispatch loader
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-js-binding
+          path: |
+            sdks/nodejs/native-binding.js
+            sdks/nodejs/native-binding.d.ts
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -125,10 +143,32 @@ jobs:
             ls -l *.node
             exit 1
           fi
+          if [ ! -f native-binding.js ] || [ ! -f native-binding.d.ts ]; then
+            echo "Error: native-binding.js/.d.ts missing — index.js requires these at runtime."
+            exit 1
+          fi
 
       - name: Install dependencies
         working-directory: sdks/nodejs
         run: npm install
+
+      # Actually require() the assembled package end to end — this is the
+      # exact failure mode that shipped silently before: index.js requiring a
+      # file that doesn't exist in the real multi-platform output. A missing
+      # native-binding.js, a stale `require('./index.node')`, or a renamed
+      # export would all be caught here instead of surfacing only when a
+      # consumer runs `npm install @checkgate/node`.
+      - name: Smoke test the assembled package
+        working-directory: sdks/nodejs
+        run: |
+          node -e "
+            const { CheckgateClient } = require('./index.js');
+            if (typeof CheckgateClient !== 'function') throw new Error('CheckgateClient export missing');
+            const client = new CheckgateClient({ serverUrl: 'http://localhost:1' });
+            if (typeof client.isEnabled !== 'function') throw new Error('isEnabled method missing');
+            if (typeof client.connect !== 'function') throw new Error('connect method missing');
+            console.log('Smoke test passed — native binding resolved and CheckgateClient constructed.');
+          "
 
       - name: Set version from tag
         working-directory: sdks/nodejs

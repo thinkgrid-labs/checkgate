@@ -1,6 +1,8 @@
 use crate::state::{AppState, ConnectedClient};
 use axum::{
+    Json,
     extract::{ConnectInfo, State},
+    http::StatusCode,
     response::sse::{Event, KeepAlive, Sse},
 };
 use constant_time_eq::constant_time_eq;
@@ -128,7 +130,14 @@ pub async fn sse_handler(
         // Guard ensures the client is removed when the stream drops (on disconnect or break).
         let _guard = ConnectionGuard { clients: connected_clients, connection_id: connection_id.clone() };
 
-        yield Ok(Event::default().event("connected").data("true"));
+        // Announce the resolved environment so SDK clients know where to report
+        // impressions (POST /api/environments/{environment_id}/impressions).
+        // `null` for session-auth (dashboard) connections, which do not report.
+        let connected_payload = serde_json::json!({
+            "environment_id": environment_id.clone(),
+        })
+        .to_string();
+        yield Ok(Event::default().event("connected").data(connected_payload));
 
         // Bootstrap: load flags for this environment from DB.
         // If no environment_id (session auth), send all flags from the in-memory store.
@@ -193,6 +202,11 @@ pub async fn sse_handler(
             "SSE bootstrap complete"
         );
 
+        // Signal end of the initial state dump so SDK clients can resolve connect()
+        // deterministically (instead of guessing when bootstrap finished). Sent on
+        // every (re)connect after the full flag set has been replayed.
+        yield Ok(Event::default().event("ready").data(flag_count.to_string()));
+
         // Stream live deltas, filtering by environment_id when present.
         loop {
             match rx.recv().await {
@@ -233,4 +247,72 @@ pub async fn sse_handler(
             .interval(Duration::from_secs(15))
             .text("keep-alive-text"),
     )
+}
+
+/// GET /flags/snapshot — SDK-key-authed, segment-expanding full flag snapshot.
+///
+/// SDK clients poll this as a fallback when the SSE stream at `/stream` cannot be
+/// established (e.g. a proxy or firewall blocking long-lived connections, or after
+/// repeated reconnect failures). Unlike `GET /api/environments/{env_id}/flags`
+/// (session-cookie only, no segment expansion — see `server/src/api/flags.rs`),
+/// this route is keyed by SDK key alone, exactly like `/stream`, and returns flags
+/// with segment references already expanded so the response is ready to evaluate
+/// against directly, matching what SSE bootstrap sends.
+///
+/// Returns 400 if called with session-cookie auth (dashboard) rather than an SDK
+/// key — the dashboard isn't scoped to a single environment the way an SDK key is.
+pub async fn flags_snapshot_handler(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+) -> Result<Json<Vec<checkgate_core::evaluator::Flag>>, StatusCode> {
+    let query = req.uri().query().unwrap_or("").to_string();
+    let auth_header = req
+        .headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let sdk_info = {
+        let keys = state.sdk_keys.read().await;
+        resolve_sdk_key_info(&query, auth_header.as_deref(), &keys)
+    };
+
+    let Some(env_id) = sdk_info.environment_id else {
+        warn!("flags_snapshot: rejected — caller has no environment-scoped SDK key");
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let segment_map = crate::api::segments::load_env_segments(&env_id, &state.db)
+        .await
+        .unwrap_or_default();
+
+    let rows =
+        sqlx::query("SELECT data FROM flags WHERE environment_id = $1::uuid ORDER BY key ASC")
+            .bind(&env_id)
+            .fetch_all(&state.db)
+            .await
+            .map_err(|e| {
+                warn!(error = %e, "flags_snapshot: DB query failed");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+    let flags: Vec<checkgate_core::evaluator::Flag> = rows
+        .iter()
+        .filter_map(|row| {
+            let v: serde_json::Value = row.try_get("data").ok()?;
+            let flag = serde_json::from_value::<checkgate_core::evaluator::Flag>(v).ok()?;
+            Some(crate::api::segments::expand_flag_with_segments(
+                flag,
+                &segment_map,
+            ))
+        })
+        .collect();
+
+    info!(
+        env_id = %env_id,
+        flag_count = flags.len(),
+        "Flags snapshot served (poll fallback)"
+    );
+
+    Ok(Json(flags))
 }

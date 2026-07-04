@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -6,13 +6,53 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use checkgate_core::evaluator::Flag;
 use redis::AsyncCommands;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::Row;
 use tracing::{error, info, instrument, warn};
+
+// ---------------------------------------------------------------------------
+// Lifecycle metadata (tags / ownership / archival)
+// ---------------------------------------------------------------------------
+//
+// Tags, owner, and archival state are management/UI metadata, not evaluation
+// inputs — kept as discrete `flags` table columns rather than inside `data`
+// so they never flow into the evaluation core or over SSE to SDK clients.
+// `core::Flag` (and therefore the SSE/`/flags/snapshot` wire format) is
+// untouched by this feature.
+
+/// A flag as returned by the dashboard-facing REST API — the evaluation `Flag`
+/// plus lifecycle metadata. Never sent over SSE or `/flags/snapshot`; those
+/// paths serialize bare `Flag` values read directly from the `data` column.
+#[derive(Debug, Serialize)]
+pub struct FlagWithMetadata {
+    #[serde(flatten)]
+    pub flag: Flag,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_email: Option<String>,
+    /// `time`'s default (de)serialization is a proprietary space-separated,
+    /// triple-colon-offset format that JavaScript's `Date` cannot parse —
+    /// `time::serde::rfc3339` gives proper RFC 3339 (`"2026-07-04T03:19:17Z"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub archived_at: Option<time::OffsetDateTime>,
+}
+
+/// Request body for `POST /flags` — the evaluation `Flag` plus optional
+/// lifecycle metadata set at creation time.
+#[derive(Debug, Deserialize)]
+struct CreateFlagRequest {
+    #[serde(flatten)]
+    flag: Flag,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    owner_email: Option<String>,
+}
 
 // ---------------------------------------------------------------------------
 // Environment-scoped path params
@@ -33,7 +73,7 @@ pub struct EnvFlagPath {
 /// Others must be a project member.
 pub(super) async fn check_env_access(
     db: &sqlx::PgPool,
-    jar: &PrivateCookieJar,
+    jar: &AuthContext,
     env_id: &str,
 ) -> Result<(), StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
@@ -114,6 +154,14 @@ pub fn write_router() -> Router<AppState> {
             "/environments/{env_id}/flags/{key}/promote",
             post(promote_flag),
         )
+        .route(
+            "/environments/{env_id}/flags/{key}/archive",
+            post(archive_flag),
+        )
+        .route(
+            "/environments/{env_id}/flags/{key}/unarchive",
+            post(unarchive_flag),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -126,10 +174,32 @@ struct Pagination {
     limit: usize,
     #[serde(default)]
     offset: usize,
+    /// Include archived flags in the results. Defaults to false — archived
+    /// flags are hidden from the default dashboard list view.
+    #[serde(default)]
+    include_archived: bool,
+    /// Filter to flags carrying this exact tag.
+    #[serde(default)]
+    tag: Option<String>,
 }
 
 fn default_limit() -> usize {
     200
+}
+
+/// Builds a `FlagWithMetadata` from a `flags` row that selected
+/// `data, tags, owner_email, archived_at`. Returns `None` if `data` doesn't
+/// deserialize into a valid `Flag` (defensive — should not happen for rows
+/// written by this server).
+fn row_to_flag_with_metadata(row: &sqlx::postgres::PgRow) -> Option<FlagWithMetadata> {
+    let data: serde_json::Value = row.try_get("data").ok()?;
+    let flag: Flag = serde_json::from_value(data).ok()?;
+    Some(FlagWithMetadata {
+        flag,
+        tags: row.try_get("tags").unwrap_or_default(),
+        owner_email: row.try_get("owner_email").unwrap_or(None),
+        archived_at: row.try_get("archived_at").unwrap_or(None),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -139,19 +209,24 @@ fn default_limit() -> usize {
 #[instrument(skip(state, jar))]
 async fn list_flags(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
     Query(page): Query<Pagination>,
-) -> Result<Json<Vec<Flag>>, StatusCode> {
+) -> Result<Json<Vec<FlagWithMetadata>>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
 
     let rows = sqlx::query(
-        "SELECT data FROM flags WHERE environment_id = $1::uuid \
+        "SELECT data, tags, owner_email, archived_at FROM flags \
+         WHERE environment_id = $1::uuid \
+           AND ($4 OR archived_at IS NULL) \
+           AND ($5::text IS NULL OR tags @> ARRAY[$5]) \
          ORDER BY key ASC LIMIT $2 OFFSET $3",
     )
     .bind(&env_id)
     .bind(page.limit as i64)
     .bind(page.offset as i64)
+    .bind(page.include_archived)
+    .bind(page.tag.as_deref())
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
@@ -159,13 +234,7 @@ async fn list_flags(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let flags: Vec<Flag> = rows
-        .iter()
-        .filter_map(|r| {
-            let v: serde_json::Value = r.try_get("data").ok()?;
-            serde_json::from_value(v).ok()
-        })
-        .collect();
+    let flags: Vec<FlagWithMetadata> = rows.iter().filter_map(row_to_flag_with_metadata).collect();
 
     info!(
         count = flags.len(),
@@ -177,14 +246,15 @@ async fn list_flags(
     Ok(Json(flags))
 }
 
-#[instrument(skip(state, jar, payload), fields(flag_key = %payload.key))]
+#[instrument(skip(state, jar, req), fields(flag_key = %req.flag.key))]
 async fn create_flag(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
-    Json(payload): Json<Flag>,
-) -> Result<Json<Flag>, StatusCode> {
+    Json(req): Json<CreateFlagRequest>,
+) -> Result<Json<FlagWithMetadata>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
+    let payload = req.flag;
     if !is_valid_flag_key(&payload.key) {
         warn!(key = %payload.key, "Rejected create_flag: invalid key");
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
@@ -204,12 +274,16 @@ async fn create_flag(
     })?;
 
     sqlx::query(
-        "INSERT INTO flags (key, environment_id, data) VALUES ($1, $2::uuid, $3) \
-         ON CONFLICT (key, environment_id) DO UPDATE SET data = EXCLUDED.data",
+        "INSERT INTO flags (key, environment_id, data, tags, owner_email) \
+         VALUES ($1, $2::uuid, $3, $4, $5) \
+         ON CONFLICT (key, environment_id) \
+         DO UPDATE SET data = EXCLUDED.data, tags = EXCLUDED.tags, owner_email = EXCLUDED.owner_email",
     )
     .bind(&payload.key)
     .bind(&env_id)
     .bind(&data)
+    .bind(&req.tags)
+    .bind(&req.owner_email)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -249,31 +323,36 @@ async fn create_flag(
     crate::webhook_fire::fire_webhooks(state.clone(), env_id.clone(), wh_payload);
 
     info!(env_id = %env_id, "Flag created/replaced");
-    Ok(Json(payload))
+    Ok(Json(FlagWithMetadata {
+        flag: payload,
+        tags: req.tags,
+        owner_email: req.owner_email,
+        archived_at: None,
+    }))
 }
 
 #[instrument(skip(state, jar), fields(flag_key = %path.key))]
 async fn get_flag(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(path): Path<EnvFlagPath>,
-) -> Result<Json<Flag>, StatusCode> {
+) -> Result<Json<FlagWithMetadata>, StatusCode> {
     check_env_access(&state.db, &jar, &path.env_id).await?;
-    let row = sqlx::query("SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid")
-        .bind(&path.key)
-        .bind(&path.env_id)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "DB error fetching flag");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let row = sqlx::query(
+        "SELECT data, tags, owner_email, archived_at FROM flags \
+         WHERE key = $1 AND environment_id = $2::uuid",
+    )
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error fetching flag");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
 
-    let v: serde_json::Value = row
-        .try_get("data")
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let flag: Flag = serde_json::from_value(v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let flag = row_to_flag_with_metadata(&row).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     info!(env_id = %path.env_id, "Flag retrieved");
     Ok(Json(flag))
@@ -282,7 +361,7 @@ async fn get_flag(
 #[instrument(skip(state, jar), fields(flag_key = %path.key))]
 async fn delete_flag(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(path): Path<EnvFlagPath>,
 ) -> Result<StatusCode, StatusCode> {
     check_env_access(&state.db, &jar, &path.env_id).await?;
@@ -332,52 +411,58 @@ async fn delete_flag(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// PATCH /api/environments/:env_id/flags/:key — partial update via JSON merge.
+/// Merges `patch` onto the flag JSON currently stored for `key`/`env_id` and
+/// validates the result deserializes to a valid [`Flag`] with an in-range
+/// rollout — without writing anything. Shared by the direct-apply path and
+/// the change-request approval path so both reject the same way, and by the
+/// approval-required path so a request is only queued if it would actually
+/// apply cleanly.
 ///
-/// Only provided fields are changed; omitted fields retain their current values.
-/// The `key` field is excluded from the patch to prevent key aliasing.
-/// The read-modify-write is wrapped in a transaction with FOR UPDATE to prevent
-/// concurrent-patch races.
-#[instrument(skip(state, jar, patch), fields(flag_key = %path.key))]
-async fn patch_flag(
-    State(state): State<AppState>,
-    jar: PrivateCookieJar,
-    Path(path): Path<EnvFlagPath>,
-    Json(mut patch): Json<serde_json::Value>,
-) -> Result<Json<Flag>, StatusCode> {
-    check_env_access(&state.db, &jar, &path.env_id).await?;
-    // Prevent the key from being mutated through a PATCH body.
+/// Also pulls `tags`/`owner_email` (and drops `key`) out of the patch, since
+/// those are discrete columns, not part of `data` — see the module-level
+/// comment on [`FlagWithMetadata`].
+async fn merge_and_validate(
+    db: impl sqlx::PgExecutor<'_>,
+    env_id: &str,
+    key: &str,
+    mut patch: serde_json::Value,
+) -> Result<
+    (
+        serde_json::Value,
+        serde_json::Value,
+        Flag,
+        Option<Vec<String>>,
+        Option<Option<String>>,
+    ),
+    StatusCode,
+> {
+    let (mut new_tags, mut new_owner_email) = (None, None);
     if let serde_json::Value::Object(ref mut m) = patch {
         m.remove("key");
+        if let Some(v) = m.remove("tags") {
+            new_tags = serde_json::from_value::<Vec<String>>(v).ok();
+        }
+        if let Some(v) = m.remove("owner_email") {
+            new_owner_email = Some(v.as_str().map(str::to_string));
+        }
     }
 
-    let mut db_tx = state.db.begin().await.map_err(|e| {
-        error!(error = %e, "Failed to begin transaction");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let before_val: serde_json::Value =
+        sqlx::query_scalar("SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid")
+            .bind(key)
+            .bind(env_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "PostgreSQL read failed");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .ok_or_else(|| {
+                info!("Flag not found for PATCH");
+                StatusCode::NOT_FOUND
+            })?;
 
-    let rec = sqlx::query(
-        "SELECT data FROM flags WHERE key = $1 AND environment_id = $2::uuid FOR UPDATE",
-    )
-    .bind(&path.key)
-    .bind(&path.env_id)
-    .fetch_optional(&mut *db_tx)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "PostgreSQL read failed");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or_else(|| {
-        info!("Flag not found for PATCH");
-        StatusCode::NOT_FOUND
-    })?;
-
-    let before_val: serde_json::Value = rec.try_get("data").map_err(|e| {
-        error!(error = %e, "Failed to deserialize stored flag data");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
     let mut flag_val = before_val.clone();
-
     if let (serde_json::Value::Object(map), serde_json::Value::Object(patch_map)) =
         (&mut flag_val, patch)
     {
@@ -399,28 +484,76 @@ async fn patch_flag(
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    sqlx::query("UPDATE flags SET data = $1 WHERE key = $2 AND environment_id = $3::uuid")
-        .bind(&flag_val)
-        .bind(&path.key)
-        .bind(&path.env_id)
-        .execute(&mut *db_tx)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "PostgreSQL update failed");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    Ok((before_val, flag_val, flag, new_tags, new_owner_email))
+}
+
+/// Writes an already-validated patch: read-modify-write under `FOR UPDATE`,
+/// audit log, SSE broadcast, webhook fire. Shared by the direct PATCH path
+/// (`require_approval = false`) and by change-request approval.
+pub(super) async fn apply_patch(
+    state: &AppState,
+    env_id: &str,
+    key: &str,
+    patch: serde_json::Value,
+    actor_email: Option<&str>,
+) -> Result<FlagWithMetadata, StatusCode> {
+    let mut db_tx = state.db.begin().await.map_err(|e| {
+        error!(error = %e, "Failed to begin transaction");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Re-select FOR UPDATE inside the write transaction — `merge_and_validate`
+    // above may have run against a plain (non-locking) read for a dry-run.
+    let rec = sqlx::query(
+        "SELECT tags, owner_email, archived_at FROM flags \
+         WHERE key = $1 AND environment_id = $2::uuid FOR UPDATE",
+    )
+    .bind(key)
+    .bind(env_id)
+    .fetch_optional(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "PostgreSQL read failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let (before_val, flag_val, flag, new_tags, new_owner_email) =
+        merge_and_validate(&mut *db_tx, env_id, key, patch).await?;
+
+    // Only touch tags/owner_email if the patch provided them — otherwise keep
+    // whatever is already stored (read above under the same row lock).
+    let tags: Vec<String> = new_tags.unwrap_or(rec.try_get("tags").unwrap_or_default());
+    let owner_email: Option<String> =
+        new_owner_email.unwrap_or(rec.try_get("owner_email").unwrap_or(None));
+    let archived_at: Option<time::OffsetDateTime> = rec.try_get("archived_at").unwrap_or(None);
+
+    sqlx::query(
+        "UPDATE flags SET data = $1, tags = $2, owner_email = $3 \
+         WHERE key = $4 AND environment_id = $5::uuid",
+    )
+    .bind(&flag_val)
+    .bind(&tags)
+    .bind(&owner_email)
+    .bind(key)
+    .bind(env_id)
+    .execute(&mut *db_tx)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "PostgreSQL update failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     db_tx.commit().await.map_err(|e| {
         error!(error = %e, "Transaction commit failed");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let actor_email = get_session_claims(&jar).map(|c| c.email);
     super::audit::log_audit_event(
         &state.db,
-        &path.env_id,
-        &path.key,
-        actor_email.as_deref(),
+        env_id,
+        key,
+        actor_email,
         "UPDATE",
         Some(&before_val),
         Some(&flag_val),
@@ -428,26 +561,95 @@ async fn patch_flag(
     )
     .await;
 
-    let segment_map = super::segments::load_env_segments(&path.env_id, &state.db)
+    let segment_map = super::segments::load_env_segments(env_id, &state.db)
         .await
         .unwrap_or_default();
     let expanded = super::segments::expand_flag_with_segments(flag.clone(), &segment_map);
     state.store.upsert_flag(expanded.clone());
-    let msg = json!({"type": "UPSERT", "env_id": path.env_id, "flag": expanded}).to_string();
-    publish_update(&state, &msg, "patch_flag").await;
+    let msg = json!({"type": "UPSERT", "env_id": env_id, "flag": expanded}).to_string();
+    publish_update(state, &msg, "patch_flag").await;
 
     let wh_payload = super::webhooks::flag_event_payload(
         "flag.updated",
-        &path.env_id,
-        &path.key,
+        env_id,
+        key,
         Some(&flag_val),
-        actor_email.as_deref(),
+        actor_email,
         None,
     );
-    crate::webhook_fire::fire_webhooks(state.clone(), path.env_id.clone(), wh_payload);
+    crate::webhook_fire::fire_webhooks(state.clone(), env_id.to_string(), wh_payload);
 
-    info!(env_id = %path.env_id, "Flag patched");
-    Ok(Json(flag))
+    info!(env_id = %env_id, "Flag patched");
+    Ok(FlagWithMetadata {
+        flag,
+        tags,
+        owner_email,
+        archived_at,
+    })
+}
+
+/// PATCH /api/environments/:env_id/flags/:key — partial update via JSON merge.
+///
+/// Only provided fields are changed; omitted fields retain their current values.
+/// The `key` field is excluded from the patch to prevent key aliasing.
+///
+/// If the environment has `require_approval` set, the patch is not applied —
+/// it's captured as a pending [`super::change_requests::ChangeRequestInfo`]
+/// and `202 Accepted` is returned instead of `200 OK`. The patch is validated
+/// (would it produce a valid flag?) before being queued, so approval doesn't
+/// surface a validation error later on someone else's click.
+#[instrument(skip(state, jar, patch), fields(flag_key = %path.key))]
+async fn patch_flag(
+    State(state): State<AppState>,
+    jar: AuthContext,
+    Path(path): Path<EnvFlagPath>,
+    Json(patch): Json<serde_json::Value>,
+) -> Result<axum::response::Response, StatusCode> {
+    use axum::response::IntoResponse;
+
+    check_env_access(&state.db, &jar, &path.env_id).await?;
+
+    let require_approval: bool =
+        sqlx::query_scalar("SELECT require_approval FROM environments WHERE id = $1::uuid")
+            .bind(&path.env_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "DB error checking require_approval");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .unwrap_or(false);
+
+    let actor_email = get_session_claims(&jar).map(|c| c.email);
+
+    if !require_approval {
+        let updated = apply_patch(
+            &state,
+            &path.env_id,
+            &path.key,
+            patch,
+            actor_email.as_deref(),
+        )
+        .await?;
+        return Ok(Json(updated).into_response());
+    }
+
+    // Approval required — validate it would apply cleanly, then queue it.
+    // SDK-key auth has no per-user identity to attribute the request to.
+    let requested_by = actor_email.ok_or(StatusCode::UNAUTHORIZED)?;
+    merge_and_validate(&state.db, &path.env_id, &path.key, patch.clone()).await?;
+
+    let cr = super::change_requests::create_change_request(
+        &state.db,
+        &path.env_id,
+        &path.key,
+        &patch,
+        &requested_by,
+    )
+    .await?;
+
+    info!(env_id = %path.env_id, flag_key = %path.key, "Flag patch queued for approval");
+    Ok((StatusCode::ACCEPTED, Json(cr)).into_response())
 }
 
 /// POST /api/environments/:env_id/flags/:key/promote
@@ -458,7 +660,7 @@ async fn patch_flag(
 #[instrument(skip(state, jar), fields(flag_key = %path.key))]
 async fn promote_flag(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(path): Path<EnvFlagPath>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<Flag>, StatusCode> {
@@ -551,6 +753,78 @@ async fn promote_flag(
         "Flag promoted"
     );
     Ok(Json(flag))
+}
+
+/// POST /api/environments/:env_id/flags/:key/archive
+/// POST /api/environments/:env_id/flags/:key/unarchive
+///
+/// Archiving is a pure dashboard/management concept — it hides a flag from
+/// the default list view to help teams find flags that are safe to clean up.
+/// It has **no effect on evaluation**: `is_enabled`/`rollout_percentage`
+/// remain the only kill-switches, so an archived flag keeps behaving exactly
+/// as before for any client still evaluating it. No SSE update or webhook is
+/// fired, since nothing evaluation-relevant changed.
+async fn set_archived(
+    state: &AppState,
+    jar: &AuthContext,
+    path: &EnvFlagPath,
+    archived: bool,
+) -> Result<Json<FlagWithMetadata>, StatusCode> {
+    check_env_access(&state.db, jar, &path.env_id).await?;
+
+    let row = sqlx::query(
+        "UPDATE flags SET archived_at = CASE WHEN $3 THEN NOW() ELSE NULL END \
+         WHERE key = $1 AND environment_id = $2::uuid \
+         RETURNING data, tags, owner_email, archived_at",
+    )
+    .bind(&path.key)
+    .bind(&path.env_id)
+    .bind(archived)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "PostgreSQL update failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let flag_with_metadata =
+        row_to_flag_with_metadata(&row).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let actor_email = get_session_claims(jar).map(|c| c.email);
+    let metadata = json!({ "archived": archived });
+    super::audit::log_audit_event(
+        &state.db,
+        &path.env_id,
+        &path.key,
+        actor_email.as_deref(),
+        if archived { "ARCHIVE" } else { "UNARCHIVE" },
+        None,
+        None,
+        Some(&metadata),
+    )
+    .await;
+
+    info!(env_id = %path.env_id, archived, "Flag archive state changed");
+    Ok(Json(flag_with_metadata))
+}
+
+#[instrument(skip(state, jar), fields(flag_key = %path.key))]
+async fn archive_flag(
+    State(state): State<AppState>,
+    jar: AuthContext,
+    Path(path): Path<EnvFlagPath>,
+) -> Result<Json<FlagWithMetadata>, StatusCode> {
+    set_archived(&state, &jar, &path, true).await
+}
+
+#[instrument(skip(state, jar), fields(flag_key = %path.key))]
+async fn unarchive_flag(
+    State(state): State<AppState>,
+    jar: AuthContext,
+    Path(path): Path<EnvFlagPath>,
+) -> Result<Json<FlagWithMetadata>, StatusCode> {
+    set_archived(&state, &jar, &path, false).await
 }
 
 // ---------------------------------------------------------------------------

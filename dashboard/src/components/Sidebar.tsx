@@ -15,6 +15,7 @@ import {
   Webhook,
   Wifi,
   CalendarClock,
+  GitPullRequest,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -26,6 +27,7 @@ const NAV_ALL = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true, adminOnly: false },
   { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false, adminOnly: false },
   { to: '/segments', icon: Tags, label: 'Segments', end: false, adminOnly: false },
+  { to: '/change-requests', icon: GitPullRequest, label: 'Change Requests', end: false, adminOnly: false },
   { to: '/schedule', icon: CalendarClock, label: 'Scheduled', end: false, adminOnly: false },
   { to: '/impressions', icon: Activity, label: 'Impressions', end: false, adminOnly: false },
   { to: '/audit', icon: History, label: 'Audit Log', end: false, adminOnly: false },

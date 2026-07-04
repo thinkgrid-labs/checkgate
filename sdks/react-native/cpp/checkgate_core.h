@@ -37,6 +37,15 @@ void checkgate_upsert_flag(
 );
 
 /**
+ * Upsert a flag from a full JSON string. Unlike checkgate_upsert_flag, this
+ * preserves flag_type, default_value, disabled_value, and per-rule variants —
+ * required for multi-variant (string/integer/JSON) flags.
+ *
+ * @param flag_json Null-terminated JSON object of the full flag.
+ */
+void checkgate_upsert_flag_v2(const char *flag_json);
+
+/**
  * Remove a flag from the in-process cache.
  *
  * @param key Null-terminated flag key.
@@ -63,6 +72,35 @@ int checkgate_is_enabled(
     const char *user_key,
     const char *attributes_json
 );
+
+/**
+ * Evaluate a multi-variant flag and return a heap-allocated JSON string
+ * `{"enabled":bool,"value":...}`. Returns the string "null" if the flag is
+ * not found. The caller MUST free the returned pointer with
+ * checkgate_free_string.
+ */
+char *checkgate_get_variant(
+    const char *flag_key,
+    const char *user_key,
+    const char *attributes_json
+);
+
+/**
+ * Evaluate a multi-variant flag and return a heap-allocated JSON string of just
+ * the resolved value. Returns "null" if the flag is not found. The caller MUST
+ * free the returned pointer with checkgate_free_string.
+ */
+char *checkgate_get_value(
+    const char *flag_key,
+    const char *user_key,
+    const char *attributes_json
+);
+
+/**
+ * Free a string returned by checkgate_get_variant or checkgate_get_value.
+ * Passing NULL is a safe no-op.
+ */
+void checkgate_free_string(char *s);
 
 #ifdef __cplusplus
 }

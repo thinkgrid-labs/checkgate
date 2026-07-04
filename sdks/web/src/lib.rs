@@ -90,7 +90,7 @@ impl CheckgateCoreWasm {
             key: user_key,
             attributes,
         };
-        evaluate(flag.as_ref(), &ctx)
+        evaluate(flag.as_ref(), &ctx, &self.store)
     }
 
     /// Evaluate a flag and return the resolved value as a JS value.
@@ -112,7 +112,7 @@ impl CheckgateCoreWasm {
             key: user_key,
             attributes,
         };
-        let result = evaluate_variant(flag.as_ref(), &ctx);
+        let result = evaluate_variant(flag.as_ref(), &ctx, &self.store);
         serde_wasm_bindgen::to_value(&result.value).unwrap_or(JsValue::NULL)
     }
 
@@ -135,7 +135,7 @@ impl CheckgateCoreWasm {
             key: user_key,
             attributes,
         };
-        let result = evaluate_variant(flag.as_ref(), &ctx);
+        let result = evaluate_variant(flag.as_ref(), &ctx, &self.store);
         serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
     }
 }

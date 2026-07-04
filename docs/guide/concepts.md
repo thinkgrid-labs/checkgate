@@ -86,6 +86,14 @@ A rule has three parts:
 | `contains` | Substring match | `email` contains `["@acme.com"]` |
 | `starts_with` | Prefix match | `region` starts_with `["eu-"]` |
 | `ends_with` | Suffix match | `email` ends_with `["@contractor.com"]` |
+| `greater_than` | Numeric `>` (any value) | `age` greater_than `["18"]` |
+| `greater_than_or_equal` | Numeric `≥` | `age` greater_than_or_equal `["18"]` |
+| `less_than` | Numeric `<` | `cart_total` less_than `["100"]` |
+| `less_than_or_equal` | Numeric `≤` | `score` less_than_or_equal `["0.5"]` |
+
+The numeric operators parse both the attribute and the rule values as numbers (integers or
+floats). A non-numeric attribute value never matches, so a `greater_than` rule will not admit
+users whose attribute is missing or non-numeric.
 
 ### Rule Evaluation
 
@@ -130,6 +138,67 @@ The rollout percentage enables gradual feature releases. Checkgate uses **determ
 - `null` (no rollout) — effectively 100%; all users get `true` if enabled
 - `0` — no one gets `true` (useful to disable without deleting)
 - `100` — everyone gets `true`
+
+## Weighted Variants (A/B Testing)
+
+For string, integer, and JSON flags, `variants` distributes traffic across **multiple**
+values by weight — e.g. a 60/30/10 split across `"control"` / `"treatment-a"` /
+`"treatment-b"` — instead of always returning a single `default_value`. This is the
+building block for A/B/n experiments.
+
+```json
+{
+  "key": "checkout-experiment",
+  "is_enabled": true,
+  "flag_type": "string",
+  "variants": [
+    { "weight": 60, "value": "control" },
+    { "weight": 30, "value": "treatment-a" },
+    { "weight": 10, "value": "treatment-b" }
+  ]
+}
+```
+
+- Applies only when the flag is enabled, the user is inside `rollout_percentage`, and no
+  targeting rule matched — rules and rollout still take priority, exactly as they do for
+  `default_value`.
+- Weights don't need to sum to 100 — they're normalized against their total (`[6, 3, 1]`
+  behaves identically to `[60, 30, 10]`).
+- Bucketing is deterministic and sticky per user (same MurmurHash3 approach as rollout
+  percentage, salted independently so variant assignment doesn't correlate with which users
+  pass the rollout gate).
+- Leave `variants` empty (the default) to keep returning `default_value` as before — fully
+  backward compatible.
+
+## Prerequisite Flags
+
+A flag can require another flag to be enabled — or resolved to a specific value — before its
+own rules and rollout are even considered. This is checked **first**, ahead of targeting rules
+and the rollout percentage: if any prerequisite is unsatisfied, the flag evaluates as disabled
+regardless of its own `is_enabled`/rules/rollout configuration.
+
+```json
+{
+  "key": "advanced-search",
+  "is_enabled": true,
+  "prerequisites": [
+    { "flag_key": "search-v2-infra" },
+    { "flag_key": "theme", "required_value": "dark" }
+  ]
+}
+```
+
+- `flag_key` — the prerequisite flag's key.
+- `required_value` (optional) — the specific value the prerequisite must resolve to. Omit it to
+  just require the prerequisite be enabled (the common case for boolean prerequisites, which
+  have no other meaningful value to check).
+- Prerequisites are evaluated recursively — a prerequisite can itself have prerequisites — with
+  a depth limit that fails closed on cycles (e.g. flag A requiring flag B which requires flag A
+  back) or excessively deep chains, rather than looping forever.
+- A prerequisite referencing a flag that no longer exists is treated as unsatisfied (fails
+  closed) rather than silently passing.
+- Leave `prerequisites` empty (the default) for a flag that evaluates independently — fully
+  backward compatible.
 
 ## User Context
 
