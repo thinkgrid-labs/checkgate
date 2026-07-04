@@ -23,7 +23,7 @@ labels: bug
 - SDK: <!-- node / browser / react-native / flutter -->
 - SDK version:
 - OS / platform:
-- Sidekick server version:
+- Checkgate server version:
 
 ## Logs / error output
 

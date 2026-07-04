@@ -1,3 +1,4 @@
+use crate::auth::AuthContext;
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -5,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::Row;
@@ -90,7 +90,7 @@ pub fn write_router() -> Router<AppState> {
 
 async fn list_webhooks(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
 ) -> Result<Json<Vec<Webhook>>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -126,7 +126,7 @@ async fn list_webhooks(
 
 async fn create_webhook(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
     Json(body): Json<CreateBody>,
 ) -> Result<Json<Webhook>, StatusCode> {
@@ -170,7 +170,7 @@ async fn create_webhook(
 
 async fn patch_webhook(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, id)): Path<(String, String)>,
     Json(body): Json<PatchBody>,
 ) -> Result<Json<Webhook>, StatusCode> {
@@ -213,7 +213,7 @@ async fn patch_webhook(
 
 async fn delete_webhook(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, id)): Path<(String, String)>,
 ) -> Result<StatusCode, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -239,7 +239,7 @@ async fn delete_webhook(
 
 async fn list_deliveries(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, id)): Path<(String, String)>,
 ) -> Result<Json<Vec<WebhookDelivery>>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;

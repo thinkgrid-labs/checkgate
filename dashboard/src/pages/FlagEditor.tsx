@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Save, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, Plus, Save, Trash2, X } from 'lucide-react'
 import { api, scheduledApi, segmentsApi } from '../api'
-import type { Flag, FlagType, FlagValue, ScheduledChange, Segment, TargetingRule } from '../types'
+import type { Flag, FlagType, FlagValue, Prerequisite, ScheduledChange, Segment, TargetingRule, WeightedVariant } from '../types'
 import RuleEditor from '../components/RuleEditor'
 import { useEnvironment } from '../context/EnvironmentContext'
 
@@ -15,6 +15,10 @@ const EMPTY_FLAG: Flag = {
   flag_type: 'boolean',
   default_value: null,
   disabled_value: null,
+  variants: [],
+  prerequisites: [],
+  tags: [],
+  owner_email: null,
 }
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -61,6 +65,7 @@ const FLAG_TYPES: { value: FlagType; label: string; description: string }[] = [
 ]
 
 function parseValue(raw: string, flagType: FlagType): FlagValue {
+  if (flagType === 'boolean') return raw === 'true'
   if (raw.trim() === '') return null
   if (flagType === 'integer') {
     const n = parseInt(raw, 10)
@@ -76,6 +81,21 @@ function valueToString(v: FlagValue): string {
   if (v == null) return ''
   if (typeof v === 'object') return JSON.stringify(v, null, 2)
   return String(v)
+}
+
+/**
+ * A sensible non-null starting value per type. Used when a field transitions from
+ * "unset" to "set" (e.g. checking "require a specific value") — `null` would be
+ * indistinguishable from "unset" once round-tripped through the server, since a
+ * JSON `null` deserializes to `Option::None` there, same as an absent field.
+ */
+function defaultValueForType(flagType: FlagType): FlagValue {
+  switch (flagType) {
+    case 'boolean': return true
+    case 'integer': return 0
+    case 'json': return {}
+    default: return ''
+  }
 }
 
 function ValueInput({
@@ -97,7 +117,16 @@ function ValueInput({
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
-      {flagType === 'json' ? (
+      {flagType === 'boolean' ? (
+        <select
+          value={raw === 'false' ? 'false' : 'true'}
+          onChange={e => onChange(parseValue(e.target.value, flagType))}
+          className={selectClass}
+        >
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      ) : flagType === 'json' ? (
         <textarea
           rows={3}
           value={raw}
@@ -119,6 +148,231 @@ function ValueInput({
   )
 }
 
+function WeightedVariantsEditor({
+  variants,
+  flagType,
+  onChange,
+}: {
+  variants: WeightedVariant[]
+  flagType: FlagType
+  onChange: (variants: WeightedVariant[]) => void
+}) {
+  const totalWeight = variants.reduce((sum, v) => sum + (v.weight || 0), 0)
+
+  function updateVariant(i: number, patch: Partial<WeightedVariant>) {
+    onChange(variants.map((v, idx) => (idx === i ? { ...v, ...patch } : v)))
+  }
+
+  function removeVariant(i: number) {
+    onChange(variants.filter((_, idx) => idx !== i))
+  }
+
+  function addVariant() {
+    onChange([...variants, { value: null, weight: variants.length === 0 ? 100 : 0 }])
+  }
+
+  return (
+    <div className="space-y-3">
+      {variants.length === 0 && (
+        <p className="text-xs text-gray-400">
+          No weighted variants configured — the default value above is always returned.
+        </p>
+      )}
+      {variants.map((v, i) => {
+        const pct = totalWeight > 0 ? Math.round((v.weight / totalWeight) * 1000) / 10 : 0
+        return (
+          <div key={i} className="flex items-start gap-2">
+            <div className="flex-1">
+              <ValueInput
+                label={`Variant ${i + 1}`}
+                value={v.value}
+                flagType={flagType}
+                onChange={val => updateVariant(i, { value: val })}
+              />
+            </div>
+            <div className="w-24 shrink-0">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Weight</label>
+              <input
+                type="number"
+                min={0}
+                value={v.weight}
+                onChange={e => updateVariant(i, { weight: parseInt(e.target.value, 10) || 0 })}
+                className={inputClass}
+              />
+              <p className="mt-1.5 text-xs text-gray-400">{pct}%</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => removeVariant(i)}
+              className="mt-8 text-red-400 hover:text-red-600 shrink-0"
+              aria-label="Remove variant"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      })}
+      <button
+        type="button"
+        onClick={addVariant}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+      >
+        <Plus className="w-3.5 h-3.5" /> Add variant
+      </button>
+    </div>
+  )
+}
+
+function PrerequisitesEditor({
+  prerequisites,
+  candidates,
+  onChange,
+}: {
+  prerequisites: Prerequisite[]
+  /** Other flags in this environment that could be used as a prerequisite. */
+  candidates: Flag[]
+  onChange: (prerequisites: Prerequisite[]) => void
+}) {
+  function updatePrereq(i: number, patch: Partial<Prerequisite>) {
+    onChange(prerequisites.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
+  }
+
+  function removePrereq(i: number) {
+    onChange(prerequisites.filter((_, idx) => idx !== i))
+  }
+
+  function addPrereq() {
+    if (candidates.length === 0) return
+    onChange([...prerequisites, { flag_key: candidates[0].key }])
+  }
+
+  return (
+    <div className="space-y-3">
+      {candidates.length === 0 && prerequisites.length === 0 && (
+        <p className="text-xs text-gray-400">
+          No other flags exist in this environment yet to depend on.
+        </p>
+      )}
+      {prerequisites.length === 0 && candidates.length > 0 && (
+        <p className="text-xs text-gray-400">
+          No prerequisites configured — this flag evaluates independently.
+        </p>
+      )}
+      {prerequisites.map((p, i) => {
+        const candidate = candidates.find(c => c.key === p.flag_key)
+        const candidateType = candidate?.flag_type ?? 'boolean'
+        const requiresValue = p.required_value !== undefined
+        return (
+          <div key={i} className="flex items-start gap-2">
+            <div className="flex-1 space-y-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Requires flag</label>
+                <select
+                  value={p.flag_key}
+                  onChange={e => updatePrereq(i, { flag_key: e.target.value })}
+                  className={selectClass}
+                >
+                  {!candidates.some(c => c.key === p.flag_key) && (
+                    <option value={p.flag_key}>{p.flag_key} (not found)</option>
+                  )}
+                  {candidates.map(c => (
+                    <option key={c.key} value={c.key}>{c.key} ({c.flag_type ?? 'boolean'})</option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={requiresValue}
+                  onChange={e => updatePrereq(i, {
+                    required_value: e.target.checked ? defaultValueForType(candidateType) : undefined,
+                  })}
+                />
+                Require a specific resolved value (instead of just "enabled")
+              </label>
+              {requiresValue && (
+                <ValueInput
+                  label="Required value"
+                  value={p.required_value ?? null}
+                  flagType={candidateType}
+                  onChange={v => updatePrereq(i, { required_value: v })}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => removePrereq(i)}
+              className="mt-8 text-red-400 hover:text-red-600 shrink-0"
+              aria-label="Remove prerequisite"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      })}
+      {candidates.length > 0 && (
+        <button
+          type="button"
+          onClick={addPrereq}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add prerequisite
+        </button>
+      )}
+    </div>
+  )
+}
+
+function TagsInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+
+  function addTag() {
+    const t = draft.trim()
+    if (t && !tags.includes(t)) onChange([...tags, t])
+    setDraft('')
+  }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">Tags</label>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {tags.map(t => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-medium"
+            >
+              {t}
+              <button
+                type="button"
+                onClick={() => onChange(tags.filter(x => x !== t))}
+                className="hover:text-emerald-900"
+                aria-label={`Remove tag ${t}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault()
+            addTag()
+          }
+        }}
+        onBlur={addTag}
+        placeholder="Add a tag and press Enter"
+        className={inputClass}
+      />
+    </div>
+  )
+}
+
 export default function FlagEditor() {
   const { key } = useParams<{ key?: string }>()
   const isEdit = Boolean(key)
@@ -130,16 +384,24 @@ export default function FlagEditor() {
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingApproval, setPendingApproval] = useState(false)
   const [segments, setSegments] = useState<Segment[]>([])
+  const [otherFlags, setOtherFlags] = useState<Flag[]>([])
   const [scheduledChanges, setScheduledChanges] = useState<ScheduledChange[]>([])
   const [scheduleAt, setScheduleAt] = useState('')
   const [scheduleAction, setScheduleAction] = useState<'enable' | 'disable'>('enable')
   const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [archiving, setArchiving] = useState(false)
 
   useEffect(() => {
     if (!activeEnv) return
     segmentsApi.list(activeEnv.id).then(setSegments).catch(() => {/* non-fatal */})
-  }, [activeEnv])
+    // Candidates for the Prerequisites picker — exclude the flag being edited
+    // itself, since a self-referencing prerequisite is a trivial cycle.
+    api.listFlags(activeEnv.id)
+      .then(list => setOtherFlags(list.filter(f => f.key !== key)))
+      .catch(() => {/* non-fatal */})
+  }, [activeEnv, key])
 
   useEffect(() => {
     if (!key || !activeEnv) return
@@ -184,6 +446,23 @@ export default function FlagEditor() {
     }
   }
 
+  async function handleArchiveToggle() {
+    if (!activeEnv || !key) return
+    const archiving_ = !flag.archived_at
+    if (archiving_ && !confirm(`Archive "${key}"? It will be hidden from the flag list, but keeps evaluating exactly as before.`)) return
+    setArchiving(true)
+    try {
+      const updated = archiving_
+        ? await api.archiveFlag(activeEnv.id, key)
+        : await api.unarchiveFlag(activeEnv.id, key)
+      setFlag(updated)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setArchiving(false)
+    }
+  }
+
   function setField<K extends keyof Flag>(field: K, value: Flag[K]) {
     setFlag(prev => ({ ...prev, [field]: value }))
   }
@@ -194,6 +473,7 @@ export default function FlagEditor() {
       flag_type: newType,
       default_value: null,
       disabled_value: null,
+      variants: [],
       rules: prev.rules.map(r => ({ ...r, variant: undefined })),
     }))
   }
@@ -202,6 +482,7 @@ export default function FlagEditor() {
     e.preventDefault()
     setSaving(true)
     setError(null)
+    setPendingApproval(false)
 
     const rollout = rolloutInput.trim() === '' ? null : parseInt(rolloutInput, 10)
     if (rollout !== null && (isNaN(rollout) || rollout < 0 || rollout > 100)) {
@@ -220,7 +501,7 @@ export default function FlagEditor() {
 
     try {
       if (isEdit && key) {
-        await api.patchFlag(activeEnv.id, key, {
+        const result = await api.patchFlag(activeEnv.id, key, {
           is_enabled: payload.is_enabled,
           rollout_percentage: payload.rollout_percentage,
           description: payload.description,
@@ -228,7 +509,18 @@ export default function FlagEditor() {
           flag_type: payload.flag_type,
           default_value: payload.default_value,
           disabled_value: payload.disabled_value,
+          variants: payload.variants,
+          prerequisites: payload.prerequisites,
+          tags: payload.tags,
+          owner_email: payload.owner_email,
         })
+        if (!result.applied) {
+          // Environment requires approval — the patch was queued, not applied.
+          // Stay on the page rather than navigating away as if it took effect.
+          setPendingApproval(true)
+          setSaving(false)
+          return
+        }
       } else {
         await api.createFlag(activeEnv.id, payload)
       }
@@ -253,16 +545,30 @@ export default function FlagEditor() {
 
   return (
     <div className="w-full max-w-2xl space-y-5">
-      <Link
-        to="/flags"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to flags
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          to="/flags"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to flags
+        </Link>
+        {flag.archived_at && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs font-medium">
+            <Archive className="w-3 h-3" /> Archived
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
           {error}
+        </div>
+      )}
+
+      {pendingApproval && (
+        <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+          This environment requires approval — your change was queued instead of applied.{' '}
+          <Link to="/change-requests" className="font-bold underline">View change requests</Link>
         </div>
       )}
 
@@ -300,6 +606,38 @@ export default function FlagEditor() {
               />
             </div>
           </div>
+        </SectionCard>
+
+        <SectionCard title="Tags & ownership">
+          <div className="space-y-4">
+            <TagsInput tags={flag.tags ?? []} onChange={tags => setField('tags', tags)} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Owner</label>
+              <input
+                type="email"
+                value={flag.owner_email ?? ''}
+                onChange={e => setField('owner_email', e.target.value || null)}
+                placeholder="owner@example.com"
+                className={inputClass}
+              />
+              <p className="mt-1.5 text-xs text-gray-400">
+                Who's responsible for this flag — useful when deciding what's safe to clean up.
+              </p>
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Prerequisites">
+          <p className="text-xs text-gray-400 mb-4">
+            Require other flags to be enabled (or resolve to a specific value) before this flag's
+            own rules and rollout are even considered. Checked first — if any prerequisite fails,
+            this flag evaluates as disabled.
+          </p>
+          <PrerequisitesEditor
+            prerequisites={flag.prerequisites ?? []}
+            candidates={otherFlags}
+            onChange={prerequisites => setField('prerequisites', prerequisites)}
+          />
         </SectionCard>
 
         <SectionCard title="Flag type">
@@ -378,6 +716,22 @@ export default function FlagEditor() {
             </div>
           </div>
         </SectionCard>
+
+        {isVariant && (
+          <SectionCard title="Weighted variants (A/B testing)">
+            <p className="text-xs text-gray-400 mb-4">
+              Split traffic across multiple values by weight (e.g. 60/30/10). Applies to users who
+              are enabled, inside the rollout percentage above, and don't match a targeting rule.
+              Weights don't need to sum to 100 — only their proportions matter. Leave empty to
+              always return the default value above.
+            </p>
+            <WeightedVariantsEditor
+              variants={flag.variants ?? []}
+              flagType={flagType}
+              onChange={variants => setField('variants', variants)}
+            />
+          </SectionCard>
+        )}
 
         <SectionCard title="Targeting rules">
           <p className="text-xs text-gray-400 mb-4">
@@ -480,6 +834,20 @@ export default function FlagEditor() {
           >
             Cancel
           </Link>
+          {isEdit && key && (
+            <button
+              type="button"
+              onClick={() => void handleArchiveToggle()}
+              disabled={archiving}
+              className="ml-auto flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50 transition-colors"
+            >
+              {flag.archived_at ? (
+                <><ArchiveRestore className="w-4 h-4" /> {archiving ? 'Unarchiving…' : 'Unarchive'}</>
+              ) : (
+                <><Archive className="w-4 h-4" /> {archiving ? 'Archiving…' : 'Archive'}</>
+              )}
+            </button>
+          )}
         </div>
       </form>
     </div>

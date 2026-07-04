@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::{delete, get, patch, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tracing::{error, info, warn};
@@ -73,7 +72,7 @@ pub struct UpdateMemberRoleRequest {
 /// - Session with no membership → Err(403)
 async fn project_role(
     db: &sqlx::PgPool,
-    jar: &PrivateCookieJar,
+    jar: &AuthContext,
     project_id: &str,
 ) -> Result<String, StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
@@ -139,7 +138,7 @@ fn slugify(name: &str) -> String {
 
 async fn list_projects(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
 ) -> Result<Json<Vec<ProjectSummary>>, StatusCode> {
     let is_admin_or_sdk = match get_session_claims(&jar) {
         None => true,
@@ -201,7 +200,7 @@ async fn list_projects(
 
 async fn create_project(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Json(req): Json<CreateProjectRequest>,
 ) -> Result<Json<Project>, StatusCode> {
     // Only workspace admins can create projects.
@@ -251,7 +250,7 @@ async fn create_project(
 
 async fn get_project(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
 ) -> Result<Json<Project>, StatusCode> {
     project_role(&state.db, &jar, &project_id).await?;
@@ -278,7 +277,7 @@ async fn get_project(
 
 async fn rename_project(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
     Json(req): Json<RenameProjectRequest>,
 ) -> Result<Json<Project>, StatusCode> {
@@ -315,7 +314,7 @@ async fn rename_project(
 
 async fn delete_project(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let role = project_role(&state.db, &jar, &project_id).await?;
@@ -371,7 +370,7 @@ async fn delete_project(
 
 async fn list_members(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
 ) -> Result<Json<Vec<ProjectMemberInfo>>, StatusCode> {
     project_role(&state.db, &jar, &project_id).await?;
@@ -406,7 +405,7 @@ async fn list_members(
 
 async fn add_member(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
     Json(req): Json<AddMemberRequest>,
 ) -> Result<Json<ProjectMemberInfo>, StatusCode> {
@@ -453,7 +452,7 @@ async fn add_member(
 
 async fn update_member_role(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((project_id, user_id)): Path<(String, i64)>,
     Json(req): Json<UpdateMemberRoleRequest>,
 ) -> Result<StatusCode, StatusCode> {
@@ -487,7 +486,7 @@ async fn update_member_role(
 
 async fn remove_member(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((project_id, user_id)): Path<(String, i64)>,
 ) -> Result<StatusCode, StatusCode> {
     let role = project_role(&state.db, &jar, &project_id).await?;

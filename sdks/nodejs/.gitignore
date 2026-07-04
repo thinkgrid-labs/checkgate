@@ -1,1 +1,10 @@
 /target
+
+# napi-rs build outputs — generated fresh per platform by `npm run build`
+# (locally) or the release workflow (per-target in CI). Never hand-edited,
+# never meant to be committed; see index.js for why the dispatch loader is
+# named native-binding.js instead of the napi-rs default of index.js.
+*.node
+native-binding.js
+native-binding.d.ts
+index.node

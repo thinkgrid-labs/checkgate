@@ -20,6 +20,8 @@ typedef _UpsertFlagNative = Void Function(
   Pointer<Utf8> rulesJson,
 );
 
+typedef _UpsertFlagV2Native = Void Function(Pointer<Utf8> flagJson);
+
 typedef _DeleteFlagNative = Void Function(Pointer<Utf8> key);
 
 typedef _ClearStoreNative = Void Function();
@@ -29,6 +31,14 @@ typedef _IsEnabledNative = Int32 Function(
   Pointer<Utf8> userKey,
   Pointer<Utf8> attributesJson,
 );
+
+typedef _GetVariantNative = Pointer<Utf8> Function(
+  Pointer<Utf8> flagKey,
+  Pointer<Utf8> userKey,
+  Pointer<Utf8> attributesJson,
+);
+
+typedef _FreeStringNative = Void Function(Pointer<Utf8> s);
 
 // ---------------------------------------------------------------------------
 // Dart function types (used by lookupFunction)
@@ -41,6 +51,8 @@ typedef UpsertFlagFn = void Function(
   Pointer<Utf8> rulesJson,
 );
 
+typedef UpsertFlagV2Fn = void Function(Pointer<Utf8> flagJson);
+
 typedef DeleteFlagFn = void Function(Pointer<Utf8> key);
 
 typedef ClearStoreFn = void Function();
@@ -51,25 +63,42 @@ typedef IsEnabledFn = int Function(
   Pointer<Utf8> attributesJson,
 );
 
+typedef GetVariantFn = Pointer<Utf8> Function(
+  Pointer<Utf8> flagKey,
+  Pointer<Utf8> userKey,
+  Pointer<Utf8> attributesJson,
+);
+
+typedef FreeStringFn = void Function(Pointer<Utf8> s);
+
 // ---------------------------------------------------------------------------
 // Binding class — loads symbols from the compiled Rust library.
 // ---------------------------------------------------------------------------
 
 class CheckgateBindings {
   final UpsertFlagFn checkgate_upsert_flag;
+  final UpsertFlagV2Fn checkgate_upsert_flag_v2;
   final DeleteFlagFn checkgate_delete_flag;
   final ClearStoreFn checkgate_clear_store;
   final IsEnabledFn checkgate_is_enabled;
+  final GetVariantFn checkgate_get_variant;
+  final FreeStringFn checkgate_free_string;
 
   CheckgateBindings(DynamicLibrary lib)
       : checkgate_upsert_flag = lib.lookupFunction<_UpsertFlagNative, UpsertFlagFn>(
             'checkgate_upsert_flag'),
+        checkgate_upsert_flag_v2 = lib.lookupFunction<_UpsertFlagV2Native, UpsertFlagV2Fn>(
+            'checkgate_upsert_flag_v2'),
         checkgate_delete_flag = lib.lookupFunction<_DeleteFlagNative, DeleteFlagFn>(
             'checkgate_delete_flag'),
         checkgate_clear_store = lib.lookupFunction<_ClearStoreNative, ClearStoreFn>(
             'checkgate_clear_store'),
         checkgate_is_enabled = lib.lookupFunction<_IsEnabledNative, IsEnabledFn>(
-            'checkgate_is_enabled');
+            'checkgate_is_enabled'),
+        checkgate_get_variant = lib.lookupFunction<_GetVariantNative, GetVariantFn>(
+            'checkgate_get_variant'),
+        checkgate_free_string = lib.lookupFunction<_FreeStringNative, FreeStringFn>(
+            'checkgate_free_string');
 
   /// Opens the correct shared library for the current platform.
   factory CheckgateBindings.open() {

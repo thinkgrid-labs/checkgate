@@ -1,6 +1,6 @@
 {
   "name": "@checkgate/node",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Checkgate feature-flag SDK for Node.js — local evaluation via Rust NAPI.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -8,6 +8,8 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "native-binding.js",
+    "native-binding.d.ts",
     "*.node"
   ],
   "napi": {
@@ -22,10 +24,10 @@
     ]
   },
   "scripts": {
-    "build": "napi build --platform --release",
-    "build:zig": "napi build --platform --release --zig",
-    "build:cross": "napi build --platform --release --use-napi-cross",
-    "build:debug": "napi build --platform"
+    "build": "napi build --platform --release --js native-binding.js --dts native-binding.d.ts",
+    "build:zig": "napi build --platform --release --zig --js native-binding.js --dts native-binding.d.ts",
+    "build:cross": "napi build --platform --release --use-napi-cross --js native-binding.js --dts native-binding.d.ts",
+    "build:debug": "napi build --platform --js native-binding.js --dts native-binding.d.ts"
   },
   "dependencies": {
     "eventsource": "^4.1.0"

@@ -19,7 +19,17 @@ All protected endpoints require one of:
 Authorization: Bearer sk_live_your_sdk_key
 ```
 
+```http
+Authorization: Bearer pat_your_personal_access_token
+```
+
 or an active session cookie set by `POST /api/auth/login`.
+
+An SDK key is always admin-equivalent, intended for the SDKs themselves. A
+personal access token (see [Personal Access Tokens](#personal-access-tokens))
+instead acts *as its owning user* — same role, same project memberships —
+and can be capped to read-only, making it the right choice for CI/CD,
+Terraform, or any script that shouldn't hold blanket admin access.
 
 Dashboard mutation requests also require:
 
@@ -360,6 +370,23 @@ POST /api/projects/{project_id}/environments/{env_id}/default
 
 ---
 
+### Set Approval Requirement
+
+```http
+POST /api/projects/{project_id}/environments/{env_id}/require-approval
+Content-Type: application/json
+```
+
+```json
+{ "require_approval": true }
+```
+
+When enabled, `PATCH` requests against flags in this environment no longer apply immediately — see [Partially Update a Flag](#partially-update-a-flag) and [Change Requests](#change-requests).
+
+**Response** `200 OK` — returns the updated environment.
+
+---
+
 ## Flags
 
 Flag endpoints remain environment-scoped via `{env_id}` (UUID). The environment UUID can be obtained from the environments list.
@@ -444,7 +471,9 @@ Applies a JSON merge patch. Only the provided fields are updated; omitted fields
 { "is_enabled": false }
 ```
 
-**Response** `200 OK` — returns the updated flag.
+**Response** `200 OK` — returns the updated flag (applied immediately).
+
+**Response** `202 Accepted` — the environment has `require_approval` set; the patch was validated and queued as a pending [change request](#change-requests) instead of applied. Returns the created change request, not the flag (which is unchanged).
 
 **Response** `404 Not Found` — flag does not exist.
 
@@ -481,25 +510,116 @@ Copies the flag's configuration from `{env_id}` to another environment atomicall
 
 ---
 
+## Change Requests
+
+Only relevant for environments with [`require_approval`](#set-approval-requirement) enabled. A change
+request captures a flag `PATCH` that hasn't been applied yet — see
+[Partially Update a Flag](#partially-update-a-flag) for how one gets created. Someone other than the
+requester must approve it (self-approval is rejected); admins may cancel anyone's pending request,
+mirroring how workspace admins bypass project membership elsewhere.
+
+### List Change Requests
+
+```http
+GET /api/environments/{env_id}/change-requests?status=pending
+```
+
+`status` is optional — one of `pending`, `approved`, `rejected`, `cancelled`. Omit to list all.
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "environment_id": "550e8400-e29b-41d4-a716-446655440000",
+    "flag_key": "dark_mode",
+    "patch": { "is_enabled": true },
+    "requested_by": "alice@acme.com",
+    "status": "pending",
+    "reviewed_by": null,
+    "reason": null,
+    "created_at": "2026-07-04T00:00:00Z",
+    "reviewed_at": null
+  }
+]
+```
+
+---
+
+### Approve Change Request
+
+```http
+POST /api/environments/{env_id}/change-requests/{id}/approve
+```
+
+Applies the stored patch to the flag's *current* state (not a stale snapshot from when the request was filed) and marks the request approved.
+
+**Response** `200 OK` — returns the updated flag.
+
+**Response** `403 Forbidden` — the caller is the original requester.
+
+**Response** `409 Conflict` — the request is no longer pending (already approved/rejected/cancelled).
+
+---
+
+### Reject Change Request
+
+```http
+POST /api/environments/{env_id}/change-requests/{id}/reject
+Content-Type: application/json
+```
+
+```json
+{ "reason": "Not ready for this rollout yet" }
+```
+
+`reason` is optional. The flag is never touched.
+
+**Response** `204 No Content`
+
+---
+
+### Cancel (Withdraw) Change Request
+
+```http
+DELETE /api/environments/{env_id}/change-requests/{id}
+```
+
+Only the original requester or a workspace admin may cancel, and only while still `pending`.
+
+**Response** `204 No Content`
+
+**Response** `404 Not Found` — no such pending request, or the caller doesn't own it.
+
+---
+
 ## Flag Schema
 
 ### Flag Object
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `key` | `string` | Yes | Unique within environment. Alphanumerics, underscores, hyphens. Max 100 chars. |
-| `is_enabled` | `boolean` | Yes | Master switch. `false` always evaluates to `false`. |
+| `key` | `string` | Yes | Unique within environment. Alphanumerics, underscores, hyphens. Max 100 chars. Immutable after creation. |
+| `is_enabled` | `boolean` | Yes | Master switch. `false` always evaluates to the disabled result. |
 | `rollout_percentage` | `integer \| null` | No | 0–100. `null` is treated as 100%. |
 | `description` | `string \| null` | No | Human-readable description. |
-| `rules` | `TargetingRule[]` | No | Targeting rules. Defaults to `[]`. |
+| `rules` | `TargetingRule[]` | No | Targeting rules, evaluated in order (first match wins). Defaults to `[]`. |
+| `flag_type` | `"boolean" \| "string" \| "integer" \| "json"` | No | Variant type. Defaults to `"boolean"`. |
+| `default_value` | any (matching `flag_type`) | No | Returned when enabled, inside the rollout, and no rule matched. |
+| `disabled_value` | any (matching `flag_type`) | No | Returned when disabled, outside the rollout, or a prerequisite fails. |
+| `variants` | `WeightedVariant[]` | No | Weighted multivariate distribution — see [Weighted Variants](guide/concepts.md#weighted-variants-a-b-testing). Defaults to `[]`. |
+| `prerequisites` | `Prerequisite[]` | No | Other flags this flag depends on — see [Prerequisite Flags](guide/concepts.md#prerequisite-flags). Defaults to `[]`. |
 
 ### TargetingRule Object
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `attribute` | `string` | Yes | User attribute name to match against. |
-| `operator` | `Operator` | Yes | Comparison operator. |
-| `values` | `string[]` | Yes | One or more values to match. At least one must match. |
+| `attribute` | `string` | Yes* | User attribute name to match against. Not required when `segment_key` is set. |
+| `operator` | `Operator` | Yes* | Comparison operator. Not required when `segment_key` is set. |
+| `values` | `string[]` | Yes* | One or more values to match. At least one must match. Not required when `segment_key` is set. |
+| `segment_key` | `string \| null` | No | References a named segment instead of a concrete attribute check. Expanded server-side before reaching SDKs. |
+| `variant` | any (matching `flag_type`) | No | Value returned when this rule matches (non-boolean flags). Falls back to `default_value` if unset. |
 
 ### Operator Enum
 
@@ -510,6 +630,27 @@ Copies the flag's configuration from `{env_id}` to another environment atomicall
 | `contains` | Attribute value contains any of the provided values as a substring |
 | `starts_with` | Attribute value starts with any of the provided values |
 | `ends_with` | Attribute value ends with any of the provided values |
+| `greater_than` | Attribute, parsed as a number, is greater than any of the provided values |
+| `greater_than_or_equal` | Attribute, parsed as a number, is greater than or equal to any of the provided values |
+| `less_than` | Attribute, parsed as a number, is less than any of the provided values |
+| `less_than_or_equal` | Attribute, parsed as a number, is less than or equal to any of the provided values |
+
+Non-numeric attribute or rule values never match the four numeric operators (no error — the
+comparison is simply skipped).
+
+### WeightedVariant Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `weight` | `integer` | Yes | Relative weight. Weights need not sum to 100 — normalized against their total. |
+| `value` | any (matching `flag_type`) | Yes | The variant value returned when this weighted bucket is selected. |
+
+### Prerequisite Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `flag_key` | `string` | Yes | The prerequisite flag's key. |
+| `required_value` | any (matching the prerequisite's `flag_type`) | No | The value the prerequisite must resolve to. Omit to just require it be enabled. |
 
 ---
 
@@ -690,6 +831,87 @@ DELETE /api/projects/{project_id}/keys/{id}
 
 ---
 
+## Personal Access Tokens
+
+Personal access tokens are user-owned, not project-scoped — routes are flat
+under `/api/tokens` and always operate on the caller's own tokens. There is
+no admin override; revoking a departing or compromised user's automation
+access is done by deleting the user, which cascades to their tokens.
+
+### List Tokens
+
+```http
+GET /api/tokens
+```
+
+Returns the caller's own tokens. The full token value is never returned after creation.
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Terraform CI",
+    "prefix": "pat_a1b2c3d4e5f6…",
+    "scope": "read_only",
+    "created_at": "2026-07-04T00:00:00Z",
+    "last_used_at": "2026-07-04T09:02:09Z",
+    "expires_at": "2026-08-03T00:00:00Z"
+  }
+]
+```
+
+---
+
+### Create Token
+
+```http
+POST /api/tokens
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Terraform CI",
+  "scope": "read_only",
+  "expires_in_days": 90
+}
+```
+
+- `scope` is `"read_only"` or `"read_write"`. A token authenticated request that is itself `read_only` cannot create a `read_write` token — this would let a leaked read-only credential mint itself a more privileged replacement.
+- `expires_in_days` is optional (1–365); omit for a token that never expires.
+
+**Response** `200 OK` — returns the token including the full value (shown once only).
+
+```json
+{
+  "id": 2,
+  "name": "Terraform CI",
+  "token": "pat_a1b2c3d4e5f6...",
+  "prefix": "pat_a1b2c3d4e5f6…",
+  "scope": "read_only",
+  "created_at": "2026-07-04T00:00:00Z",
+  "expires_at": "2026-10-02T00:00:00Z"
+}
+```
+
+**Response** `403 Forbidden` — a read-only-scoped caller tried to create a read-write token.
+
+---
+
+### Revoke Token
+
+```http
+DELETE /api/tokens/{id}
+```
+
+**Response** `204 No Content`
+
+**Response** `404 Not Found` — no such token owned by the caller.
+
+---
+
 ## Users
 
 Users are workspace-level. Role here is the workspace role; per-project access is managed via Project Members.
@@ -780,17 +1002,21 @@ Opens a persistent SSE connection scoped to the environment associated with the 
 
 1. A `connected` event immediately
 2. One `update` event per existing flag in the key's environment (bootstrap)
-3. `update` events as flags change in that environment in real time
-4. Keep-alive comments every 15 seconds
+3. A `ready` event once the bootstrap replay is complete
+4. `update` events as flags change in that environment in real time
+5. Keep-alive comments every 15 seconds
 
 ### Event: `connected`
 
 ```
 event: connected
-data: true
+data: {"environment_id":"<uuid>"}
 ```
 
-Sent once when the connection is established. SDK clients should clear their local store on receiving this event to prepare for a clean bootstrap.
+Sent once when the connection is established. `environment_id` is `null` for session-cookie
+(dashboard) connections, which aren't scoped to a single environment. SDK clients should clear
+their local store on receiving this event to prepare for a clean bootstrap, and use
+`environment_id` to route impression reporting (`POST /api/environments/{environment_id}/impressions`).
 
 ### Event: `update`
 
@@ -803,6 +1029,17 @@ data: {"type":"UPSERT","env_id":"<uuid>","flag":{"key":"my-flag","is_enabled":tr
 event: update
 data: {"type":"DELETE","env_id":"<uuid>","key":"my-flag"}
 ```
+
+### Event: `ready`
+
+```
+event: ready
+data: "3"
+```
+
+Sent once the full bootstrap replay (the `update` events above) is complete — `data` is the
+number of flags sent. SDK clients should resolve their `connect()` promise on this event rather
+than guessing when bootstrap has finished. Sent on every (re)connection, not just the first.
 
 ### Keep-Alive
 
@@ -818,8 +1055,40 @@ If the SSE connection drops, clients should reconnect with exponential backoff. 
 
 1. Server sends `connected` → SDK clears local store
 2. Server replays all current flags for the environment → SDK rebuilds from scratch
+3. Server sends `ready` → SDK resolves `connect()` again if it hadn't already
 
 This guarantees consistency even after missed updates during the disconnected period.
+
+---
+
+## Flags Snapshot (Poll Fallback)
+
+```http
+GET /flags/snapshot
+Authorization: Bearer sk_live_your_key
+```
+
+Returns the full, segment-expanded flag set for the environment associated with the SDK key, as
+a plain JSON array — the same shape each flag has in an SSE `update` event, but without the
+`type`/`env_id` envelope:
+
+```json
+[
+  { "key": "my-flag", "is_enabled": true, "rollout_percentage": null, "rules": [], "flag_type": "boolean", ... }
+]
+```
+
+Intended as a fallback for SDK clients when the SSE connection at `/stream` cannot be
+established at all — e.g. a corporate proxy or firewall blocking long-lived connections. Official
+SDKs poll this endpoint automatically after a configurable number of consecutive failed SSE
+reconnects (default: 3), and stop polling as soon as SSE reconnects successfully.
+
+Unlike `GET /api/environments/{env_id}/flags` (session-cookie auth only, segment references left
+unexpanded — intended for the dashboard UI), this route is keyed by SDK key alone, exactly like
+`/stream`, and returns segment-expanded flags ready to evaluate against directly.
+
+Returns `400` if called with session-cookie auth rather than an SDK key (the dashboard isn't
+scoped to a single environment the way an SDK key is), and `401` for missing/invalid credentials.
 
 ---
 

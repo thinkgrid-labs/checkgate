@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod change_requests;
 pub mod environments;
 pub mod flags;
 pub mod health;
@@ -8,6 +9,7 @@ pub mod projects;
 pub mod scheduled;
 pub mod segments;
 pub mod session;
+pub mod tokens;
 pub mod users;
 pub mod webhooks;
 
@@ -113,6 +115,15 @@ pub fn read_router() -> Router<AppState> {
         .merge(webhooks::read_router())
         .merge(scheduled::read_router())
         .merge(health::read_router())
+        .merge(tokens::read_router())
+        .merge(change_requests::read_router())
+}
+
+/// Self-service write routes — any authenticated user, no elevated role
+/// required. Handlers enforce their own "self only" scoping (e.g. a user
+/// managing their own personal access tokens).
+pub fn self_service_router() -> Router<AppState> {
+    tokens::self_service_router()
 }
 
 /// SDK ingest routes — any authenticated client; not admin-gated.
@@ -123,7 +134,7 @@ pub fn ingest_router() -> Router<AppState> {
 
 /// Flag write routes — require editor or admin role (layer added in main.rs).
 pub fn editor_write_router() -> Router<AppState> {
-    flags::write_router()
+    flags::write_router().merge(change_requests::write_router())
 }
 
 /// Admin-only write routes: environments, SDK keys, users, projects (layer added in main.rs).

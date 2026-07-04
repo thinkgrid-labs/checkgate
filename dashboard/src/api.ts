@@ -25,7 +25,7 @@ function baseUrl(): string {
   return import.meta.env.VITE_API_URL ?? ''
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestRaw<T>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
   const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
     // `same-origin` ensures the HttpOnly session cookie is sent automatically.
@@ -50,13 +50,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(text || res.statusText || `Error ${res.status}`)
   }
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
+  if (res.status === 204) return { status: res.status, body: undefined as T }
+  return { status: res.status, body: await res.json() as T }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await requestRaw<T>(path, init)).body
 }
 
 export const api = {
-  listFlags(envId: string): Promise<Flag[]> {
-    return request(`/api/environments/${envId}/flags`)
+  listFlags(
+    envId: string,
+    opts: { includeArchived?: boolean; tag?: string } = {},
+  ): Promise<Flag[]> {
+    const params = new URLSearchParams()
+    if (opts.includeArchived) params.set('include_archived', 'true')
+    if (opts.tag) params.set('tag', opts.tag)
+    const qs = params.toString()
+    return request(`/api/environments/${envId}/flags${qs ? `?${qs}` : ''}`)
   },
 
   getFlag(envId: string, key: string): Promise<Flag> {
@@ -70,11 +81,21 @@ export const api = {
     })
   },
 
-  patchFlag(envId: string, key: string, patch: FlagPatch): Promise<Flag> {
-    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    })
+  // Returns { applied: true, flag } when the patch took effect immediately,
+  // or { applied: false, changeRequest } when the environment requires
+  // approval and the patch was queued instead (202 Accepted).
+  async patchFlag(
+    envId: string,
+    key: string,
+    patch: FlagPatch,
+  ): Promise<{ applied: true; flag: Flag } | { applied: false; changeRequest: ChangeRequest }> {
+    const { status, body } = await requestRaw<Flag | ChangeRequest>(
+      `/api/environments/${envId}/flags/${encodeURIComponent(key)}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    )
+    return status === 202
+      ? { applied: false, changeRequest: body as ChangeRequest }
+      : { applied: true, flag: body as Flag }
   },
 
   deleteFlag(envId: string, key: string): Promise<void> {
@@ -87,6 +108,18 @@ export const api = {
     return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}/promote`, {
       method: 'POST',
       body: JSON.stringify({ target_env_id: targetEnvId }),
+    })
+  },
+
+  archiveFlag(envId: string, key: string): Promise<Flag> {
+    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}/archive`, {
+      method: 'POST',
+    })
+  },
+
+  unarchiveFlag(envId: string, key: string): Promise<Flag> {
+    return request(`/api/environments/${envId}/flags/${encodeURIComponent(key)}/unarchive`, {
+      method: 'POST',
     })
   },
 
@@ -281,6 +314,82 @@ export const keysApi = {
 
   revoke(projectId: string, id: number): Promise<void> {
     return request(`/api/projects/${projectId}/keys/${id}`, { method: 'DELETE' })
+  },
+}
+
+export type TokenScope = 'read_only' | 'read_write'
+
+export interface TokenInfo {
+  id: number
+  name: string
+  prefix: string
+  scope: TokenScope
+  created_at: string
+  last_used_at: string | null
+  expires_at: string | null
+}
+
+export interface NewTokenResponse {
+  id: number
+  name: string
+  token: string
+  prefix: string
+  scope: TokenScope
+  created_at: string
+  expires_at: string | null
+}
+
+export const tokensApi = {
+  list(): Promise<TokenInfo[]> {
+    return request('/api/tokens')
+  },
+
+  create(name: string, scope: TokenScope, expiresInDays: number | null): Promise<NewTokenResponse> {
+    return request('/api/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ name, scope, expires_in_days: expiresInDays }),
+    })
+  },
+
+  revoke(id: number): Promise<void> {
+    return request(`/api/tokens/${id}`, { method: 'DELETE' })
+  },
+}
+
+export type ChangeRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export interface ChangeRequest {
+  id: number
+  environment_id: string
+  flag_key: string
+  patch: Record<string, unknown>
+  requested_by: string
+  status: ChangeRequestStatus
+  reviewed_by: string | null
+  reason: string | null
+  created_at: string
+  reviewed_at: string | null
+}
+
+export const changeRequestsApi = {
+  list(envId: string, status?: ChangeRequestStatus): Promise<ChangeRequest[]> {
+    const qs = status ? `?status=${status}` : ''
+    return request(`/api/environments/${envId}/change-requests${qs}`)
+  },
+
+  approve(envId: string, id: number): Promise<Flag> {
+    return request(`/api/environments/${envId}/change-requests/${id}/approve`, { method: 'POST' })
+  },
+
+  reject(envId: string, id: number, reason?: string): Promise<void> {
+    return request(`/api/environments/${envId}/change-requests/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? null }),
+    })
+  },
+
+  cancel(envId: string, id: number): Promise<void> {
+    return request(`/api/environments/${envId}/change-requests/${id}`, { method: 'DELETE' })
   },
 }
 

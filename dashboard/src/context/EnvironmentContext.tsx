@@ -19,6 +19,7 @@ export interface Environment {
   color: string
   is_default: boolean
   created_at: string
+  require_approval: boolean
 }
 
 interface EnvironmentContextValue {

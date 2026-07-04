@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::{delete, get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tracing::{error, info, warn};
@@ -23,6 +22,7 @@ pub struct Environment {
     pub color: String,
     pub is_default: bool,
     pub created_at: String,
+    pub require_approval: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +30,11 @@ pub struct CreateEnvironmentRequest {
     pub name: String,
     pub slug: String,
     pub color: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetRequireApprovalRequest {
+    pub require_approval: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +63,7 @@ fn is_valid_hex_color(color: &str) -> bool {
 /// Returns true if the caller is a workspace admin or project member.
 async fn can_access_project(
     db: &sqlx::PgPool,
-    jar: &PrivateCookieJar,
+    jar: &AuthContext,
     project_id: &str,
 ) -> Result<(), StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
@@ -91,7 +96,7 @@ async fn can_access_project(
 /// Returns true only for workspace admin or project-level admin.
 async fn can_admin_project(
     db: &sqlx::PgPool,
-    jar: &PrivateCookieJar,
+    jar: &AuthContext,
     project_id: &str,
 ) -> Result<(), StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
@@ -127,13 +132,13 @@ async fn can_admin_project(
 
 async fn list_environments(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
 ) -> Result<Json<Vec<Environment>>, StatusCode> {
     can_access_project(&state.db, &jar, &project_id).await?;
 
     let rows = sqlx::query(
-        "SELECT id::text, name, slug, color, is_default, created_at::text \
+        "SELECT id::text, name, slug, color, is_default, created_at::text, require_approval \
          FROM environments WHERE project_id = $1::uuid ORDER BY created_at ASC",
     )
     .bind(&project_id)
@@ -153,6 +158,7 @@ async fn list_environments(
             color: r.get("color"),
             is_default: r.get("is_default"),
             created_at: r.get("created_at"),
+            require_approval: r.get("require_approval"),
         })
         .collect();
 
@@ -161,7 +167,7 @@ async fn list_environments(
 
 async fn create_environment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(project_id): Path<String>,
     Json(req): Json<CreateEnvironmentRequest>,
 ) -> Result<Json<Environment>, StatusCode> {
@@ -188,7 +194,7 @@ async fn create_environment(
 
     let row = sqlx::query(
         "INSERT INTO environments (name, slug, color, project_id) VALUES ($1, $2, $3, $4::uuid) \
-         RETURNING id::text, name, slug, color, is_default, created_at::text",
+         RETURNING id::text, name, slug, color, is_default, created_at::text, require_approval",
     )
     .bind(&name)
     .bind(&slug)
@@ -212,6 +218,7 @@ async fn create_environment(
         color: row.get("color"),
         is_default: row.get("is_default"),
         created_at: row.get("created_at"),
+        require_approval: row.get("require_approval"),
     };
 
     info!(slug = %env.slug, project_id = %project_id, "Environment created");
@@ -220,7 +227,7 @@ async fn create_environment(
 
 async fn delete_environment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((project_id, env_id)): Path<(String, String)>,
 ) -> Result<StatusCode, StatusCode> {
     can_admin_project(&state.db, &jar, &project_id).await?;
@@ -281,7 +288,7 @@ async fn delete_environment(
 
 async fn set_default_environment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((project_id, env_id)): Path<(String, String)>,
 ) -> Result<Json<Environment>, StatusCode> {
     can_admin_project(&state.db, &jar, &project_id).await?;
@@ -311,7 +318,7 @@ async fn set_default_environment(
     // Set the new default first so there is never a window with zero defaults.
     let row = sqlx::query(
         "UPDATE environments SET is_default = true WHERE id = $1::uuid \
-         RETURNING id::text, name, slug, color, is_default, created_at::text",
+         RETURNING id::text, name, slug, color, is_default, created_at::text, require_approval",
     )
     .bind(&env_id)
     .fetch_optional(&mut *db_tx)
@@ -348,9 +355,53 @@ async fn set_default_environment(
         color: row.get("color"),
         is_default: row.get("is_default"),
         created_at: row.get("created_at"),
+        require_approval: row.get("require_approval"),
     };
 
     info!(slug = %env.slug, project_id = %project_id, "Default environment updated");
+    Ok(Json(env))
+}
+
+/// POST /api/projects/:project_id/environments/:env_id/require-approval
+///
+/// Toggles whether flag PATCHes in this environment must go through a change
+/// request instead of applying immediately. Admin only, like other
+/// environment-level settings — this is a guard rail, not a per-user preference.
+async fn set_require_approval(
+    State(state): State<AppState>,
+    jar: AuthContext,
+    Path((project_id, env_id)): Path<(String, String)>,
+    Json(req): Json<SetRequireApprovalRequest>,
+) -> Result<Json<Environment>, StatusCode> {
+    can_admin_project(&state.db, &jar, &project_id).await?;
+
+    let row = sqlx::query(
+        "UPDATE environments SET require_approval = $1 \
+         WHERE id = $2::uuid AND project_id = $3::uuid \
+         RETURNING id::text, name, slug, color, is_default, created_at::text, require_approval",
+    )
+    .bind(req.require_approval)
+    .bind(&env_id)
+    .bind(&project_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to set require_approval");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let env = Environment {
+        id: row.get("id"),
+        name: row.get("name"),
+        slug: row.get("slug"),
+        color: row.get("color"),
+        is_default: row.get("is_default"),
+        created_at: row.get("created_at"),
+        require_approval: row.get("require_approval"),
+    };
+
+    info!(slug = %env.slug, project_id = %project_id, require_approval = req.require_approval, "Environment approval requirement updated");
     Ok(Json(env))
 }
 
@@ -378,5 +429,9 @@ pub fn write_router() -> Router<AppState> {
         .route(
             "/projects/{project_id}/environments/{env_id}/default",
             post(set_default_environment),
+        )
+        .route(
+            "/projects/{project_id}/environments/{env_id}/require-approval",
+            post(set_require_approval),
         )
 }

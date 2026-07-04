@@ -176,7 +176,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Session key ───────────────────────────────────────────────────────────
 
-    const DEV_SESSION_KEY: &str = "INSECURE_DEFAULT_DEV_KEY_CHANGE_IN_PRODUCTION_SIDEKICK";
+    const DEV_SESSION_KEY: &str = "INSECURE_DEFAULT_DEV_KEY_CHANGE_IN_PRODUCTION_CHECKGATE";
 
     let session_key = match std::env::var("SESSION_SECRET") {
         Ok(ref s) if s.len() >= 32 => {
@@ -443,6 +443,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Standard API routes (65 KB body limit).
     let api_routes = api::read_router()
+        .merge(api::self_service_router())
         .merge(editor_write_api)
         .merge(admin_write_api)
         .layer(DefaultBodyLimit::max(API_BODY_LIMIT));
@@ -455,6 +456,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api", api_routes)
         .nest("/api", ingest_routes)
         .route("/stream", get(stream::sse_handler))
+        .route("/flags/snapshot", get(stream::flags_snapshot_handler))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             auth::require_auth,

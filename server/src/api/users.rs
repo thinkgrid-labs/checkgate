@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -7,13 +7,20 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::Row;
 use tracing::{error, info, warn};
 
 use super::session::hash_password;
+
+/// Formats a timestamp as RFC 3339 for JSON responses. `OffsetDateTime`'s
+/// `Display`/`to_string()` uses a proprietary space-separated, triple-colon-offset
+/// format that JavaScript's `Date` cannot parse.
+fn format_rfc3339(dt: time::OffsetDateTime) -> String {
+    dt.format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_else(|_| dt.to_string())
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,19 +43,13 @@ pub struct CreateUserRequest {
     pub password: String,
 }
 
-/// Minimal session claims needed to identify the caller in handlers.
-#[derive(Deserialize)]
-struct CallerClaims {
-    email: String,
-}
-
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
 pub async fn list_users(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
 ) -> Result<Json<Vec<UserInfo>>, StatusCode> {
     // SDK key auth (None from get_session_claims) is admin-equivalent.
     // Session users must be admin — editors/viewers cannot enumerate all workspace accounts.
@@ -76,7 +77,7 @@ pub async fn list_users(
                 name: row.get("name"),
                 email: row.get("email"),
                 role: row.get("role"),
-                created_at: created_at.to_string(),
+                created_at: format_rfc3339(created_at),
             }
         })
         .collect();
@@ -149,20 +150,18 @@ pub async fn create_user(
         name,
         email,
         role,
-        created_at: created_at.to_string(),
+        created_at: format_rfc3339(created_at),
     })
     .into_response())
 }
 
 pub async fn delete_user(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, StatusCode> {
     // Prevent self-deletion — the client check can be bypassed via direct API calls.
-    if let Some(cookie) = jar.get("lg_session")
-        && let Ok(claims) = serde_json::from_str::<CallerClaims>(cookie.value())
-    {
+    if let Some(claims) = get_session_claims(&jar) {
         let self_id: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
             .bind(&claims.email)
             .fetch_optional(&state.db)

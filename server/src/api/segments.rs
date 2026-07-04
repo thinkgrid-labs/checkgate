@@ -1,4 +1,4 @@
-use crate::auth::get_session_claims;
+use crate::auth::{AuthContext, get_session_claims};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use checkgate_core::evaluator::{Flag, TargetingRule};
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
@@ -178,7 +177,7 @@ pub fn write_router() -> Router<AppState> {
 
 async fn list_segments(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
 ) -> Result<Json<Vec<Segment>>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -217,7 +216,7 @@ async fn list_segments(
 
 async fn get_segment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, key)): Path<(String, String)>,
 ) -> Result<Json<Segment>, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -254,7 +253,7 @@ async fn get_segment(
 
 async fn create_segment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
     Json(body): Json<CreateSegmentBody>,
 ) -> Result<Json<Segment>, StatusCode> {
@@ -308,7 +307,7 @@ async fn create_segment(
 
 async fn patch_segment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, key)): Path<(String, String)>,
     Json(body): Json<PatchSegmentBody>,
 ) -> Result<Json<Segment>, StatusCode> {
@@ -370,7 +369,7 @@ async fn patch_segment(
 
 async fn delete_segment(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path((env_id, key)): Path<(String, String)>,
 ) -> Result<StatusCode, StatusCode> {
     check_env_access(&state.db, &jar, &env_id).await?;
@@ -404,7 +403,7 @@ async fn delete_segment(
 
 /// Check that the caller has at least editor role. SDK key auth is treated as
 /// admin-equivalent and always passes.
-fn require_editor(jar: &PrivateCookieJar) -> Result<(), StatusCode> {
+fn require_editor(jar: &AuthContext) -> Result<(), StatusCode> {
     let Some(claims) = get_session_claims(jar) else {
         return Ok(()); // SDK key auth
     };

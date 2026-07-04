@@ -1,3 +1,4 @@
+use crate::auth::AuthContext;
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -5,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
@@ -45,7 +45,7 @@ pub fn read_router() -> Router<AppState> {
 
 async fn list_audit(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
     Query(q): Query<AuditQuery>,
 ) -> Result<Json<Vec<AuditEntry>>, StatusCode> {

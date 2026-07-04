@@ -1,4 +1,13 @@
-export type Operator = 'equals' | 'not_equals' | 'contains' | 'starts_with' | 'ends_with'
+export type Operator =
+  | 'equals'
+  | 'not_equals'
+  | 'contains'
+  | 'starts_with'
+  | 'ends_with'
+  | 'greater_than'
+  | 'greater_than_or_equal'
+  | 'less_than'
+  | 'less_than_or_equal'
 
 export type FlagType = 'boolean' | 'string' | 'integer' | 'json'
 
@@ -13,6 +22,18 @@ export interface TargetingRule {
   variant?: FlagValue
 }
 
+export interface WeightedVariant {
+  /** Relative weight — need not sum to 100 across all variants, only proportions matter. */
+  weight: number
+  value: FlagValue
+}
+
+export interface Prerequisite {
+  flag_key: string
+  /** Value the prerequisite flag must resolve to. Omit to just require it be enabled. */
+  required_value?: FlagValue
+}
+
 export interface Flag {
   key: string
   is_enabled: boolean
@@ -22,6 +43,25 @@ export interface Flag {
   flag_type?: FlagType
   default_value?: FlagValue
   disabled_value?: FlagValue
+  /**
+   * Weighted distribution across multiple variant values (e.g. a 60/30/10 A/B/C split).
+   * When non-empty, an enabled evaluation that matches no targeting rule is bucketed across
+   * these weighted variants instead of returning `default_value`.
+   */
+  variants?: WeightedVariant[]
+  /**
+   * Other flags this flag depends on. If any prerequisite is not satisfied, this flag
+   * evaluates as disabled — even if its own `is_enabled`/rules/rollout would otherwise
+   * say yes. Checked before rules and rollout.
+   */
+  prerequisites?: Prerequisite[]
+  /** Free-form labels for search/filtering. Management metadata only — never sent to SDKs. */
+  tags?: string[]
+  /** Email of the person responsible for this flag. Management metadata only. */
+  owner_email?: string | null
+  /** RFC 3339 timestamp if archived (hidden from the default list), else absent. Purely a
+   *  dashboard hygiene concept — does not affect evaluation. */
+  archived_at?: string | null
 }
 
 export type FlagPatch = Partial<Omit<Flag, 'key'>>
@@ -54,7 +94,7 @@ export interface AuditEntry {
   environment_id: string
   flag_key: string
   actor_email: string | null
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PROMOTE'
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PROMOTE' | 'ARCHIVE' | 'UNARCHIVE'
   before_data: Record<string, unknown> | null
   after_data: Record<string, unknown> | null
   metadata: Record<string, unknown> | null

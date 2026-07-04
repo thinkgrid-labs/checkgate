@@ -1,3 +1,4 @@
+use crate::auth::AuthContext;
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -5,7 +6,6 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use axum_extra::extract::cookie::PrivateCookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tracing::{error, info, warn};
@@ -16,12 +16,18 @@ const MAX_BATCH: usize = 500;
 // Types
 // ---------------------------------------------------------------------------
 
+// `time`'s default (de)serialization is a proprietary space-separated,
+// triple-colon-offset format that JavaScript's `Date` cannot parse —
+// `time::serde::rfc3339` gives proper RFC 3339 (`"2026-07-04T03:19:17Z"`)
+// on every OffsetDateTime field in this module.
+
 #[derive(Debug, Deserialize)]
 pub struct ImpressionPayload {
     pub flag_key: String,
     pub user_id: Option<String>,
     pub value: String,
     pub context: Option<serde_json::Value>,
+    #[serde(default, with = "time::serde::rfc3339::option")]
     pub evaluated_at: Option<time::OffsetDateTime>,
 }
 
@@ -32,6 +38,7 @@ pub struct Impression {
     pub user_id: Option<String>,
     pub value: String,
     pub context: Option<serde_json::Value>,
+    #[serde(with = "time::serde::rfc3339")]
     pub evaluated_at: time::OffsetDateTime,
 }
 
@@ -42,6 +49,7 @@ pub struct ImpressionStats {
     pub true_count: i64,
     pub false_count: i64,
     pub unique_users: i64,
+    #[serde(with = "time::serde::rfc3339::option")]
     pub last_seen: Option<time::OffsetDateTime>,
 }
 
@@ -187,7 +195,7 @@ async fn ingest_impressions(
 /// `total` always reflects the count matching the base filters (ignoring `since_id`).
 async fn list_impressions(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<ImpressionListResponse>, StatusCode> {
@@ -261,7 +269,7 @@ async fn list_impressions(
 /// Returns per-flag aggregate counts: total evals, true/false split, unique users.
 async fn impression_stats(
     State(state): State<AppState>,
-    jar: PrivateCookieJar,
+    jar: AuthContext,
     Path(env_id): Path<String>,
 ) -> Result<Json<Vec<ImpressionStats>>, StatusCode> {
     super::flags::check_env_access(&state.db, &jar, &env_id).await?;

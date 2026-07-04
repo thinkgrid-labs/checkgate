@@ -91,7 +91,7 @@ impl CheckgateCore {
             key: user_key,
             attributes: user_attributes,
         };
-        evaluate(flag.as_ref(), &ctx)
+        evaluate(flag.as_ref(), &ctx, &self.store)
     }
 
     /// Evaluate a flag and return the resolved variant value as a JSON string.
@@ -111,7 +111,7 @@ impl CheckgateCore {
             key: user_key,
             attributes: user_attributes,
         };
-        let result = evaluate_variant(flag.as_ref(), &ctx);
+        let result = evaluate_variant(flag.as_ref(), &ctx, &self.store);
         serde_json::to_string(&result.value).unwrap_or_else(|_| "null".to_string())
     }
 
@@ -132,7 +132,7 @@ impl CheckgateCore {
             key: user_key,
             attributes: user_attributes,
         };
-        let result = evaluate_variant(flag.as_ref(), &ctx);
+        let result = evaluate_variant(flag.as_ref(), &ctx, &self.store);
         serde_json::to_string(&result).unwrap_or_else(|_| "null".to_string())
     }
 }

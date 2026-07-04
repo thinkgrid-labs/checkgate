@@ -2,11 +2,15 @@ import { Trash2, Plus, Tags } from 'lucide-react'
 import type { FlagType, FlagValue, Segment, TargetingRule, Operator } from '../types'
 
 const OPERATORS: { value: Operator; label: string }[] = [
-  { value: 'equals',      label: 'equals' },
-  { value: 'not_equals',  label: 'does not equal' },
-  { value: 'contains',    label: 'contains' },
-  { value: 'starts_with', label: 'starts with' },
-  { value: 'ends_with',   label: 'ends with' },
+  { value: 'equals',                label: 'equals' },
+  { value: 'not_equals',            label: 'does not equal' },
+  { value: 'contains',              label: 'contains' },
+  { value: 'starts_with',           label: 'starts with' },
+  { value: 'ends_with',             label: 'ends with' },
+  { value: 'greater_than',          label: '> (greater than)' },
+  { value: 'greater_than_or_equal', label: '≥ (greater than or equal)' },
+  { value: 'less_than',             label: '< (less than)' },
+  { value: 'less_than_or_equal',    label: '≤ (less than or equal)' },
 ]
 
 const inputClass =

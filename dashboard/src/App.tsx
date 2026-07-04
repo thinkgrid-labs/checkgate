@@ -15,6 +15,8 @@ import Segments from './pages/Segments'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import Environments from './pages/Environments'
+import EnvironmentDiff from './pages/EnvironmentDiff'
+import ChangeRequests from './pages/ChangeRequests'
 import Impressions from './pages/Impressions'
 import Projects from './pages/Projects'
 import ProjectSettings from './pages/ProjectSettings'
@@ -64,12 +66,14 @@ export default function App() {
                     <Route path="/flags/new" element={<FlagEditor />} />
                     <Route path="/flags/:key/edit" element={<FlagEditor />} />
                     <Route path="/segments" element={<Segments />} />
+                    <Route path="/change-requests" element={<ChangeRequests />} />
                     <Route path="/schedule" element={<Scheduled />} />
                     <Route path="/impressions" element={<Impressions />} />
                     <Route path="/audit" element={<AuditLog />} />
                     <Route path="/sdk-health" element={<SdkHealth />} />
                     <Route path="/webhooks" element={<Webhooks />} />
                     <Route path="/environments" element={<Environments />} />
+                    <Route path="/environments/diff" element={<EnvironmentDiff />} />
                     <Route path="/projects" element={<Projects />} />
                     <Route path="/projects/:projectId" element={<ProjectSettings />} />
                     <Route path="/users" element={<Users />} />

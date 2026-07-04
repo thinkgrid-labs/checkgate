@@ -178,17 +178,28 @@ This means a single Checkgate installation can serve multiple projects with mult
 2. Server looks up the key → resolves `environment_id`
 3. Server sends `connected` event — SDK clears its local store
 4. Server bootstraps the SDK by replaying all current flags for that environment
-5. Server sends `keep-alive` pings every 15 seconds
-6. On flag change, only clients in the matching environment receive the update
-7. On reconnect, the SDK clears its local store and re-bootstraps from scratch
+5. Server sends `ready` — SDK resolves its `connect()` promise
+6. Server sends `keep-alive` pings every 15 seconds
+7. On flag change, only clients in the matching environment receive the update
+8. On reconnect, the SDK clears its local store and re-bootstraps from scratch, then receives `ready` again
 
 ### Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `connected` | `"true"` | Connection established; SDK resets its store |
+| `connected` | `{"environment_id": "<uuid>" \| null}` | Connection established; SDK resets its store |
 | `update` | JSON string | A flag was upserted or deleted in this environment |
+| `ready` | flag count (string) | Bootstrap replay complete; SDK resolves `connect()` |
 | (keep-alive) | `keep-alive-text` | Heartbeat every 15 seconds |
+
+### Poll Fallback
+
+`GET /flags/snapshot` (SDK-key-authed, no session-cookie support) returns the same
+segment-expanded flag set as an SSE bootstrap, as a plain JSON array, for SDK clients whose
+network cannot sustain a long-lived SSE connection at all (e.g. a corporate proxy). Official SDKs
+poll this endpoint on a timer after a configurable number of consecutive failed `/stream`
+reconnects, and stop polling as soon as `/stream` reconnects successfully — SSE retries continue
+in the background the whole time. See [API Reference → Flags Snapshot](../api-reference.md#flags-snapshot-poll-fallback).
 
 ## Authentication
 
