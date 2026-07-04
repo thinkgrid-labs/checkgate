@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Key, Users, Settings, Plus, Trash2, Copy, Check, AlertCircle, X, ChevronDown } from 'lucide-react'
 import { projectsApi, keysApi, userApi, type ProjectSummary, type ProjectMemberInfo, type SdkKeyInfo, type NewKeyResponse } from '../api'
 import { useProject } from '../context/ProjectContext'
@@ -438,13 +438,20 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
+const VALID_TABS: Tab[] = ['members', 'keys', 'settings']
+
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const { reload: reloadContext } = useProject()
+  const [searchParams] = useSearchParams()
   const [project, setProject] = useState<ProjectSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('members')
+  // Deep-linkable via ?tab=keys (e.g. from Settings' "get an SDK key" pointer).
+  const requestedTab = searchParams.get('tab')
+  const [tab, setTab] = useState<Tab>(
+    VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'members',
+  )
 
   useEffect(() => {
     if (!projectId) return
@@ -472,7 +479,7 @@ export default function ProjectSettings() {
   }
 
   return (
-    <div className="max-w-2xl">
+    <div className="w-full max-w-4xl">
       <div className="mb-6">
         <button
           onClick={() => navigate('/projects')}

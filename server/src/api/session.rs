@@ -527,10 +527,17 @@ pub async fn setup_complete(
     ))
 }
 
-/// Returns workspace name — used by the login page to personalise the UI.
+/// Returns workspace name and setup status — public (no session required),
+/// so the frontend can tell "setup already done, go to /login" apart from
+/// "setup not done yet" *before* the user has any session cookie. `/api/auth/me`
+/// can't be used for this on its own: it 401s for anyone without a valid
+/// session, which is exactly the case of someone who needs to log in.
 pub async fn workspace_info(State(state): State<AppState>) -> Json<serde_json::Value> {
     let workspace_name = get_workspace_name(&state).await;
-    Json(serde_json::json!({ "workspace_name": workspace_name }))
+    let is_setup_complete = get_is_setup_complete(&state).await;
+    Json(
+        serde_json::json!({ "workspace_name": workspace_name, "is_setup_complete": is_setup_complete }),
+    )
 }
 
 // ---------------------------------------------------------------------------

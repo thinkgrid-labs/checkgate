@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Globe, LogOut, Shield, Info, Code2, Copy, Check, KeyRound, Plus, Trash2, AlertCircle, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useProject } from '../context/ProjectContext'
 import { tokensApi, type TokenInfo, type NewTokenResponse, type TokenScope } from '../api'
 
 function SectionCard({ icon: Icon, title, description, children }: {
@@ -233,6 +234,7 @@ function PersonalAccessTokensSection() {
 
 export default function Settings() {
   const { logout, session } = useAuth()
+  const { activeProject } = useProject()
   const navigate = useNavigate()
 
   async function handleLogout() {
@@ -268,92 +270,105 @@ await client.connect()
 const enabled = client.getBool('feature_x', false, { userId: req.user.id })`
 
   return (
-    <div className="max-w-2xl space-y-5">
-
-      {/* SDK quick-start */}
-      <SectionCard
-        icon={Code2}
-        title="SDK quick-start"
-        description="Copy a snippet to connect your app to this Checkgate instance."
-      >
-        <div className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Browser / Node (ESM)
-            </p>
-            <CodeBlock code={jsSnippet} />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Node.js (server-side evaluation)
-            </p>
-            <CodeBlock code={nodeSnippet} />
-          </div>
-          <p className="text-xs text-gray-400">
-            Replace <code className="text-gray-600">sk_live_…</code> with an SDK key from the{' '}
-            <a href="/settings" className="text-emerald-600 hover:underline">Settings → SDK Keys</a> page
-            (or the key shown during initial setup).
-          </p>
-        </div>
-      </SectionCard>
-
-      {/* Auth info */}
-      <SectionCard
-        icon={Shield}
-        title="Authentication"
-        description="Sessions use HttpOnly encrypted cookies — the SDK key is never exposed to JavaScript."
-      >
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-            <Info className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Your SDK key is validated server-side at login. After that, a short-lived
-              encrypted cookie keeps you authenticated. The key is never stored in your browser.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-              <p className="text-gray-500 mb-0.5">Cookie flags</p>
-              <p className="text-gray-800 font-mono">HttpOnly · SameSite=Strict</p>
+    <div className="w-full space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        {/* Main column — things you actively use/copy */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* SDK quick-start */}
+          <SectionCard
+            icon={Code2}
+            title="SDK quick-start"
+            description="Copy a snippet to connect your app to this Checkgate instance."
+          >
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Browser / Node (ESM)
+                </p>
+                <CodeBlock code={jsSnippet} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Node.js (server-side evaluation)
+                </p>
+                <CodeBlock code={nodeSnippet} />
+              </div>
+              <p className="text-xs text-gray-400">
+                Replace <code className="text-gray-600">sk_live_…</code> with an SDK key from the{' '}
+                {activeProject ? (
+                  <Link to={`/projects/${activeProject.id}?tab=keys`} className="text-emerald-600 hover:underline">
+                    Project Settings → SDK Keys
+                  </Link>
+                ) : (
+                  <span className="text-gray-500">Project Settings → SDK Keys</span>
+                )}{' '}
+                page (or the key shown during initial setup).
+              </p>
             </div>
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-              <p className="text-gray-500 mb-0.5">Session TTL</p>
-              <p className="text-gray-800 font-mono">7 days</p>
+          </SectionCard>
+
+          {/* Personal access tokens */}
+          <PersonalAccessTokensSection />
+        </div>
+
+        {/* Sidebar — informational, rarely touched */}
+        <div className="space-y-5">
+          {/* Auth info */}
+          <SectionCard
+            icon={Shield}
+            title="Authentication"
+            description="Sessions use HttpOnly encrypted cookies — the SDK key is never exposed to JavaScript."
+          >
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                <Info className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Your SDK key is validated server-side at login. After that, a short-lived
+                  encrypted cookie keeps you authenticated. The key is never stored in your browser.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <p className="text-gray-500 mb-0.5">Cookie flags</p>
+                  <p className="text-gray-800 font-mono">HttpOnly · SameSite=Strict</p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <p className="text-gray-500 mb-0.5">Session TTL</p>
+                  <p className="text-gray-800 font-mono">7 days</p>
+                </div>
+              </div>
             </div>
-          </div>
+          </SectionCard>
+
+          {/* API endpoint */}
+          <SectionCard
+            icon={Globe}
+            title="API endpoint"
+            description="The dashboard communicates with the Checkgate server at this origin."
+          >
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-200">
+              <code className="text-emerald-600 text-sm flex-1 truncate">{apiOrigin}</code>
+            </div>
+            <p className="mt-2 text-xs text-gray-400">
+              Set <code className="text-gray-600">VITE_API_URL</code> at build time to point at a different server.
+            </p>
+          </SectionCard>
+
+          {/* Account */}
+          <SectionCard
+            icon={LogOut}
+            title="Account"
+            description={`Signed in as ${session?.user.email ?? '—'} · ${session?.user.role ?? ''}`}
+          >
+            <button
+              onClick={() => void handleLogout()}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors border border-gray-200"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Sign out
+            </button>
+          </SectionCard>
         </div>
-      </SectionCard>
-
-      {/* Personal access tokens */}
-      <PersonalAccessTokensSection />
-
-      {/* API endpoint */}
-      <SectionCard
-        icon={Globe}
-        title="API endpoint"
-        description="The dashboard communicates with the Checkgate server at this origin."
-      >
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-200">
-          <code className="text-emerald-600 text-sm flex-1 truncate">{apiOrigin}</code>
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          Set <code className="text-gray-600">VITE_API_URL</code> at build time to point at a different server.
-        </p>
-      </SectionCard>
-
-      {/* Account */}
-      <SectionCard
-        icon={LogOut}
-        title="Account"
-        description={`Signed in as ${session?.user.email ?? '—'} · ${session?.user.role ?? ''}`}
-      >
-        <button
-          onClick={() => void handleLogout()}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors border border-gray-200"
-        >
-          <LogOut className="w-3.5 h-3.5" /> Sign out
-        </button>
-      </SectionCard>
+      </div>
     </div>
   )
 }

@@ -23,7 +23,12 @@ import ProjectSettings from './pages/ProjectSettings'
 import Webhooks from './pages/Webhooks'
 
 function RequireAuth({ children }: { readonly children: React.ReactNode }) {
-  const { session, sessionLoading, isSetupComplete } = useAuth()
+  const { session, sessionLoading, isSetupComplete, setupLoading } = useAuth()
+  // Must not act on isSetupComplete until the authoritative check resolves —
+  // its pre-check value is only a localStorage guess, and routing to /setup
+  // on a wrong guess is a one-way trip (nothing there re-checks and bounces
+  // back once the real value arrives).
+  if (setupLoading) return null
   if (!isSetupComplete) return <Navigate to="/setup" replace />
   if (sessionLoading) return null
   if (!session) return <Navigate to="/login" replace />
@@ -31,10 +36,18 @@ function RequireAuth({ children }: { readonly children: React.ReactNode }) {
 }
 
 function PublicOnly({ children }: { readonly children: React.ReactNode }) {
-  const { session, sessionLoading, isSetupComplete } = useAuth()
+  const { session, sessionLoading, isSetupComplete, setupLoading } = useAuth()
+  if (setupLoading) return null
   if (!isSetupComplete) return <Navigate to="/setup" replace />
   if (sessionLoading) return null
   if (session) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function SetupOnly({ children }: { readonly children: React.ReactNode }) {
+  const { isSetupComplete, setupLoading } = useAuth()
+  if (setupLoading) return null
+  if (isSetupComplete) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
@@ -42,7 +55,14 @@ export default function App() {
   return (
     <Routes>
       {/* Auth routes (no sidebar) */}
-      <Route path="/setup" element={<Setup />} />
+      <Route
+        path="/setup"
+        element={
+          <SetupOnly>
+            <Setup />
+          </SetupOnly>
+        }
+      />
       <Route
         path="/login"
         element={

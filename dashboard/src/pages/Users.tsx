@@ -233,7 +233,7 @@ export default function Users() {
   }
 
   return (
-    <div className="w-full max-w-3xl space-y-4">
+    <div className="w-full space-y-4">
       {showModal && (
         <AddUserModal
           onClose={() => setShowModal(false)}

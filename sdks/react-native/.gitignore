@@ -3,3 +3,9 @@
 # fresh by CI before every release — committing it risks it silently drifting
 # out of sync with core/ between releases (as it had, prior to this).
 /rust-core
+
+# Local Gradle build cache — machine-specific, never meant to be committed.
+# Got swept into git at some point and, because package.json's `files` field
+# includes the whole `android/` directory, shipped inside the published npm
+# tarball too (harmless but junk — see v0.1.18 postmortem).
+android/.gradle

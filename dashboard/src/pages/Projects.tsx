@@ -111,7 +111,7 @@ export default function Projects() {
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Projects</h1>

@@ -80,7 +80,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 bg-white border-r border-gray-200">
+      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 xl:p-20 bg-white border-r border-gray-200">
         <div className="flex items-center gap-3">
           <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-50 overflow-hidden">
             <img src="/checkgate_logo.png" alt="" className="h-7 w-7 object-contain" />
@@ -88,7 +88,7 @@ export default function Login() {
           <span className="text-gray-900 font-display font-bold text-2xl tracking-tight">Checkgate</span>
         </div>
 
-        <div className="max-w-sm">
+        <div className="max-w-lg">
           <blockquote className="text-4xl font-display font-bold text-gray-900 leading-[1.1] mb-6 tracking-tight">
             Ship with confidence. <span className="text-emerald-600">Roll back in seconds.</span>
           </blockquote>
@@ -114,7 +114,7 @@ export default function Login() {
           <span className="text-gray-900 font-display font-bold text-xl tracking-tight">Checkgate</span>
         </div>
 
-        <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-premium-xl border border-gray-50">
+        <div className="w-full max-w-lg bg-white p-10 rounded-3xl shadow-premium-xl border border-gray-50">
           <h2 className="text-3xl font-display font-bold text-gray-900 tracking-tight mb-1 text-center sm:text-left">
             Welcome back
           </h2>
