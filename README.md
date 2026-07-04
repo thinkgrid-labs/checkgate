@@ -61,6 +61,10 @@ It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), brows
 
 ![Environments](assets/screenshots/07-environments.png)
 
+**Collapsible sidebar** — reclaim screen space on data-dense pages; the whole dashboard is full-width by default.
+
+![Collapsed sidebar](assets/screenshots/08-sidebar-collapsed.png)
+
 ---
 
 ## Documentation
