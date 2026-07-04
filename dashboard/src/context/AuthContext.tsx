@@ -32,6 +32,7 @@ interface AuthContextValue {
   session: Session | null
   sessionLoading: boolean
   isSetupComplete: boolean
+  setupLoading: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   logout: () => Promise<void>
   completeSetup: (
@@ -77,9 +78,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isSetupComplete, setIsSetupComplete] = useState(
     () => localStorage.getItem(KEY_SETUP) === 'true',
   )
+  // True until the authoritative /api/auth/workspace check resolves. Routing
+  // must not act on `isSetupComplete` while this is true — its initial value
+  // above is only a localStorage guess (wrong for a fresh browser, a
+  // different device, or a session that expired after a server restart), and
+  // routing to /setup on a wrong guess is a one-way trip: nothing on the
+  // /setup route itself re-checks and bounces back once the real value
+  // arrives.
+  const [setupLoading, setSetupLoading] = useState(true)
 
   // On mount: restore session and authoritative setup state from the server.
+  //
+  // Setup status is fetched from the *public* /api/auth/workspace endpoint,
+  // not just inferred from /api/auth/me — the latter 401s for anyone without
+  // a valid session cookie (a fresh browser, a different device, a session
+  // that expired after a server restart), which previously meant those users
+  // got permanently bounced to /setup instead of /login even though setup
+  // had already been completed by someone else.
   useEffect(() => {
+    fetch('/api/auth/workspace', { credentials: 'same-origin' })
+      .then(res => (res.ok ? res.json() as Promise<{ workspace_name: string; is_setup_complete: boolean }> : null))
+      .then(body => {
+        if (body) {
+          setIsSetupComplete(body.is_setup_complete)
+          if (body.is_setup_complete) localStorage.setItem(KEY_SETUP, 'true')
+          else localStorage.removeItem(KEY_SETUP)
+        }
+      })
+      .catch(() => {/* network error — fall back to the localStorage-seeded initial state */})
+      .finally(() => setSetupLoading(false))
+
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(res => {
         if (res.ok) return res.json() as Promise<AuthResponse>
@@ -182,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         sessionLoading,
         isSetupComplete,
+        setupLoading,
         login,
         logout,
         completeSetup,

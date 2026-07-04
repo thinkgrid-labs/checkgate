@@ -107,7 +107,7 @@ export default function ChangeRequests() {
   }
 
   return (
-    <div className="w-full max-w-3xl space-y-5">
+    <div className="w-full space-y-5">
       <div className="premium-card shadow-premium-lg border-none">
         <div className="flex items-start gap-5 px-6 py-5 border-b border-gray-50 bg-white">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">

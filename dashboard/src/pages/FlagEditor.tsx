@@ -544,7 +544,7 @@ export default function FlagEditor() {
   }
 
   return (
-    <div className="w-full max-w-2xl space-y-5">
+    <div className="w-full space-y-5">
       <div className="flex items-center justify-between">
         <Link
           to="/flags"
@@ -573,247 +573,255 @@ export default function FlagEditor() {
       )}
 
       <form onSubmit={e => void handleSubmit(e)} className="space-y-5">
-        <SectionCard title="Basic info">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Key <span className="text-rose-400">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                disabled={isEdit}
-                value={flag.key}
-                onChange={e => setField('key', e.target.value)}
-                placeholder="e.g. dark_mode"
-                className={`${inputClass} font-mono`}
-              />
-              {!isEdit && (
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Immutable after creation. Use <code className="text-gray-600">snake_case</code>.
-                </p>
-              )}
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          {/* Main column — evaluation behavior */}
+          <div className="lg:col-span-2 space-y-5">
+            <SectionCard title="Flag type">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
+                  <select
+                    value={flagType}
+                    onChange={e => handleTypeChange(e.target.value as FlagType)}
+                    disabled={isEdit}
+                    className={selectClass}
+                  >
+                    {FLAG_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
+                    ))}
+                  </select>
+                  {isEdit && (
+                    <p className="mt-1.5 text-xs text-gray-400">
+                      Flag type cannot be changed after creation.
+                    </p>
+                  )}
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
-              <input
-                type="text"
-                value={flag.description ?? ''}
-                onChange={e => setField('description', e.target.value || null)}
-                placeholder="What does this flag control?"
-                className={inputClass}
-              />
-            </div>
-          </div>
-        </SectionCard>
+                {isVariant && (
+                  <>
+                    <ValueInput
+                      label="Default value"
+                      hint="Returned when the flag is enabled and no targeting rule overrides it."
+                      value={flag.default_value ?? null}
+                      flagType={flagType}
+                      onChange={v => setField('default_value', v)}
+                    />
+                    <ValueInput
+                      label="Disabled value"
+                      hint="Returned when the flag is disabled or the user is outside the rollout."
+                      value={flag.disabled_value ?? null}
+                      flagType={flagType}
+                      onChange={v => setField('disabled_value', v)}
+                    />
+                  </>
+                )}
+              </div>
+            </SectionCard>
 
-        <SectionCard title="Tags & ownership">
-          <div className="space-y-4">
-            <TagsInput tags={flag.tags ?? []} onChange={tags => setField('tags', tags)} />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Owner</label>
-              <input
-                type="email"
-                value={flag.owner_email ?? ''}
-                onChange={e => setField('owner_email', e.target.value || null)}
-                placeholder="owner@example.com"
-                className={inputClass}
-              />
-              <p className="mt-1.5 text-xs text-gray-400">
-                Who's responsible for this flag — useful when deciding what's safe to clean up.
-              </p>
-            </div>
-          </div>
-        </SectionCard>
+            <SectionCard title="Rollout">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Enabled</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {isVariant
+                        ? 'When disabled, returns the disabled value.'
+                        : <>When disabled, always evaluates to <code className="text-gray-600">false</code>.</>}
+                    </p>
+                  </div>
+                  <Toggle enabled={flag.is_enabled} onToggle={() => setField('is_enabled', !flag.is_enabled)} />
+                </div>
 
-        <SectionCard title="Prerequisites">
-          <p className="text-xs text-gray-400 mb-4">
-            Require other flags to be enabled (or resolve to a specific value) before this flag's
-            own rules and rollout are even considered. Checked first — if any prerequisite fails,
-            this flag evaluates as disabled.
-          </p>
-          <PrerequisitesEditor
-            prerequisites={flag.prerequisites ?? []}
-            candidates={otherFlags}
-            onChange={prerequisites => setField('prerequisites', prerequisites)}
-          />
-        </SectionCard>
-
-        <SectionCard title="Flag type">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
-              <select
-                value={flagType}
-                onChange={e => handleTypeChange(e.target.value as FlagType)}
-                disabled={isEdit}
-                className={selectClass}
-              >
-                {FLAG_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
-                ))}
-              </select>
-              {isEdit && (
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Flag type cannot be changed after creation.
-                </p>
-              )}
-            </div>
+                <div className="border-t border-gray-100 pt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Rollout percentage</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={rolloutInput}
+                      onChange={e => setRolloutInput(e.target.value)}
+                      placeholder="100"
+                      className="w-28 bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                    />
+                    <span className="text-gray-400 text-sm">%</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-gray-400">
+                    Leave empty for 100%. Users are bucketed deterministically by their key.
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
 
             {isVariant && (
-              <>
-                <ValueInput
-                  label="Default value"
-                  hint="Returned when the flag is enabled and no targeting rule overrides it."
-                  value={flag.default_value ?? null}
-                  flagType={flagType}
-                  onChange={v => setField('default_value', v)}
-                />
-                <ValueInput
-                  label="Disabled value"
-                  hint="Returned when the flag is disabled or the user is outside the rollout."
-                  value={flag.disabled_value ?? null}
-                  flagType={flagType}
-                  onChange={v => setField('disabled_value', v)}
-                />
-              </>
-            )}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Rollout">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Enabled</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {isVariant
-                    ? 'When disabled, returns the disabled value.'
-                    : <>When disabled, always evaluates to <code className="text-gray-600">false</code>.</>}
+              <SectionCard title="Weighted variants (A/B testing)">
+                <p className="text-xs text-gray-400 mb-4">
+                  Split traffic across multiple values by weight (e.g. 60/30/10). Applies to users who
+                  are enabled, inside the rollout percentage above, and don't match a targeting rule.
+                  Weights don't need to sum to 100 — only their proportions matter. Leave empty to
+                  always return the default value above.
                 </p>
-              </div>
-              <Toggle enabled={flag.is_enabled} onToggle={() => setField('is_enabled', !flag.is_enabled)} />
-            </div>
-
-            <div className="border-t border-gray-100 pt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Rollout percentage</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={rolloutInput}
-                  onChange={e => setRolloutInput(e.target.value)}
-                  placeholder="100"
-                  className="w-28 bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                <WeightedVariantsEditor
+                  variants={flag.variants ?? []}
+                  flagType={flagType}
+                  onChange={variants => setField('variants', variants)}
                 />
-                <span className="text-gray-400 text-sm">%</span>
-              </div>
-              <p className="mt-1.5 text-xs text-gray-400">
-                Leave empty for 100%. Users are bucketed deterministically by their key.
+              </SectionCard>
+            )}
+
+            <SectionCard title="Targeting rules">
+              <p className="text-xs text-gray-400 mb-4">
+                {isVariant
+                  ? 'Users matching a rule return that rule\'s value (or the default value if no per-rule value is set), bypassing the rollout cap.'
+                  : 'Users matching any rule always see the flag as enabled, bypassing the rollout cap.'}
               </p>
-            </div>
+              <RuleEditor
+                rules={flag.rules as TargetingRule[]}
+                onChange={rules => setField('rules', rules)}
+                flagType={flagType}
+                segments={segments}
+              />
+            </SectionCard>
           </div>
-        </SectionCard>
 
-        {isVariant && (
-          <SectionCard title="Weighted variants (A/B testing)">
-            <p className="text-xs text-gray-400 mb-4">
-              Split traffic across multiple values by weight (e.g. 60/30/10). Applies to users who
-              are enabled, inside the rollout percentage above, and don't match a targeting rule.
-              Weights don't need to sum to 100 — only their proportions matter. Leave empty to
-              always return the default value above.
-            </p>
-            <WeightedVariantsEditor
-              variants={flag.variants ?? []}
-              flagType={flagType}
-              onChange={variants => setField('variants', variants)}
-            />
-          </SectionCard>
-        )}
-
-        <SectionCard title="Targeting rules">
-          <p className="text-xs text-gray-400 mb-4">
-            {isVariant
-              ? 'Users matching a rule return that rule\'s value (or the default value if no per-rule value is set), bypassing the rollout cap.'
-              : 'Users matching any rule always see the flag as enabled, bypassing the rollout cap.'}
-          </p>
-          <RuleEditor
-            rules={flag.rules as TargetingRule[]}
-            onChange={rules => setField('rules', rules)}
-            flagType={flagType}
-            segments={segments}
-          />
-        </SectionCard>
-
-        {isEdit && key && (
-          <SectionCard title="Scheduled changes">
-            <div className="space-y-4">
-              {scheduledChanges.filter(c => !c.executed_at).length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Pending
-                  </p>
-                  {scheduledChanges
-                    .filter(c => !c.executed_at)
-                    .map(sc => (
-                      <div
-                        key={sc.id}
-                        className="flex items-center justify-between gap-3 bg-indigo-50 rounded-lg px-3 py-2 text-sm"
-                      >
-                        <span className="text-indigo-700">
-                          <strong>{sc.patch.is_enabled ? 'Enable' : 'Disable'}</strong>
-                          {' at '}
-                          {new Date(sc.scheduled_at).toLocaleString()}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => void cancelScheduledChange(sc.id)}
-                          className="text-red-400 hover:text-red-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              )}
-
-              <form onSubmit={e => void handleSchedule(e)} className="flex items-end gap-3 flex-wrap">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Action</label>
-                  <select
-                    value={scheduleAction}
-                    onChange={e => setScheduleAction(e.target.value as 'enable' | 'disable')}
-                    className={selectClass + ' w-auto'}
-                  >
-                    <option value="enable">Enable flag</option>
-                    <option value="disable">Disable flag</option>
-                  </select>
-                </div>
+          {/* Sidebar — identity, ownership, dependencies */}
+          <div className="space-y-5">
+            <SectionCard title="Basic info">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    At (local time)
+                    Key <span className="text-rose-400">*</span>
                   </label>
                   <input
-                    type="datetime-local"
+                    type="text"
                     required
-                    value={scheduleAt}
-                    onChange={e => setScheduleAt(e.target.value)}
-                    className={inputClass + ' w-auto'}
+                    disabled={isEdit}
+                    value={flag.key}
+                    onChange={e => setField('key', e.target.value)}
+                    placeholder="e.g. dark_mode"
+                    className={`${inputClass} font-mono`}
+                  />
+                  {!isEdit && (
+                    <p className="mt-1.5 text-xs text-gray-400">
+                      Immutable after creation. Use <code className="text-gray-600">snake_case</code>.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                  <input
+                    type="text"
+                    value={flag.description ?? ''}
+                    onChange={e => setField('description', e.target.value || null)}
+                    placeholder="What does this flag control?"
+                    className={inputClass}
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={scheduleSaving || !scheduleAt}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-all"
-                >
-                  {scheduleSaving ? 'Scheduling…' : 'Schedule'}
-                </button>
-              </form>
-            </div>
-          </SectionCard>
-        )}
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Tags & ownership">
+              <div className="space-y-4">
+                <TagsInput tags={flag.tags ?? []} onChange={tags => setField('tags', tags)} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Owner</label>
+                  <input
+                    type="email"
+                    value={flag.owner_email ?? ''}
+                    onChange={e => setField('owner_email', e.target.value || null)}
+                    placeholder="owner@example.com"
+                    className={inputClass}
+                  />
+                  <p className="mt-1.5 text-xs text-gray-400">
+                    Who's responsible for this flag — useful when deciding what's safe to clean up.
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Prerequisites">
+              <p className="text-xs text-gray-400 mb-4">
+                Require other flags to be enabled (or resolve to a specific value) before this flag's
+                own rules and rollout are even considered. Checked first — if any prerequisite fails,
+                this flag evaluates as disabled.
+              </p>
+              <PrerequisitesEditor
+                prerequisites={flag.prerequisites ?? []}
+                candidates={otherFlags}
+                onChange={prerequisites => setField('prerequisites', prerequisites)}
+              />
+            </SectionCard>
+
+            {isEdit && key && (
+              <SectionCard title="Scheduled changes">
+                <div className="space-y-4">
+                  {scheduledChanges.filter(c => !c.executed_at).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Pending
+                      </p>
+                      {scheduledChanges
+                        .filter(c => !c.executed_at)
+                        .map(sc => (
+                          <div
+                            key={sc.id}
+                            className="flex items-center justify-between gap-3 bg-indigo-50 rounded-lg px-3 py-2 text-sm"
+                          >
+                            <span className="text-indigo-700">
+                              <strong>{sc.patch.is_enabled ? 'Enable' : 'Disable'}</strong>
+                              {' at '}
+                              {new Date(sc.scheduled_at).toLocaleString()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void cancelScheduledChange(sc.id)}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  <form onSubmit={e => void handleSchedule(e)} className="flex items-end gap-3 flex-wrap">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Action</label>
+                      <select
+                        value={scheduleAction}
+                        onChange={e => setScheduleAction(e.target.value as 'enable' | 'disable')}
+                        className={selectClass + ' w-auto'}
+                      >
+                        <option value="enable">Enable flag</option>
+                        <option value="disable">Disable flag</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        At (local time)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={scheduleAt}
+                        onChange={e => setScheduleAt(e.target.value)}
+                        className={inputClass + ' w-auto'}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={scheduleSaving || !scheduleAt}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-all"
+                    >
+                      {scheduleSaving ? 'Scheduling…' : 'Schedule'}
+                    </button>
+                  </form>
+                </div>
+              </SectionCard>
+            )}
+          </div>
+        </div>
 
         <div className="flex items-center gap-3">
           <button

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Flag, ArrowRight, CheckCircle2, Shield, Zap, Globe, Copy, Check, AlertCircle, Eye, EyeOff, Building2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -81,7 +81,7 @@ export default function Setup() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 bg-white border-r border-gray-200">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 xl:p-20 bg-white border-r border-gray-200">
         <div className="flex items-center gap-3">
           <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-50 overflow-hidden">
             <img src="/checkgate_logo.png" alt="" className="h-7 w-7 object-contain" />
@@ -89,11 +89,9 @@ export default function Setup() {
           <span className="text-gray-900 font-display font-bold text-2xl tracking-tight">Checkgate</span>
         </div>
 
-        <div className="max-w-sm">
-          <h1 className="text-4xl font-display font-bold text-gray-900 leading-[1.1] mb-6 tracking-tight">
-            Feature flags <br />
-            built for the <br />
-            <span className="text-emerald-600">modern web.</span>
+        <div className="max-w-lg">
+          <h1 className="text-4xl font-display font-bold text-gray-900 leading-[1.15] mb-6 tracking-tight">
+            Feature flags built for the <span className="text-emerald-600">modern web.</span>
           </h1>
           <p className="text-gray-500 text-lg font-medium leading-relaxed mb-10">
             Self-hosted, open-source, and built in Rust. Ship faster — without the vendor tax.
@@ -136,7 +134,7 @@ export default function Setup() {
           ))}
         </div>
 
-        <div className="w-full max-w-md bg-white p-12 rounded-3xl shadow-premium-xl border border-gray-50">
+        <div className="w-full max-w-lg bg-white p-12 rounded-3xl shadow-premium-xl border border-gray-50">
           {/* Step 0: Welcome */}
           {step === 0 && (
             <div className="text-center">
@@ -153,6 +151,12 @@ export default function Setup() {
               >
                 Get started <ArrowRight className="w-4 h-4" />
               </button>
+              <p className="mt-6 text-sm text-gray-500">
+                Already set up?{' '}
+                <Link to="/login" className="text-emerald-600 hover:text-emerald-700 font-medium transition-colors">
+                  Sign in
+                </Link>
+              </p>
             </div>
           )}
 

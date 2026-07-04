@@ -271,7 +271,7 @@ export default function Environments() {
   }
 
   return (
-    <div className="max-w-xl space-y-5">
+    <div className="w-full space-y-5">
       <div className="premium-card shadow-premium-lg border-none">
         {/* Header */}
         <div className="flex items-start gap-5 px-6 py-5 border-b border-gray-50 bg-white">
