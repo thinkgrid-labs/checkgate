@@ -5,6 +5,45 @@ All notable changes to Checkgate are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.19] - 2026-07-04
+
+### Changed
+
+- **Dashboard layout overhaul** — the sidebar can now be collapsed to an icon-only rail (persisted
+  across sessions via `localStorage`), reclaiming space on smaller screens. Every list/table page
+  (Dashboard, Feature Flags, Environments, Compare, Change Requests, Projects, Users, Audit Log,
+  Impressions, SDK Health, Scheduled, Webhooks) is now genuinely full width instead of capped at an
+  arbitrary max-width with dead space on either side.
+- **Flag Editor and Settings restructured into two columns** — behavior/configuration (flag type,
+  rollout, targeting rules; SDK snippets, personal access tokens) in a wider main column, with
+  identity/metadata (key, tags, ownership, prerequisites; auth info, API endpoint, account) in a
+  narrower sidebar. Previously everything was stacked in a single column, requiring far more
+  scrolling and leaving most of the screen empty on anything wider than a laptop.
+- **Setup and Login pages** now fill the browser window edge to edge (previously framed/centered
+  with growing dead space in the middle on wide monitors, then over-corrected to a narrow centered
+  card — this settles on genuinely full-width panels with wider inner content blocks). The Setup
+  welcome screen's headline now wraps to two lines instead of three, and gained an "Already set up?
+  Sign in" link for anyone who lands there after setup is already complete.
+- `ProjectSettings` now supports deep-linking to a specific tab via `?tab=keys` (etc.), so other
+  pages can link straight to e.g. SDK Keys instead of dropping the user on the default tab.
+
+### Fixed
+
+- **Setup/login redirect loop** — `/api/auth/me` 401s for anyone without a valid session cookie,
+  which the frontend was also using to determine "has setup been completed?" A fresh browser, a
+  different device, or a session that expired after a server restart would incorrectly conclude
+  setup had never been done and permanently redirect to `/setup` instead of `/login`, with no way
+  back. Fixed by checking the public `/api/auth/workspace` endpoint (now also returns
+  `is_setup_complete`) instead, and by fixing a related race where the redirect decision fired on a
+  stale guess before that check even resolved.
+- **Dead "SDK Keys" link on the Settings page** — pointed to `/settings` (itself) instead of the
+  actual key-management page. Now links to `/projects/{id}?tab=keys` and lands directly on the SDK
+  Keys tab.
+- **React Native SDK packaging** — `sdks/react-native/android/.gradle/` (a local Gradle build cache,
+  accidentally committed) was being swept into the published npm tarball via the `files` field
+  covering the whole `android/` directory. Untracked and gitignored; harmless to existing consumers,
+  just junk that shouldn't have shipped.
+
 ## [0.1.18] - 2026-07-04
 
 ### Added
