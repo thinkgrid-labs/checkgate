@@ -41,6 +41,7 @@ This document outlines the vision and future development priorities for Checkgat
 - [x] **Webhooks, Scheduled Changes & SDK Health** (v0.1.17): Outbound webhooks with HMAC signing and delivery logs; time-based scheduled flag changes applied by a background worker; live SSE connection monitoring in the dashboard.
 - [x] **SDK Impression Reporting**: All SDKs (Node, Web, React Native, Flutter) asynchronously batch and report evaluation events, feeding the impression stats and Evaluation Stream. Privacy-preserving by default — user attributes are not sent unless `sendEvaluationContext` is enabled.
 - [x] **Weighted Multivariate Rollouts**: `variants` field distributes traffic across multiple values by weight (e.g. 60/30/10 A/B/C split), independent of the on/off rollout gate. Lives in the shared evaluation core, so every SDK supports it via the existing `getValue()`/`getVariant()` with no SDK-side changes. The foundation for A/B testing.
+- [x] **Numeric Targeting Operators**: `greater_than`, `greater_than_or_equal`, `less_than`, and `less_than_or_equal` alongside the existing string operators (`equals`, `contains`, `starts_with`, `ends_with`) — e.g. targeting by `app_version >= 4.2` or `account_age_days > 30`. Lives in the shared evaluation core.
 - [x] **SDK Resilience**: Exponential backoff with jitter on SSE reconnect (replacing fixed retry delays); flag-change listeners (`onChange`) with bootstrap/reconnect-resync suppression so only genuine live deltas fire; offline persistence via a pluggable storage adapter (hydrate-on-cold-start, persist-on-bootstrap/delta) so flags evaluate before or without a connection; and an HTTP poll fallback (`GET /flags/snapshot`) for environments where SSE can't be established at all (e.g. a proxy blocking long-lived connections) — SDKs switch to polling after repeated reconnect failures and switch back once SSE recovers.
 - [x] **Prerequisite (Dependent) Flags**: A flag can require another flag to be enabled — or resolved to a specific value — before its own rules/rollout are considered, checked ahead of everything else. Evaluated recursively (a prerequisite can itself have prerequisites) with a depth guard that fails closed on cycles or misconfigured chains. Lives in the shared evaluation core, so every SDK supports it automatically — no SDK-side changes required.
 - [ ] **Exposure Dashboards**: Visualize which users are being exposed to specific variants.
@@ -48,7 +49,7 @@ This document outlines the vision and future development priorities for Checkgat
 
 ---
 
-## 🟣 Phase 5: Enterprise Governance & Scale
+## 🟣 Phase 5: Enterprise Governance & Scale (In Progress)
 *Goal: Enable large teams to move fast without breaking things.*
 
 - [x] **Flag Lifecycle Hygiene**: Tags, an owner email, and archival (soft-delete, reversible, zero evaluation impact) — kept as dashboard-only metadata on a `FlagWithMetadata` wrapper so it never flows into the evaluation core or SSE payload.
