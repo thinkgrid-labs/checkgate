@@ -9,6 +9,7 @@ const TITLES: Record<string, string> = {
   '/audit': 'Audit Log',
   '/sdk-health': 'SDK Health',
   '/webhooks': 'Webhooks',
+  '/integrations': 'Chat Integrations',
   '/environments': 'Environments',
   '/projects': 'Projects',
   '/users': 'Users',

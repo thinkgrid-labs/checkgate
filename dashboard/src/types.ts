@@ -253,3 +253,43 @@ export interface SdkKeyInfo {
   environment_name: string
   created_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Chat integrations (Slack / Microsoft Teams)
+// ---------------------------------------------------------------------------
+
+export type IntegrationKind = 'slack' | 'teams'
+
+/** Event names the server can notify on. Mirrors `SUPPORTED_EVENTS` in Rust. */
+export const INTEGRATION_EVENTS = [
+  'flag.created',
+  'flag.updated',
+  'flag.deleted',
+  'flag.promoted',
+  'change_request.opened',
+  'change_request.approved',
+  'change_request.rejected',
+] as const
+
+export interface Integration {
+  id: string
+  environment_id: string
+  kind: IntegrationKind
+  name: string
+  /** Elided tail of the webhook URL — the full URL is never sent back. */
+  webhook_url_preview: string
+  /** Empty means "every event". */
+  events: string[]
+  enabled: boolean
+  created_at: string
+}
+
+export interface IntegrationDelivery {
+  id: number
+  integration_id: string
+  event: string
+  status_code: number | null
+  response_body: string | null
+  error: string | null
+  delivered_at: string
+}

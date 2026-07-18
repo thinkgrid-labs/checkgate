@@ -82,6 +82,7 @@ export default defineConfig({
       {
         text: "Ecosystem & Integrations",
         items: [
+          { text: "Slack & Teams Alerts", link: "/ecosystem/chat-alerts" },
           { text: "Type-Safe Schema CLI", link: "/ecosystem/cli" },
           { text: "Edge Evaluation", link: "/ecosystem/edge" },
           { text: "SSR / Bootstrap", link: "/ecosystem/ssr" },

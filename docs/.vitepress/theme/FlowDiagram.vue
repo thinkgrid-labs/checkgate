@@ -49,7 +49,9 @@ const pushPath = (cy) => `M500,190 Q590,${cy} 654,${cy}`
         <text x="727" :y="c.cy + 15" class="cg-sub">{{ c.sub }} · local eval</text>
       </g>
 
-      <text x="727" y="352" class="cg-edge-label">isEnabled() · ~100 ns, in-process</text>
+      <!-- Right-anchored: centred on the client column this label runs past the
+           820-wide viewBox and gets clipped. -->
+      <text x="800" y="352" class="cg-edge-label cg-edge-end">isEnabled() · ~100 ns, in-process</text>
 
       <!-- Animated packets (SMIL). All share dur=3.2s so the write→push cycle stays in sync. -->
       <circle class="cg-packet cg-write" r="5">
@@ -134,6 +136,9 @@ const pushPath = (cy) => `M500,190 Q590,${cy} 654,${cy}`
   font-weight: 600;
   text-anchor: middle;
   font-family: var(--vp-font-family-mono, monospace);
+}
+.cg-edge-end {
+  text-anchor: end;
 }
 .cg-packet {
   fill: var(--vp-c-brand-1);

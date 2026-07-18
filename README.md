@@ -18,6 +18,21 @@ It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), brows
 
 ---
 
+## Overview
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/overview-dark.svg">
+    <img src="assets/overview-light.svg" width="820" alt="A flag change flows from the dashboard to the Checkgate server, which pushes it over SSE to every SDK, where flags evaluate locally in-process.">
+  </picture>
+</p>
+
+<p align="center">
+  <em>A flag change is written once, then pushed to every connected SDK in milliseconds — after which each <code>isEnabled()</code> is a local, in-process lookup.</em>
+</p>
+
+---
+
 ## Features
 
 - **Sub-microsecond evaluation** — flags are evaluated entirely in local memory

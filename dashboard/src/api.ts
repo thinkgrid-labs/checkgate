@@ -10,6 +10,9 @@ import type {
   FlagPatch,
   ImpressionListResponse,
   ImpressionStats,
+  Integration,
+  IntegrationDelivery,
+  IntegrationKind,
   ScheduledChange,
   Segment,
   SegmentPatch,
@@ -520,5 +523,51 @@ export const projectsApi = {
 
   removeMember(projectId: string, userId: number): Promise<void> {
     return request(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' })
+  },
+}
+
+export const integrationsApi = {
+  list(envId: string): Promise<Integration[]> {
+    return request(`/api/environments/${envId}/integrations`)
+  },
+
+  create(
+    envId: string,
+    data: {
+      kind: IntegrationKind
+      name: string
+      webhook_url: string
+      events?: string[]
+      enabled?: boolean
+    },
+  ): Promise<Integration> {
+    return request(`/api/environments/${envId}/integrations`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  patch(
+    envId: string,
+    id: string,
+    patch: { name?: string; webhook_url?: string; events?: string[]; enabled?: boolean },
+  ): Promise<Integration> {
+    return request(`/api/environments/${envId}/integrations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  },
+
+  delete(envId: string, id: string): Promise<void> {
+    return request(`/api/environments/${envId}/integrations/${id}`, { method: 'DELETE' })
+  },
+
+  /** Fires a sample message through the real delivery path. */
+  test(envId: string, id: string): Promise<void> {
+    return request(`/api/environments/${envId}/integrations/${id}/test`, { method: 'POST' })
+  },
+
+  listDeliveries(envId: string, id: string): Promise<IntegrationDelivery[]> {
+    return request(`/api/environments/${envId}/integrations/${id}/deliveries`)
   },
 }

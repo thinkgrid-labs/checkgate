@@ -21,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -70,6 +71,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/impressions', icon: Activity, label: 'Impressions' },
       { to: '/audit', icon: History, label: 'Audit Log' },
       { to: '/webhooks', icon: Webhook, label: 'Webhooks', adminOnly: true },
+      { to: '/integrations', icon: MessageSquare, label: 'Chat Alerts', adminOnly: true },
     ],
   },
   {

@@ -15,6 +15,7 @@
 
 use serde_json::{Value, json};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Kills the spawned server when the test ends (including on panic).
@@ -133,6 +134,10 @@ async fn full_api_flow() {
     analytics_and_experiments(&ctx, &sdk_key, &prod_env).await;
     snapshot(&ctx, &sdk_key).await;
     rbac_and_change_requests(&ctx, &prod_env).await;
+    // Runs last on purpose: `rbac_and_change_requests` leaves Production in
+    // approval-required mode, so a PATCH here queues a change request and
+    // exercises the change_request.* notifications alongside the flag ones.
+    chat_integrations(&ctx, &prod_env).await;
 
     eprintln!("integration: full_api_flow passed");
 }
@@ -602,4 +607,390 @@ async fn rbac_and_change_requests(ctx: &Ctx, env: &str) {
         !crs.as_array().unwrap().is_empty(),
         "a pending change request exists: {crs}"
     );
+}
+
+// --- Chat integrations (Slack / Teams) -------------------------------------
+
+/// A stand-in for a Slack/Teams incoming webhook: accepts POSTs, records the
+/// JSON body, and always answers 200. Lets the test assert on the exact message
+/// the server produced, over a real socket, rather than trusting the formatter
+/// in isolation.
+struct MockChat {
+    url: String,
+    received: Arc<Mutex<Vec<Value>>>,
+}
+
+impl MockChat {
+    /// Waits until at least `n` messages have arrived, or fails after ~5s.
+    async fn wait_for(&self, n: usize, what: &str) -> Vec<Value> {
+        for _ in 0..50 {
+            {
+                let got = self.received.lock().unwrap();
+                if got.len() >= n {
+                    return got.clone();
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let got = self.received.lock().unwrap();
+        panic!(
+            "timed out waiting for {n} message(s) [{what}]; got {}: {:?}",
+            got.len(),
+            *got
+        );
+    }
+
+    fn count(&self) -> usize {
+        self.received.lock().unwrap().len()
+    }
+}
+
+/// Splits a raw HTTP request into (header_len, content_length).
+fn parse_head(buf: &[u8]) -> Option<(usize, usize)> {
+    let pos = buf.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
+    let head = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
+    let len = head
+        .lines()
+        .find_map(|l| l.strip_prefix("content-length:"))
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(0);
+    Some((pos, len))
+}
+
+async fn start_mock_chat() -> MockChat {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let received: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = received.clone();
+
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                continue;
+            };
+            let sink = sink.clone();
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 4096];
+                loop {
+                    match socket.read(&mut tmp).await {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            buf.extend_from_slice(&tmp[..n]);
+                            if let Some((head_len, body_len)) = parse_head(&buf)
+                                && buf.len() >= head_len + body_len
+                            {
+                                if let Ok(v) = serde_json::from_slice::<Value>(
+                                    &buf[head_len..head_len + body_len],
+                                ) {
+                                    sink.lock().unwrap().push(v);
+                                }
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                let _ = socket
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                    .await;
+            });
+        }
+    });
+
+    MockChat {
+        url: format!("http://127.0.0.1:{port}/hook"),
+        received,
+    }
+}
+
+/// The display name the API reports for `env_id` — the notification is expected
+/// to carry exactly this, which is what proves the delivery path resolves the
+/// environment rather than echoing an id.
+async fn env_name(ctx: &Ctx, env_id: &str) -> String {
+    let projects: Value = ctx
+        .sess
+        .get(ctx.url("/api/projects"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let project_id = projects[0]["id"].as_str().unwrap().to_string();
+
+    let envs: Value = ctx
+        .sess
+        .get(ctx.url(&format!("/api/projects/{project_id}/environments")))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    envs.as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["id"] == env_id)
+        .unwrap_or_else(|| panic!("environment {env_id} not found in {envs}"))["name"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+async fn chat_integrations(ctx: &Ctx, env: &str) {
+    let env_display = env_name(ctx, env).await;
+
+    // --- validation ---------------------------------------------------------
+
+    let bad_kind = ctx
+        .sess
+        .post(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({ "kind": "irc", "name": "x", "webhook_url": "https://example.com/h" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_kind.status(), 422, "unknown provider rejected");
+
+    let plaintext = ctx
+        .sess
+        .post(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({ "kind": "slack", "name": "x", "webhook_url": "http://evil.example.com/h" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(plaintext.status(), 422, "non-loopback plaintext rejected");
+
+    let bad_event = ctx
+        .sess
+        .post(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({
+            "kind": "slack",
+            "name": "x",
+            "webhook_url": "https://hooks.slack.com/h",
+            "events": ["flag.exploded"],
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_event.status(), 422, "unknown event name rejected");
+
+    // --- create against a live mock endpoint --------------------------------
+
+    let slack = start_mock_chat().await;
+    let teams = start_mock_chat().await;
+    // Subscribes to a single event, to prove the filter actually filters.
+    let filtered = start_mock_chat().await;
+
+    let r = ctx
+        .sess
+        .post(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({ "kind": "slack", "name": "Eng channel", "webhook_url": slack.url }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200, "create slack integration");
+    let slack_row: Value = r.json().await.unwrap();
+    let slack_id = slack_row["id"].as_str().unwrap().to_string();
+
+    // The webhook URL is a channel-posting credential — it must not come back.
+    assert!(
+        slack_row.get("webhook_url").is_none(),
+        "raw webhook_url must never be returned: {slack_row}"
+    );
+    let preview = slack_row["webhook_url_preview"].as_str().unwrap();
+    assert!(preview.starts_with('…'), "preview is elided: {preview}");
+    assert!(
+        !preview.contains("127.0.0.1"),
+        "preview leaks host: {preview}"
+    );
+
+    ctx.sess
+        .post(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({ "kind": "teams", "name": "Ops channel", "webhook_url": teams.url }))
+        .send()
+        .await
+        .unwrap();
+
+    ctx.sess
+        .post(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({
+            "kind": "slack",
+            "name": "Deletes only",
+            "webhook_url": filtered.url,
+            "events": ["flag.deleted"],
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    // --- flag.created reaches both providers --------------------------------
+
+    let r = ctx
+        .sess
+        .post(ctx.url(&format!("/api/environments/{env}/flags")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({
+            "key": "chat_notify",
+            "is_enabled": true,
+            "flag_type": "boolean",
+            "rollout_percentage": 25,
+            "rules": [],
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(r.status().is_success(), "create flag: {}", r.status());
+
+    let slack_msgs = slack.wait_for(1, "slack flag.created").await;
+    let msg = &slack_msgs[0];
+    // Block Kit shape — a fallback line plus a coloured attachment with blocks.
+    assert!(
+        msg["text"].as_str().unwrap().contains("Flag created"),
+        "slack fallback text: {msg}"
+    );
+    assert!(msg["text"].as_str().unwrap().contains("chat_notify"));
+    assert_eq!(msg["attachments"][0]["blocks"][0]["type"], "header");
+    let rendered = msg.to_string();
+    assert!(
+        rendered.contains(&env_display),
+        "names the env ({env_display}): {rendered}"
+    );
+    assert!(rendered.contains("25%"), "carries rollout: {rendered}");
+
+    let teams_msgs = teams.wait_for(1, "teams flag.created").await;
+    let card = &teams_msgs[0];
+    assert_eq!(card["@type"], "MessageCard", "teams card shape: {card}");
+    let facts = card["sections"][0]["facts"].as_array().unwrap();
+    assert!(
+        facts
+            .iter()
+            .any(|f| f["name"] == "Flag" && f["value"] == "chat_notify"),
+        "teams facts name the flag: {card}"
+    );
+
+    // The delete-only integration must have stayed silent.
+    assert_eq!(
+        filtered.count(),
+        0,
+        "event filter must suppress unsubscribed events"
+    );
+
+    // --- change_request.opened (Production requires approval by now) ---------
+
+    let r = ctx
+        .sess
+        .patch(ctx.url(&format!("/api/environments/{env}/flags/chat_notify")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({ "is_enabled": false }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 202, "patch is queued for approval");
+
+    let slack_msgs = slack.wait_for(2, "slack change_request.opened").await;
+    let cr_msg = slack_msgs
+        .iter()
+        .find(|m| {
+            m["text"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("Change request opened")
+        })
+        .unwrap_or_else(|| panic!("no change-request message in {slack_msgs:?}"));
+    assert!(
+        cr_msg.to_string().contains("chat_notify"),
+        "change-request message names the flag: {cr_msg}"
+    );
+
+    // --- delivery log -------------------------------------------------------
+
+    let deliveries: Value = ctx
+        .sess
+        .get(ctx.url(&format!(
+            "/api/environments/{env}/integrations/{slack_id}/deliveries"
+        )))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rows = deliveries.as_array().unwrap();
+    assert!(!rows.is_empty(), "deliveries were logged: {deliveries}");
+    assert_eq!(rows[0]["status_code"], 200, "mock answered 200: {rows:?}");
+
+    // --- disable stops delivery ---------------------------------------------
+
+    let r = ctx
+        .sess
+        .patch(ctx.url(&format!("/api/environments/{env}/integrations/{slack_id}")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({ "enabled": false }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200, "disable integration");
+
+    let before = slack.count();
+    ctx.sess
+        .post(ctx.url(&format!("/api/environments/{env}/flags")))
+        .header("X-Checkgate-Request", "true")
+        .json(&json!({
+            "key": "chat_notify_two",
+            "is_enabled": true,
+            "flag_type": "boolean",
+            "rules": [],
+        }))
+        .send()
+        .await
+        .unwrap();
+    // Teams is still enabled, so waiting on it gives the disabled Slack hook a
+    // fair chance to have (wrongly) fired before we assert it didn't.
+    teams.wait_for(2, "teams still receiving").await;
+    assert_eq!(
+        slack.count(),
+        before,
+        "a disabled integration must not receive events"
+    );
+
+    // --- delete -------------------------------------------------------------
+
+    let r = ctx
+        .sess
+        .delete(ctx.url(&format!("/api/environments/{env}/integrations/{slack_id}")))
+        .header("X-Checkgate-Request", "true")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 204, "delete integration");
+
+    let list: Value = ctx
+        .sess
+        .get(ctx.url(&format!("/api/environments/{env}/integrations")))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        !list
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"] == slack_id.as_str()),
+        "deleted integration is gone: {list}"
+    );
+
+    eprintln!("integration: chat_integrations passed");
 }

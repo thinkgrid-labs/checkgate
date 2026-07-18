@@ -22,6 +22,7 @@ import Experiments from './pages/Experiments'
 import Projects from './pages/Projects'
 import ProjectSettings from './pages/ProjectSettings'
 import Webhooks from './pages/Webhooks'
+import Integrations from './pages/Integrations'
 
 /**
  * Flag create/edit moved from standalone pages into a slide-over on the list.
@@ -107,6 +108,7 @@ export default function App() {
                     <Route path="/audit" element={<AuditLog />} />
                     <Route path="/sdk-health" element={<SdkHealth />} />
                     <Route path="/webhooks" element={<Webhooks />} />
+                    <Route path="/integrations" element={<Integrations />} />
                     <Route path="/environments" element={<Environments />} />
                     <Route path="/environments/diff" element={<EnvironmentDiff />} />
                     <Route path="/projects" element={<Projects />} />

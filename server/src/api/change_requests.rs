@@ -212,6 +212,21 @@ pub async fn approve_change_request(
     let applied =
         super::flags::apply_patch(&state, &env_id, &flag_key, patch, Some(&reviewer)).await?;
 
+    // Note `apply_patch` above already emitted `flag.updated`; this second
+    // event records *who reviewed it*, which the flag event doesn't carry.
+    crate::notify::notify(
+        state.clone(),
+        env_id.clone(),
+        crate::integrations::change_request_payload(
+            "change_request.approved",
+            &env_id,
+            &flag_key,
+            id,
+            Some(&reviewer),
+            None,
+        ),
+    );
+
     info!(change_request_id = id, env_id = %env_id, flag_key = %flag_key, "Change request approved and applied");
     Ok(Json(applied))
 }
@@ -228,24 +243,41 @@ pub async fn reject_change_request(
         .map(|c| c.email)
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let result = sqlx::query(
+    // RETURNING the flag key so the rejection notification can name the flag —
+    // "change request rejected" alone isn't actionable in a chat channel.
+    let row = sqlx::query(
         "UPDATE change_requests SET status = 'rejected', reviewed_by = $1, reviewed_at = NOW(), reason = $2 \
-         WHERE id = $3 AND environment_id = $4::uuid AND status = 'pending'",
+         WHERE id = $3 AND environment_id = $4::uuid AND status = 'pending' \
+         RETURNING flag_key",
     )
     .bind(&reviewer)
     .bind(&req.reason)
     .bind(id)
     .bind(&env_id)
-    .execute(&state.db)
+    .fetch_optional(&state.db)
     .await
     .map_err(|e| {
         error!(error = %e, "Failed to reject change request");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    if result.rows_affected() == 0 {
+    let Some(row) = row else {
         return Err(StatusCode::NOT_FOUND);
-    }
+    };
+    let flag_key: String = row.get("flag_key");
+
+    crate::notify::notify(
+        state.clone(),
+        env_id.clone(),
+        crate::integrations::change_request_payload(
+            "change_request.rejected",
+            &env_id,
+            &flag_key,
+            id,
+            Some(&reviewer),
+            req.reason.as_deref(),
+        ),
+    );
 
     info!(change_request_id = id, env_id = %env_id, "Change request rejected");
     Ok(StatusCode::NO_CONTENT)

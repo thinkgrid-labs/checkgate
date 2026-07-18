@@ -5,6 +5,64 @@ All notable changes to Checkgate are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.22] - 2026-07-18
+
+### Added
+
+- **Slack & Microsoft Teams alerts** — flag and change-request activity can now be delivered straight
+  into a chat channel, configured per environment under **Chat Alerts** in the dashboard. Each
+  provider receives its own native message format rather than a raw JSON envelope: Slack gets a
+  **Block Kit** message (header, detail fields, colour-coded attachment, plus a fallback line so push
+  notifications are readable on their own), Teams gets a **MessageCard** with the same details as
+  facts. Messages carry the environment, flag key, enabled/disabled state, rollout percentage, the
+  acting user, and — for rejections — the stated reason.
+  - **Seven event types**, subscribable per integration: `flag.created`, `flag.updated`,
+    `flag.deleted`, `flag.promoted`, `change_request.opened`, `change_request.approved`,
+    `change_request.rejected`. Leaving the selection empty subscribes to everything.
+  - **Change-request events are new to the notification system entirely** — previously only flag
+    mutations fired outbound events, so approval workflows were invisible to webhooks as well. Both
+    raw webhooks and chat integrations now receive them.
+  - Delivery reuses the webhook pipeline: fire-and-forget (never blocks the API response), retried
+    with 1s/5s/15s backoff, and recorded in a bounded per-integration delivery log
+    (`GET …/integrations/{id}/deliveries`) so failures are diagnosable. A **Send test message**
+    action fires a sample event through the real delivery path.
+  - The incoming-webhook URL is treated as a bearer credential: it is **never returned by the API**
+    after creation (only an elided `…XXXXXX` preview), and plaintext `http://` is rejected outside
+    loopback.
+  - New `POST/GET/PATCH/DELETE /api/environments/{env}/integrations` endpoints, admin-gated at the
+    same tier as webhooks.
+
+### Changed
+
+- Outbound events now fan out through a single `notify()` entry point instead of each call site
+  invoking the webhook dispatcher directly, so a newly-added event cannot reach one sink and silently
+  miss the other.
+- **Dashboard now builds and runs on [Bun](https://bun.sh)** instead of pnpm + Node. The Docker image
+  builds it from `oven/bun:1-slim` (dropping the Node toolchain and the global pnpm install layer
+  entirely), and CI uses `oven-sh/setup-bun`. Vite and Vitest are unchanged. Contributors need Bun
+  1.3+ for `dashboard/`; note `bun run test`, not `bun test` — the latter invokes Bun's own runner,
+  which does not understand the Vitest setup.
+- **Flag create/edit moved into a slide-over panel** on the flag list rather than a separate page.
+  The panel's state lives in the URL (`/flags?new=1`, `/flags?edit=<key>`), so it is linkable,
+  survives a refresh, and closes on browser Back; the previous `/flags/new` and `/flags/:key/edit`
+  routes redirect into it, keeping existing bookmarks working.
+- **Sidebar navigation is grouped by scope** — Environment, Project, and Workspace — with each
+  header naming the project or environment it applies to. Membership follows the API each page
+  actually calls. The admin-oriented Project and Workspace sections start collapsed (a section
+  holding the current page always stays open), cutting the default list from fifteen items to ten.
+
+### Fixed
+
+- The `isEnabled() · ~100 ns, in-process` caption in the architecture diagram was centred on the
+  client column and overflowed the SVG viewBox, clipping the last few characters. It is now
+  right-anchored.
+
+## [0.1.21] - 2026-07-18
+
+### Fixed
+
+- Documentation and release-workflow corrections. No library, SDK, or server changes.
+
 ## [0.1.20] - 2026-07-18
 
 ### Added
