@@ -40,12 +40,13 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
       { text: "SDKs", link: "/sdks/nodejs" },
+      { text: "Ecosystem", link: "/ecosystem/cli" },
       { text: "Self-Hosting", link: "/self-hosting" },
-      { text: "Roadmap", link: "/roadmap" },
       { text: "API", link: "/api-reference" },
+      { text: "Roadmap", link: "/roadmap" },
       {
         text: "GitHub",
-        link: "https://github.com/ThinkGrid-Labs/checkgate",
+        link: "https://github.com/thinkgrid-labs/checkgate",
       },
     ],
 
@@ -56,17 +57,36 @@ export default defineConfig({
           { text: "What is Checkgate?", link: "/guide/what-is-checkgate" },
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "Architecture", link: "/guide/architecture" },
-          { text: "Core Concepts", link: "/guide/concepts" },
           { text: "Roadmap", link: "/roadmap" },
+        ],
+      },
+      {
+        text: "Concepts & Features",
+        items: [
+          { text: "Core Concepts", link: "/guide/concepts" },
+          { text: "Segments", link: "/guide/segments" },
+          { text: "Experimentation & Analytics", link: "/guide/experimentation" },
+          { text: "Governance", link: "/guide/governance" },
         ],
       },
       {
         text: "SDKs",
         items: [
+          { text: "Overview", link: "/sdks/nodejs" },
           { text: "Node.js (NAPI)", link: "/sdks/nodejs" },
           { text: "Web (WebAssembly)", link: "/sdks/web" },
           { text: "React Native (JSI)", link: "/sdks/react-native" },
           { text: "Flutter (FFI)", link: "/sdks/flutter" },
+        ],
+      },
+      {
+        text: "Ecosystem & Integrations",
+        items: [
+          { text: "Type-Safe Schema CLI", link: "/ecosystem/cli" },
+          { text: "Edge Evaluation", link: "/ecosystem/edge" },
+          { text: "SSR / Bootstrap", link: "/ecosystem/ssr" },
+          { text: "Terraform / OpenTofu", link: "/ecosystem/terraform" },
+          { text: "Kubernetes Operator", link: "/ecosystem/kubernetes" },
         ],
       },
       {
@@ -92,7 +112,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/ThinkGrid-Labs/checkgate" },
+      { icon: "github", link: "https://github.com/thinkgrid-labs/checkgate" },
     ],
 
     footer: {

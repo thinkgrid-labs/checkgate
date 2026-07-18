@@ -9,6 +9,12 @@ Checkgate has three main layers: the **control plane** (server), the **evaluatio
 
 ## Overview
 
+<FlowDiagram />
+
+A flag change is written once to the server, which persists it and pushes the delta to every
+connected SDK over SSE in under 50 ms. From then on, each `isEnabled()` is a local, in-process
+lookup — no network on the evaluation path. The detailed view:
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        Checkgate Server                           │

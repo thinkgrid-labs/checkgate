@@ -50,11 +50,19 @@ const enabled = client.isEnabled('new-checkout-flow', userId, {
 
 ### `new CheckgateClient(options)`
 
-| Option | Type | Required | Description |
-|--------|------|----------|-------------|
-| `serverUrl` | `string` | Yes | Base URL of your Checkgate server |
-| `sdkKey` | `string` | No | SDK key for authentication |
-| `reconnectDelayMs` | `number` | No | SSE reconnect delay in ms (default: 3000) |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `serverUrl` | `string` | — | Base URL of your Checkgate server (required) |
+| `sdkKey` | `string` | — | SDK key for authentication (Bearer) |
+| `reconnectDelayMs` | `number` | `3000` | Initial SSE reconnect delay (exponential backoff with jitter from here) |
+| `maxReconnectDelayMs` | `number` | `30000` | Maximum backoff delay between reconnects |
+| `pollFallbackThreshold` | `number` | `3` | Consecutive failed SSE reconnects before falling back to polling `/flags/snapshot`. `Infinity` disables |
+| `pollIntervalMs` | `number` | `30000` | Poll interval while in fallback mode |
+| `reportImpressions` | `boolean` | `true` | Report evaluation events for analytics |
+| `impressionBatchSize` | `number` | `50` | Flush after this many buffered events |
+| `impressionFlushIntervalMs` | `number` | `10000` | Periodic flush interval |
+| `sendEvaluationContext` | `boolean` | `false` | Include user attributes in reported impressions. Off by default so attributes never leave the process |
+| `storage` | `StorageAdapter` | — | Pluggable persistence for offline hydrate-on-start (see [Resilience](#resilience-offline)) |
 
 ### `client.connect(): Promise<void>`
 
@@ -74,9 +82,71 @@ Evaluates a flag for a user. This is a synchronous, in-process call.
 
 Returns `false` if the flag does not exist.
 
+### `client.getVariant(flagKey, userKey, attributes): { enabled, value } | null`
+
+Evaluates a multi-variant flag and returns the full result — the on/off decision plus the
+resolved `value` (boolean, string, number, or a decoded JSON object). Returns `null` if the flag
+does not exist. Use this for string/integer/JSON flags and A/B variants.
+
+### `client.getValue(flagKey, userKey, attributes, defaultValue): FlagValue`
+
+Convenience wrapper that returns just the resolved value, or `defaultValue` when the flag is
+missing.
+
+```typescript
+const color = client.getValue('checkout-button-color', userId, {}, 'blue') // string
+```
+
+### `client.track(eventKey, userKey, opts?): void`
+
+Records a goal/conversion event for [A/B testing](/guide/experimentation#a-b-testing). Buffered
+and reported asynchronously, like impressions. Use the **same `userKey`** you pass to
+`getVariant()`/`isEnabled()` so conversions attribute to the right variant.
+
+```typescript
+client.track('checkout_complete', userId, { value: 49.99 })
+```
+
+`opts` accepts an optional numeric `value` (e.g. revenue) and a `context` object.
+
 ### `client.disconnect(): void`
 
-Closes the SSE connection and cleans up resources. Call on graceful shutdown.
+Closes the SSE connection and cleans up resources (flushing any buffered impressions and events
+first). Call on graceful shutdown.
+
+## Resilience & Offline {#resilience-offline}
+
+The SDK is built to keep evaluating through network trouble — the same resilience layer ships in
+every Checkgate SDK:
+
+- **Reconnect with backoff** — SSE reconnects use exponential backoff with jitter
+  (`reconnectDelayMs` → `maxReconnectDelayMs`).
+- **Poll fallback** — if SSE can't be established at all (e.g. a proxy blocking long-lived
+  connections), after `pollFallbackThreshold` failed reconnects the SDK polls
+  `GET /flags/snapshot` every `pollIntervalMs`, then switches back to SSE once it recovers.
+- **Offline persistence** — pass a `storage` adapter (anything with `getItem`/`setItem`, e.g.
+  `localStorage` or an async KV) and the SDK persists the flag set and re-hydrates it on cold
+  start, so flags evaluate before — or entirely without — a connection.
+- **SSR bootstrap** — pass a `bootstrap` snapshot (from [`@checkgate/ssr`](/ecosystem/ssr)) to seed
+  the store synchronously on connect, for zero-flicker server-rendered apps.
+
+## Change listeners
+
+Subscribe to live flag changes to re-render or invalidate caches when a flag actually changes
+(bootstrap and reconnect resyncs are suppressed, so only genuine deltas fire):
+
+```typescript
+const unsubscribe = client.onChange((change) => {
+  // change describes the upserted/deleted flag
+  console.log('flag changed:', change)
+})
+```
+
+::: tip Every SDK shares this surface
+`getVariant`, `getValue`, `track`, the resilience options, and `bootstrap` are available in the
+[Web](/sdks/web), [React Native](/sdks/react-native), and [Flutter](/sdks/flutter) SDKs too —
+because all four wrap the same Rust evaluation core, flag decisions are identical across them.
+:::
 
 ## Usage with Express
 
