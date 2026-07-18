@@ -152,7 +152,7 @@ jobs:
             ./target/debug/server > server.log 2>&1 &
           SRV=$!
           for i in $(seq 1 60); do curl -sf "http://127.0.0.1:$PORT/health" >/dev/null && break; sleep 1; done
-          CHECKGATE_URL="http://127.0.0.1:$PORT" node sdks/nodejs/test/e2e.cjs
+          CHECKGATE_URL="http://127.0.0.1:$PORT" node sdks/nodejs/e2e/e2e.cjs
           RC=$?
           kill $SRV 2>/dev/null || true
           if [ $RC -ne 0 ]; then echo "=== server log ==="; cat server.log; fi
