@@ -1,6 +1,7 @@
 [package]
 name = "react-native"
 version.workspace = true
+license.workspace = true
 edition = "2021"
 
 # Produces both a dynamic lib (Android .so) and a static lib (iOS .a)

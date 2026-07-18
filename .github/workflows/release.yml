@@ -40,9 +40,9 @@ jobs:
     name: Verify — JS packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -116,7 +116,7 @@ jobs:
             artifact: checkgate.win32-x64-msvc.node
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -128,7 +128,7 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -152,7 +152,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: node-${{ matrix.target }}
           path: sdks/nodejs/${{ matrix.artifact }}
@@ -164,7 +164,7 @@ jobs:
       # publish job to assemble alongside all six `.node` binaries.
       - name: Upload JS dispatch loader
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: node-js-binding
           path: |
@@ -177,7 +177,7 @@ jobs:
     name: Verify — web WASM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -190,7 +190,7 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -219,7 +219,7 @@ jobs:
         run: node scripts/smoke-core.mjs
 
       - name: Upload built WASM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: web-dist
           path: sdks/web/dist
@@ -230,7 +230,7 @@ jobs:
     name: Verify — Flutter package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -269,7 +269,7 @@ jobs:
     name: Verify — Docker image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3
@@ -313,15 +313,15 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Download all native artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: node-*
           merge-multiple: true
@@ -382,15 +382,15 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Download built WASM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: web-dist
           path: sdks/web/dist
@@ -428,8 +428,8 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm provenance
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -455,8 +455,8 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm provenance
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -482,8 +482,8 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm provenance
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -509,8 +509,8 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm provenance
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -539,7 +539,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -581,7 +581,7 @@ jobs:
       packages: write
       id-token: write # Required for Cosign keyless signing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3

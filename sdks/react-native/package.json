@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/thinkgrid-labs/checkgate/issues"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "prepublishOnly": "node scripts/bundle-rust.js",
     "test": "vitest run"

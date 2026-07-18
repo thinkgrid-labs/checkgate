@@ -47,6 +47,6 @@ features:
     details: Native SDKs, a type-safe codegen CLI, edge evaluation (Cloudflare Workers, Fly.io), SSR/bootstrap helpers, and infrastructure-as-code via a Terraform provider and Kubernetes operator.
 
   - icon: 🔓
-    title: Open Source & MIT Licensed
+    title: Open Source & Apache 2.0 Licensed
     details: No black boxes, no usage limits, no surprise pricing. Fork it, extend it, and own your feature flag infrastructure completely.
 ---

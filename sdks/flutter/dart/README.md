@@ -43,4 +43,4 @@ final enabled = client.isEnabled('dark_mode', userId, {'country': 'US'});
 
 ## License
 
-MIT
+Apache-2.0

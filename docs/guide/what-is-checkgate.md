@@ -45,7 +45,7 @@ Checkgate is a complete feature-flag platform, not just a toggle store:
 | Evaluation latency | ~100ns | ~5–50ms (remote) |
 | Update propagation | SSE push, <50ms | Polling / streaming |
 | Self-hosted | Yes | No (or enterprise-only) |
-| Open source | MIT | Closed source |
+| Open source | Apache 2.0 | Closed source |
 | Vendor lock-in | None | High |
 | A/B testing | Beta (goal events + significance) | Yes |
 | Infrastructure as code | Terraform + Kubernetes operator | Terraform (managed) |
