@@ -8,16 +8,14 @@
 # ---------------------------------------------------------------------------
 # Stage 1 — build dashboard
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS dashboard-builder
-
-RUN npm install -g pnpm@10
+FROM oven/bun:1-slim AS dashboard-builder
 
 WORKDIR /app/dashboard
-COPY dashboard/package.json dashboard/pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+COPY dashboard/package.json dashboard/bun.lock* ./
+RUN bun install --frozen-lockfile
 
 COPY dashboard/ .
-RUN pnpm build
+RUN bun run build
 # → emits to ../server/public which maps to /app/server/public
 
 # ---------------------------------------------------------------------------

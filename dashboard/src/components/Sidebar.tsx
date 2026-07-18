@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   ToggleLeft,
@@ -20,6 +20,7 @@ import {
   FlaskConical,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronRight,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -27,22 +28,67 @@ import { useEnvironment, type Environment } from '../context/EnvironmentContext'
 import { useProject } from '../context/ProjectContext'
 import type { Project } from '../types'
 
-const NAV_ALL = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true, adminOnly: false },
-  { to: '/flags', icon: ToggleLeft, label: 'Feature Flags', end: false, adminOnly: false },
-  { to: '/segments', icon: Tags, label: 'Segments', end: false, adminOnly: false },
-  { to: '/change-requests', icon: GitPullRequest, label: 'Change Requests', end: false, adminOnly: false },
-  { to: '/schedule', icon: CalendarClock, label: 'Scheduled', end: false, adminOnly: false },
-  { to: '/impressions', icon: Activity, label: 'Impressions', end: false, adminOnly: false },
-  { to: '/exposure', icon: PieChart, label: 'Exposure', end: false, adminOnly: false },
-  { to: '/experiments', icon: FlaskConical, label: 'Experiments', end: false, adminOnly: false },
-  { to: '/audit', icon: History, label: 'Audit Log', end: false, adminOnly: false },
-  { to: '/sdk-health', icon: Wifi, label: 'SDK Health', end: false, adminOnly: false },
-  { to: '/webhooks', icon: Webhook, label: 'Webhooks', end: false, adminOnly: true },
-  { to: '/environments', icon: Globe, label: 'Environments', end: false, adminOnly: true },
-  { to: '/projects', icon: FolderKanban, label: 'Projects', end: false, adminOnly: true },
-  { to: '/users', icon: Users, label: 'Users', end: false, adminOnly: true },
-  { to: '/settings', icon: Settings, label: 'Settings', end: false, adminOnly: true },
+interface NavItem {
+  to: string
+  icon: typeof LayoutDashboard
+  label: string
+  end?: boolean
+  adminOnly?: boolean
+}
+
+interface NavGroup {
+  id: string
+  /** Scope label shown in the section header. */
+  label: string
+  items: NavItem[]
+}
+
+/** Always visible, above the grouped sections — the one page with no scope. */
+const HOME: NavItem = { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true }
+
+/**
+ * Nav grouped by the scope its data actually belongs to, so it's obvious which
+ * switcher above changes what you're looking at. Membership follows the API
+ * each page calls, not intuition:
+ *
+ *   environment — passes `activeEnv.id` (flags, segments, change requests,
+ *                 scheduled, experiments, exposure, impressions, webhooks, audit)
+ *   project     — passes `activeProject.id` (environments)
+ *   workspace   — unscoped endpoints (projects, users, sdk health, settings)
+ */
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'environment',
+    label: 'Environment',
+    items: [
+      { to: '/flags', icon: ToggleLeft, label: 'Feature Flags' },
+      { to: '/segments', icon: Tags, label: 'Segments' },
+      { to: '/change-requests', icon: GitPullRequest, label: 'Change Requests' },
+      { to: '/schedule', icon: CalendarClock, label: 'Scheduled' },
+      { to: '/experiments', icon: FlaskConical, label: 'Experiments' },
+      { to: '/exposure', icon: PieChart, label: 'Exposure' },
+      { to: '/impressions', icon: Activity, label: 'Impressions' },
+      { to: '/audit', icon: History, label: 'Audit Log' },
+      { to: '/webhooks', icon: Webhook, label: 'Webhooks', adminOnly: true },
+    ],
+  },
+  {
+    id: 'project',
+    label: 'Project',
+    items: [
+      { to: '/environments', icon: Globe, label: 'Environments', adminOnly: true },
+    ],
+  },
+  {
+    id: 'workspace',
+    label: 'Workspace',
+    items: [
+      { to: '/projects', icon: FolderKanban, label: 'Projects', adminOnly: true },
+      { to: '/users', icon: Users, label: 'Users', adminOnly: true },
+      { to: '/sdk-health', icon: Wifi, label: 'SDK Health' },
+      { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
+    ],
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -175,13 +221,74 @@ function EnvSwitcher() {
 // ---------------------------------------------------------------------------
 
 const KEY_SIDEBAR_COLLAPSED = 'lg_sidebar_collapsed'
+const KEY_CLOSED_GROUPS = 'lg_sidebar_closed_groups'
+
+function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+  const { to, icon: Icon, label, end } = item
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      title={collapsed ? label : undefined}
+      className={({ isActive }) =>
+        `group flex items-center rounded-xl text-sm font-medium transition-all duration-200 ${
+          collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+        } ${
+          isActive
+            ? 'bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100/50'
+            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <div className={`p-1 rounded-lg transition-colors ${isActive ? 'bg-white shadow-sm' : 'group-hover:bg-white/50'}`}>
+            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+          </div>
+          {!collapsed && <span className="flex-1">{label}</span>}
+        </>
+      )}
+    </NavLink>
+  )
+}
 
 export default function Sidebar() {
   const { session, logout } = useAuth()
+  const { activeProject } = useProject()
+  const { activeEnv } = useEnvironment()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const isAdmin = session?.user.role === 'admin'
-  const NAV = NAV_ALL.filter(item => !item.adminOnly || isAdmin)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(KEY_SIDEBAR_COLLAPSED) === 'true')
+  // Admin/config sections start closed so the first impression is the handful
+  // of pages people use daily, not all fifteen at once. Opening one sticks.
+  const [closedGroups, setClosedGroups] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(KEY_CLOSED_GROUPS)
+      return raw ? JSON.parse(raw) as string[] : ['project', 'workspace']
+    } catch {
+      return ['project', 'workspace']
+    }
+  })
+
+  const groups = NAV_GROUPS
+    .map(g => ({ ...g, items: g.items.filter(i => !i.adminOnly || isAdmin) }))
+    .filter(g => g.items.length > 0)
+
+  /** Context name shown beside the scope label, so the header names what it applies to. */
+  function groupContext(id: string): string | undefined {
+    if (id === 'environment') return activeEnv?.name
+    if (id === 'project') return activeProject?.name
+    return undefined
+  }
+
+  function toggleGroup(id: string) {
+    setClosedGroups(prev => {
+      const next = prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
+      localStorage.setItem(KEY_CLOSED_GROUPS, JSON.stringify(next))
+      return next
+    })
+  }
 
   function toggleCollapsed() {
     setCollapsed(c => {
@@ -223,33 +330,47 @@ export default function Sidebar() {
       )}
 
       {/* Nav */}
-      <nav className={`flex-1 py-2 space-y-1 overflow-y-auto ${collapsed ? 'px-3' : 'px-4'}`}>
-        {NAV.map(({ to, icon: Icon, label, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            title={collapsed ? label : undefined}
-            className={({ isActive }) =>
-              `group flex items-center rounded-xl text-sm font-medium transition-all duration-200 ${
-                collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
-              } ${
-                isActive
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100/50'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <div className={`p-1 rounded-lg transition-colors ${isActive ? 'bg-white shadow-sm' : 'group-hover:bg-white/50'}`}>
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+      <nav className={`flex-1 py-2 overflow-y-auto ${collapsed ? 'px-3 space-y-1' : 'px-4 space-y-1'}`}>
+        <NavItemLink item={HOME} collapsed={collapsed} />
+
+        {groups.map(group => {
+          // A section holding the current page always renders open — collapsing
+          // it would hide the very item marked active.
+          const hasActive = group.items.some(i => pathname === i.to || pathname.startsWith(`${i.to}/`))
+          const open = collapsed || hasActive || !closedGroups.includes(group.id)
+          const context = groupContext(group.id)
+
+          return (
+            <div key={group.id} className={collapsed ? 'pt-1 mt-1 border-t border-gray-100' : 'pt-2'}>
+              {!collapsed && (
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  aria-expanded={open}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+                  <span className="shrink-0">{group.label}</span>
+                  {context && (
+                    <>
+                      <span className="text-gray-200">·</span>
+                      <span className="truncate normal-case tracking-normal font-semibold text-gray-400">
+                        {context}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {open && (
+                <div className="space-y-1">
+                  {group.items.map(item => (
+                    <NavItemLink key={item.to} item={item} collapsed={collapsed} />
+                  ))}
                 </div>
-                {!collapsed && <span className="flex-1">{label}</span>}
-              </>
-            )}
-          </NavLink>
-        ))}
+              )}
+            </div>
+          )
+        })}
       </nav>
 
       {/* Collapse toggle */}

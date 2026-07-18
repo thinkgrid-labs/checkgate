@@ -6,7 +6,7 @@ import { useEnvironment, type Environment } from '../context/EnvironmentContext'
 
 // ---------------------------------------------------------------------------
 // Diffing — compares only the fields that affect evaluation. Tags, owner,
-// and archival state are dashboard-only metadata (see FlagEditor.tsx) and
+// and archival state are dashboard-only metadata (see FlagForm.tsx) and
 // deliberately excluded so they don't show up as noisy "differences" between
 // otherwise-identical flags.
 // ---------------------------------------------------------------------------

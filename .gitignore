@@ -1,11 +1,10 @@
 # Rust
 target/
 
-# Node / pnpm
+# Node / Bun
 dashboard/node_modules/
 docs/node_modules/
 docs/.vitepress/dist/
-dashboard/.pnpm-store/
 server/public/
 
 # macOS

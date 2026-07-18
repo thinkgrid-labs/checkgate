@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 const TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/flags': 'Feature Flags',
-  '/flags/new': 'New Flag',
   '/segments': 'Segments',
   '/schedule': 'Scheduled Changes',
   '/impressions': 'Impressions',
@@ -18,7 +17,6 @@ const TITLES: Record<string, string> = {
 
 function getTitle(pathname: string): string {
   if (TITLES[pathname]) return TITLES[pathname]
-  if (pathname.startsWith('/flags/') && pathname.endsWith('/edit')) return 'Edit Flag'
   if (pathname.startsWith('/projects/')) return 'Project Settings'
   return 'Checkgate'
 }

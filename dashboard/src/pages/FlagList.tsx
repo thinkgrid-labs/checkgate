@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, RotateCcw, Pencil, Trash2, ArrowUpRight, Copy, Check, Archive, ArchiveRestore } from 'lucide-react'
 import { api } from '../api'
 import type { Flag, FlagType } from '../types'
 import { useEnvironment } from '../context/EnvironmentContext'
+import Drawer from '../components/Drawer'
+import FlagForm from '../components/FlagForm'
 
 const TYPE_BADGE: Partial<Record<FlagType, { label: string; cls: string }>> = {
   string: { label: 'STR', cls: 'bg-blue-50 text-blue-700 ring-blue-100' },
@@ -167,6 +169,7 @@ type StatusFilter = 'all' | 'enabled' | 'disabled'
 
 export default function FlagList() {
   const { activeEnv } = useEnvironment()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [flags, setFlags] = useState<Flag[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -249,6 +252,43 @@ export default function FlagList() {
     }
   }
 
+  // The panel's open/target state lives in the URL, so it survives a refresh,
+  // is linkable, and closes on browser Back.
+  const editingKey = searchParams.get('edit')
+  const creating = searchParams.get('new') === '1'
+  const panelOpen = creating || editingKey !== null
+
+  const openNew = useCallback(() => setSearchParams({ new: '1' }), [setSearchParams])
+  const openEdit = useCallback(
+    (flagKey: string) => setSearchParams({ edit: flagKey }),
+    [setSearchParams],
+  )
+  const closePanel = useCallback(() => setSearchParams({}), [setSearchParams])
+
+  /** Merge a created/updated flag into the list without a full refetch. */
+  const upsertFlag = useCallback((saved: Flag) => {
+    setFlags(prev =>
+      prev.some(f => f.key === saved.key)
+        ? prev.map(f => (f.key === saved.key ? saved : f))
+        : [...prev, saved],
+    )
+  }, [])
+
+  const handleSaved = useCallback((saved: Flag) => {
+    upsertFlag(saved)
+    closePanel()
+  }, [upsertFlag, closePanel])
+
+  const handleFlagChanged = useCallback((changed: Flag) => {
+    // Archiving from inside the panel removes the row from the default view,
+    // matching what the list-row archive button does.
+    setFlags(prev =>
+      !showArchived && changed.archived_at
+        ? prev.filter(f => f.key !== changed.key)
+        : prev.map(f => (f.key === changed.key ? changed : f)),
+    )
+  }, [showArchived])
+
   const filtered = flags.filter(f => {
     if (statusFilter === 'enabled' && !f.is_enabled) return false
     if (statusFilter === 'disabled' && f.is_enabled) return false
@@ -262,6 +302,29 @@ export default function FlagList() {
       {promotingFlag && (
         <PromoteModal flag={promotingFlag} onClose={() => setPromotingFlag(null)} />
       )}
+
+      <Drawer
+        open={panelOpen}
+        onClose={closePanel}
+        title={creating ? 'New flag' : 'Edit flag'}
+        subtitle={
+          creating ? (
+            activeEnv ? `Creating in ${activeEnv.name}` : undefined
+          ) : (
+            <span className="font-mono text-emerald-600">{editingKey}</span>
+          )
+        }
+      >
+        {/* Keyed so switching between flags (or create ↔ edit) remounts the
+            form rather than reusing another flag's field state. */}
+        <FlagForm
+          key={creating ? '__new__' : editingKey}
+          flagKey={creating ? undefined : (editingKey ?? undefined)}
+          onSaved={handleSaved}
+          onFlagChanged={handleFlagChanged}
+          onCancel={closePanel}
+        />
+      </Drawer>
 
       {/* Toolbar */}
       <div className="flex items-center gap-3">
@@ -318,12 +381,12 @@ export default function FlagList() {
             <RotateCcw className="w-3.5 h-3.5" /> Retry
           </button>
         )}
-        <Link
-          to="/flags/new"
+        <button
+          onClick={openNew}
           className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5"
         >
           <Plus className="w-4 h-4" /> New flag
-        </Link>
+        </button>
       </div>
 
       {/* Table card */}
@@ -339,12 +402,12 @@ export default function FlagList() {
             ) : (
               <>
                 <p className="text-gray-400 text-sm">No flags in {activeEnv?.name ?? 'this environment'} yet.</p>
-                <Link
-                  to="/flags/new"
+                <button
+                  onClick={openNew}
                   className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" /> Create your first flag
-                </Link>
+                </button>
               </>
             )}
           </div>
@@ -416,13 +479,13 @@ export default function FlagList() {
                         >
                           <ArrowUpRight className="w-3.5 h-3.5" />
                         </button>
-                        <Link
-                          to={`/flags/${encodeURIComponent(flag.key)}/edit`}
+                        <button
+                          onClick={() => openEdit(flag.key)}
                           className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                           aria-label="Edit flag"
                         >
                           <Pencil className="w-3.5 h-3.5" />
-                        </Link>
+                        </button>
                         <button
                           onClick={() => void toggleArchived(flag)}
                           className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
