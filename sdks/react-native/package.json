@@ -1,8 +1,17 @@
 {
   "name": "@checkgate/react-native",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Checkgate feature-flag SDK for React Native \u2014 local evaluation via Rust JSI.",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thinkgrid-labs/checkgate.git",
+    "directory": "sdks/react-native"
+  },
+  "homepage": "https://github.com/thinkgrid-labs/checkgate#readme",
+  "bugs": {
+    "url": "https://github.com/thinkgrid-labs/checkgate/issues"
+  },
   "license": "MIT",
   "scripts": {
     "prepublishOnly": "node scripts/bundle-rust.js",
@@ -12,7 +21,6 @@
     "index.js",
     "cpp/",
     "src/",
-    "ios/",
     "android/",
     "rust-core/",
     "Cargo.toml",

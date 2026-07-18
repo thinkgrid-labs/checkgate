@@ -9,6 +9,9 @@ jobs:
   publish:
     name: Build WASM and publish to npm
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for npm provenance
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +44,7 @@ jobs:
           
       - name: Bundle Rust Core
         working-directory: sdks/web
-        run: node scripts/bundle-rust.js
+        run: node scripts/bundle-rust.cjs
 
       - name: Remove wasm-pack ignore file
         working-directory: sdks/web
@@ -52,10 +55,17 @@ jobs:
         run: |
           if [ ! -f "dist/checkgate_bg.wasm" ]; then echo "Error: WASM binary missing!"; exit 1; fi
           if [ ! -f "dist/checkgate.js" ]; then echo "Error: JS wrapper missing!"; exit 1; fi
+          if [ ! -f "core.js" ]; then echo "Error: server-side core export missing!"; exit 1; fi
           echo "WASM package integrity verified."
+
+      # Actually run the engine — @checkgate/edge and @checkgate/ssr depend on
+      # this export, so a broken init path must never reach the registry.
+      - name: Smoke-test the server-side core export
+        working-directory: sdks/web
+        run: node scripts/smoke-core.mjs
 
       - name: Publish @checkgate/web
         working-directory: sdks/web
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,12 +1,22 @@
 # Next.js (App Router) — zero-flicker flags with @checkgate/ssr
 
 The complete, copy-pasteable flow (server payload → embed → client hydration) is
-in the [package README](../../README.md#the-flow-nextjs-app-router). This folder
-holds the one shared helper it references:
+in the [package README](../../README.md#the-flow-nextjs-app-router).
 
-- [`wasm-core.ts`](wasm-core.ts) — builds a Checkgate evaluation `core` from the
-  shared `@checkgate/web` WASM engine, used both to build the bootstrap on the
-  server and (optionally) to seed the live client SDK.
+## Packages
+
+```bash
+npm install @checkgate/ssr @checkgate/web
+```
+
+- **`@checkgate/web`** — the live client SDK, and (via `@checkgate/web/core`) the
+  shared WASM evaluation engine used to resolve flags on the server. On Node the
+  engine loads itself from disk, so `await createWasmCore()` needs no arguments.
+- **`@checkgate/ssr`** — resolves flags server-side into a bootstrap payload,
+  embeds it in the document, and reads it back for the first client paint.
+- **`@checkgate/edge`** *(optional)* — adds TTL-cached snapshot fetching on the
+  server. Without it, fetch `GET /flags/snapshot` yourself and pass the result
+  straight to `buildBootstrap({ snapshot })`.
 
 ## Layout
 
@@ -14,8 +24,7 @@ holds the one shared helper it references:
 app/
   layout.tsx          # build the payload for the request, inject bootstrapScriptTag() into <head>
 lib/
-  checkgate-server.ts # getBootstrap(userKey, keys) — CheckgateEdge + buildBootstrap
-  wasm-core.ts        # this file
+  checkgate-server.ts # getBootstrap(userKey, keys) — createWasmCore + buildBootstrap
   use-flag.ts         # 'use client' hook: BootstrapValues on first paint, CheckgateWeb for live updates
 ```
 

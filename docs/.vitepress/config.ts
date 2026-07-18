@@ -39,7 +39,7 @@ export default defineConfig({
     logo: "/checkgate_logo.png",
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
-      { text: "SDKs", link: "/sdks/nodejs" },
+      { text: "SDKs", link: "/sdks/" },
       { text: "Ecosystem", link: "/ecosystem/cli" },
       { text: "Self-Hosting", link: "/self-hosting" },
       { text: "API", link: "/api-reference" },
@@ -72,7 +72,7 @@ export default defineConfig({
       {
         text: "SDKs",
         items: [
-          { text: "Overview", link: "/sdks/nodejs" },
+          { text: "Which SDK do I need?", link: "/sdks/" },
           { text: "Node.js (NAPI)", link: "/sdks/nodejs" },
           { text: "Web (WebAssembly)", link: "/sdks/web" },
           { text: "React Native (JSI)", link: "/sdks/react-native" },

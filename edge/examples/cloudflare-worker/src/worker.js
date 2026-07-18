@@ -13,7 +13,10 @@
 //     first request to a cold isolate tends to find a warm snapshot.
 
 import { CheckgateEdge } from '@checkgate/edge'
-import { createWasmCore } from './wasm-core.js'
+import { createWasmCore } from '@checkgate/web/core'
+// Wrangler compiles this .wasm import into a WebAssembly.Module, which
+// createWasmCore() accepts directly.
+import wasmModule from '@checkgate/web/dist/checkgate_bg.wasm'
 
 // Persists across requests on a warm isolate; rebuilt on cold start.
 let edge = null
@@ -23,7 +26,7 @@ async function getEdge(env) {
   edge = new CheckgateEdge({
     serverUrl: env.CHECKGATE_URL,
     sdkKey: env.CHECKGATE_SDK_KEY,
-    core: await createWasmCore(),
+    core: await createWasmCore(wasmModule),
     ttlSeconds: Number(env.CHECKGATE_TTL_SECONDS ?? 30),
     staleWhileRevalidateSeconds: Number(env.CHECKGATE_SWR_SECONDS ?? 60),
   })

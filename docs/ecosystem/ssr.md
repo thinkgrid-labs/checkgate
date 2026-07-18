@@ -31,7 +31,7 @@ npm install @checkgate/ssr @checkgate/edge @checkgate/web
 // lib/checkgate-server.ts
 import { CheckgateEdge } from '@checkgate/edge'
 import { buildBootstrap } from '@checkgate/ssr'
-import { createWasmCore } from './wasm-core' // adapter over @checkgate/web WASM
+import { createWasmCore } from '@checkgate/web/core'
 
 let edge: CheckgateEdge | null = null
 
