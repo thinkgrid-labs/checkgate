@@ -1,19 +1,23 @@
 {
   "name": "@checkgate/web",
   "version": "0.1.20",
-  "description": "Checkgate feature-flag SDK for the web — local evaluation via WebAssembly.",
+  "description": "Checkgate feature-flag SDK for the web \u2014 local evaluation via WebAssembly.",
   "main": "index.js",
   "module": "index.js",
   "types": "dist/checkgate.d.ts",
   "license": "MIT",
   "scripts": {
     "build": "wasm-pack build --target web --out-name checkgate --out-dir dist",
-    "prepublishOnly": "node scripts/bundle-rust.js"
+    "prepublishOnly": "node scripts/bundle-rust.js",
+    "test": "vitest run"
   },
   "files": [
     "index.js",
     "dist/",
     "rust-core/",
     "Cargo.toml"
-  ]
+  ],
+  "devDependencies": {
+    "vitest": "^4.1.3"
+  }
 }

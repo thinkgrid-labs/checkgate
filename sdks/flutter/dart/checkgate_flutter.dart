@@ -64,7 +64,10 @@ class CheckgateClient {
   /// Optional persistence adapter for offline flag evaluation.
   final CheckgateStorage? storage;
 
-  late final CheckgateBindings _bindings;
+  // The native evaluation engine, loaded lazily on connect() so constructing a
+  // client is cheap and side-effect-free (and unit-testable without the native
+  // library). Non-null after connect(); evaluation methods guard on readiness.
+  CheckgateBindings? _bindings;
 
   // Offline persistence: shadow copy of the raw flag set.
   final Map<String, Map<String, dynamic>> _flagCache = {};
@@ -114,7 +117,12 @@ class CheckgateClient {
     this.pollFallbackThreshold = 3,
     this.pollInterval = const Duration(seconds: 30),
     this.storage,
-  }) : _bindings = CheckgateBindings.open();
+    http.Client? httpClient,
+  }) {
+    // Test seam: an injected client lets unit tests exercise the
+    // impression/event reporting paths with a mock, without a real connection.
+    _httpClient = httpClient;
+  }
 
   /// Open the SSE stream. The returned future completes once the server has
   /// replayed the full flag set and sent the "ready" event — consistent with
@@ -127,7 +135,10 @@ class CheckgateClient {
     _connecting = true;
     _closed = false;
     _readyCompleter = Completer<void>();
-    _httpClient = http.Client();
+    // Load the native engine lazily (once), and open an HTTP client unless one
+    // was injected for testing.
+    _bindings ??= CheckgateBindings.open();
+    _httpClient ??= http.Client();
     // Hydrate from the persisted snapshot so evaluations work offline
     // immediately, then open the live stream.
     _hydrateFromCache().whenComplete(() {
@@ -179,7 +190,7 @@ class CheckgateClient {
         final f = flag as Map<String, dynamic>;
         _flagCache[key] = f;
         final ptr = jsonEncode(f).toNativeUtf8();
-        _bindings.checkgate_upsert_flag_v2(ptr);
+        _bindings!.checkgate_upsert_flag_v2(ptr);
         malloc.free(ptr);
       });
       if (!_ready) _hydrated = true;
@@ -346,7 +357,7 @@ class CheckgateClient {
   void _handleSseEvent(String eventName, String data) {
     if (eventName == 'connected') {
       // Clear the Rust cache before the server replays the full state.
-      _bindings.checkgate_clear_store();
+      _bindings!.checkgate_clear_store();
       _flagCache.clear();
       // A successful connection resets the backoff schedule and ends any
       // active poll fallback — SSE deltas take over again.
@@ -415,13 +426,13 @@ class CheckgateClient {
     // Pass the full flag (flag_type, default/disabled values, and per-rule
     // variants) so getValue()/getVariant() resolve non-boolean flags correctly.
     final flagJson = jsonEncode(flag).toNativeUtf8();
-    _bindings.checkgate_upsert_flag_v2(flagJson);
+    _bindings!.checkgate_upsert_flag_v2(flagJson);
     malloc.free(flagJson);
   }
 
   void _deleteFlag(String key) {
     final k = key.toNativeUtf8();
-    _bindings.checkgate_delete_flag(k);
+    _bindings!.checkgate_delete_flag(k);
     malloc.free(k);
   }
 
@@ -441,7 +452,7 @@ class CheckgateClient {
     final attrsJson = jsonEncode(attributes).toNativeUtf8();
 
     final result =
-        _bindings.checkgate_is_enabled(fKey, uKey, attrsJson);
+        _bindings!.checkgate_is_enabled(fKey, uKey, attrsJson);
 
     malloc.free(fKey);
     malloc.free(uKey);
@@ -468,7 +479,7 @@ class CheckgateClient {
     final uKey = userKey.toNativeUtf8();
     final attrsJson = jsonEncode(attributes).toNativeUtf8();
 
-    final ptr = _bindings.checkgate_get_variant(fKey, uKey, attrsJson);
+    final ptr = _bindings!.checkgate_get_variant(fKey, uKey, attrsJson);
 
     malloc.free(fKey);
     malloc.free(uKey);
@@ -476,7 +487,7 @@ class CheckgateClient {
 
     if (ptr == nullptr) return null;
     final json = ptr.toDartString();
-    _bindings.checkgate_free_string(ptr);
+    _bindings!.checkgate_free_string(ptr);
 
     final decoded = jsonDecode(json);
     if (decoded == null) return null;
@@ -630,6 +641,33 @@ class CheckgateClient {
       return http.Response('', 599);
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Test-only seams
+  //
+  // These expose internal reporting state so unit tests can exercise the
+  // impression/event batching and HTTP paths (with an injected mock client)
+  // without a live SSE connection or the native FFI library. Not part of the
+  // public API — do not use in application code.
+  // ---------------------------------------------------------------------------
+
+  /// Test-only: set the environment id normally learned from the SSE stream.
+  void debugSetEnvironment(String? envId) => _envId = envId;
+
+  /// Test-only: buffered impression payloads awaiting flush.
+  List<Map<String, dynamic>> get debugImpressions => _impressions;
+
+  /// Test-only: buffered goal-event payloads awaiting flush.
+  List<Map<String, dynamic>> get debugEvents => _events;
+
+  /// Test-only: force a flush of buffered impressions and events.
+  void debugFlush() {
+    _flushImpressions();
+    _flushEvents();
+  }
+
+  /// Test-only: the value serialization used for impression reporting.
+  String debugFormatValue(dynamic value) => _formatValue(value);
 
   /// Cancel the SSE stream and release the HTTP client.
   void close() {

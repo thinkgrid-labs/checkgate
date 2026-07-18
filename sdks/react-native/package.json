@@ -1,11 +1,12 @@
 {
   "name": "@checkgate/react-native",
   "version": "0.1.20",
-  "description": "Checkgate feature-flag SDK for React Native — local evaluation via Rust JSI.",
+  "description": "Checkgate feature-flag SDK for React Native \u2014 local evaluation via Rust JSI.",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "prepublishOnly": "node scripts/bundle-rust.js"
+    "prepublishOnly": "node scripts/bundle-rust.js",
+    "test": "vitest run"
   },
   "files": [
     "index.js",
@@ -26,5 +27,8 @@
     "feature-flags",
     "jsi",
     "rust"
-  ]
+  ],
+  "devDependencies": {
+    "vitest": "^4.1.3"
+  }
 }
