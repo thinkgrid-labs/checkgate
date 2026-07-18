@@ -80,6 +80,7 @@ It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), brows
 | Web (WASM) SDK | [SDK: Web](docs/sdks/web.md) |
 | React Native (JSI) SDK | [SDK: React Native](docs/sdks/react-native.md) |
 | Flutter (FFI) SDK | [SDK: Flutter](docs/sdks/flutter.md) |
+| Type-safe codegen CLI | [`@checkgate/cli`](cli/README.md) |
 | Docker, AWS, env vars | [Self-Hosting](docs/self-hosting.md) |
 | Enterprise Setup & Migration | [Enterprise Setup & Migration](docs/enterprise-setup.md) |
 

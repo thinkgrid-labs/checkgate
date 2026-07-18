@@ -1,0 +1,9 @@
+[
+  { "key": "new-dashboard", "flag_type": "boolean", "is_enabled": true, "default_value": true },
+  { "key": "checkout-color", "flag_type": "string", "is_enabled": true, "default_value": "blue" },
+  { "key": "max_items", "flag_type": "integer", "is_enabled": true, "default_value": 25 },
+  { "key": "theme-config", "flag_type": "json", "is_enabled": true, "default_value": { "mode": "dark", "accent": "#10b981" } },
+  { "key": "legacy-flag", "is_enabled": false },
+  { "key": "2fa-enabled", "flag_type": "boolean", "is_enabled": true, "default_value": false },
+  { "key": "archived-thing", "flag_type": "boolean", "is_enabled": false, "archived_at": "2026-01-01T00:00:00Z" }
+]

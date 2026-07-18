@@ -133,10 +133,7 @@ pub fn read_router() -> Router<AppState> {
             "/environments/{env_id}/impressions/stats",
             get(impression_stats),
         )
-        .route(
-            "/environments/{env_id}/impressions/exposure",
-            get(exposure),
-        )
+        .route("/environments/{env_id}/impressions/exposure", get(exposure))
 }
 
 /// Impression ingest route — any authenticated client (including SDK Bearer keys).

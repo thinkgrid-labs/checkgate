@@ -305,15 +305,16 @@ async fn delete_experiment(
     check_env_access(&state.db, &jar, &env_id).await?;
     require_editor(&jar)?;
 
-    let result = sqlx::query("DELETE FROM experiments WHERE environment_id = $1::uuid AND key = $2")
-        .bind(&env_id)
-        .bind(&key)
-        .execute(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to delete experiment");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let result =
+        sqlx::query("DELETE FROM experiments WHERE environment_id = $1::uuid AND key = $2")
+            .bind(&env_id)
+            .bind(&key)
+            .execute(&state.db)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to delete experiment");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
     if result.rows_affected() == 0 {
         return Err(StatusCode::NOT_FOUND);
@@ -440,7 +441,7 @@ async fn experiment_results(
                     None
                 };
                 let z = two_proportion_z(r.converted, r.exposed, cc, cn);
-                let p = z.map(|z| two_sided_p_value(z));
+                let p = z.map(two_sided_p_value);
                 (uplift, z, p)
             } else {
                 (None, None, None)

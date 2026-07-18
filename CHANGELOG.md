@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Type-Safe Schema CLI** (`@checkgate/cli`) — a new `checkgate typegen` command generates
+  type-safe flag accessors for **TypeScript, Dart, and Rust** from your flag definitions, read
+  either from a running server (`--url`/`--env`/`--token`, or the `CHECKGATE_*` env vars) or a local
+  JSON export (`--input`). TypeScript emits a `FlagKey` union, per-flag value types, defaults, and a
+  `typedFlags()` wrapper so a wrong key or mis-typed value is a compile error; Dart emits a `FlagKey`
+  enum + `TypedFlags` wrapper; Rust emits a `FlagKey` enum (`as_str()`/`ALL`/`Display`) and a
+  dependency-free `defaults` module. Output is deterministic (sorted, archived flags excluded);
+  non-identifier keys (hyphens, leading digits) are converted safely per language. Zero runtime
+  dependencies; Node 18+. Lives in `cli/` with a full `node --test` suite.
+
 - **Exposure Dashboards** — a new **Exposure** page visualizes which users are being exposed to
   which flag variant. Per-flag it shows the variant distribution (share of evaluations and unique
   users) and a 14-day stacked timeline of evaluations per variant, all derived from existing
