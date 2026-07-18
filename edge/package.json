@@ -1,0 +1,29 @@
+{
+  "name": "@checkgate/edge",
+  "version": "0.1.20",
+  "description": "Runtime-agnostic edge evaluator for Checkgate — fetch a flag snapshot, cache it with TTL + stale-while-revalidate, and evaluate at the edge (Cloudflare Workers, Deno Deploy, Fastly, Vercel Edge, Fly.io).",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "checkgate",
+    "feature-flags",
+    "edge",
+    "cloudflare-workers",
+    "fly",
+    "low-latency"
+  ],
+  "license": "MIT"
+}

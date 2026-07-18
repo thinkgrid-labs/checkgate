@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Edge Side Evaluation** (`@checkgate/edge`) — a new, zero-dependency, runtime-agnostic edge
+  evaluator that pulls a flag snapshot from `/flags/snapshot`, caches it with a TTL plus optional
+  stale-while-revalidate, keeps the last-known-good snapshot through origin outages (fail-open), and
+  delegates evaluation to the shared `@checkgate/web` WASM engine — so edge results are identical to
+  every other SDK, with no re-implemented rule/rollout/segment logic. Ships with a **Cloudflare
+  Workers** example (per-request edge evaluation in a warm isolate + a Cron Trigger that keeps the
+  snapshot warm) and a **Fly.io** multi-region deploy recipe (`fly.toml` + guide). Lives in `edge/`
+  with a full `node --test` suite covering refresh de-duplication, TTL/SWR behavior, and fail-open
+  resilience.
 - **Type-Safe Schema CLI** (`@checkgate/cli`) — a new `checkgate typegen` command generates
   type-safe flag accessors for **TypeScript, Dart, and Rust** from your flag definitions, read
   either from a running server (`--url`/`--env`/`--token`, or the `CHECKGATE_*` env vars) or a local

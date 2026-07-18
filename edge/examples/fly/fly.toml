@@ -1,0 +1,52 @@
+# Deploy the Checkgate server globally on Fly.io.
+#
+# Fly runs the full server (Rust + WASM local evaluation) as Machines you can
+# place in many regions at once, so every SDK's SSE bootstrap, `/flags/snapshot`
+# poll, and impression/event ingest is served from a nearby region — global
+# low-latency without changing a line of app code.
+#
+# Deploy from the REPOSITORY ROOT so the build context sees the Dockerfile:
+#   fly launch --no-deploy --copy-config --config edge/examples/fly/fly.toml
+#   fly secrets set DATABASE_URL=... REDIS_URL=... SESSION_SECRET=...
+#   fly deploy --config edge/examples/fly/fly.toml
+#
+# See README.md in this directory for the full walkthrough.
+
+app = "checkgate"
+primary_region = "iad"          # change to your busiest region
+
+[build]
+  dockerfile = "Dockerfile"     # resolved from the repo root (the build context)
+
+[env]
+  PORT = "3000"
+  PUBLIC_DIR = "/app/public"
+  COOKIE_SECURE = "true"        # Fly terminates TLS in front of the app
+  DB_MAX_CONNECTIONS = "10"
+  # DATABASE_URL, REDIS_URL, SESSION_SECRET are set via `fly secrets set`.
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Keep at least one Machine warm so flag reads never pay a cold start; Fly
+  # still stops the rest when idle to save cost.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+# Readiness/liveness — the server splits these; `/health` is the simple check.
+[[http_service.checks]]
+  interval = "15s"
+  timeout = "2s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

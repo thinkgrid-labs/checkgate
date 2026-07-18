@@ -93,3 +93,20 @@ jobs:
       - name: Smoke-test codegen (ts, dart, rust)
         working-directory: cli
         run: node bin/checkgate.js typegen --lang ts,dart,rust --input test/fixtures/flags.json --out-dir /tmp/checkgate-gen
+
+  # ---------------------------------------------------------------------------
+  # Edge — @checkgate/edge evaluator tests (zero deps, Node's built-in runner)
+  # ---------------------------------------------------------------------------
+  edge:
+    name: Edge evaluator tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run tests
+        working-directory: edge
+        run: node --test
