@@ -5,7 +5,8 @@ Thanks for your interest in contributing. This document covers how to get set up
 ## Prerequisites
 
 - Rust 1.88+
-- Node.js 18+
+- Node.js 18+ (SDKs, CLI, docs)
+- Bun 1.3+ (dashboard)
 - Docker and Docker Compose (for integration tests)
 - `wasm-pack` (browser SDK)
 - `@napi-rs/cli` (Node.js SDK)
@@ -30,9 +31,24 @@ sdks/
   browser/          wasm-bindgen / wasm-pack
   react-native/     JSI C++ bridge
   flutter/          dart:ffi binding
-dashboard/          Next.js control-plane UI
+dashboard/          Vite + React control-plane UI (Bun)
 docs/               VitePress documentation
 ```
+
+### Dashboard
+
+The dashboard uses Bun as both package manager and runtime:
+
+```bash
+cd dashboard
+bun install
+bun run dev                # dev server on :5173, proxies /api to :3000
+bun run build              # type-check + build into ../server/public
+bun run test --run         # vitest suite
+```
+
+Use `bun run test`, not `bun test` — the latter invokes Bun's own test runner,
+which does not understand the vitest setup in `src/setupTests.ts`.
 
 ## Making changes
 

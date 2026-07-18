@@ -150,7 +150,7 @@ async fn apply_change(state: &AppState, id: &str, env_id: &str, flag_key: &str, 
                 None,
                 Some(&serde_json::json!({"scheduled_change_id": id})),
             );
-            crate::webhook_fire::fire_webhooks(state.clone(), env_id.to_string(), wh_payload);
+            crate::notify::notify(state.clone(), env_id.to_string(), wh_payload);
 
             // Audit log.
             crate::api::audit::log_audit_event(

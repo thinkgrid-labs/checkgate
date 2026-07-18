@@ -1,8 +1,10 @@
 {
   "name": "checkgate-dashboard",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.3.14",
+  "trustedDependencies": ["esbuild"],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

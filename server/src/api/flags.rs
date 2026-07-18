@@ -320,7 +320,7 @@ async fn create_flag(
         actor_email.as_deref(),
         None,
     );
-    crate::webhook_fire::fire_webhooks(state.clone(), env_id.clone(), wh_payload);
+    crate::notify::notify(state.clone(), env_id.clone(), wh_payload);
 
     info!(env_id = %env_id, "Flag created/replaced");
     Ok(Json(FlagWithMetadata {
@@ -405,7 +405,7 @@ async fn delete_flag(
         actor_email.as_deref(),
         None,
     );
-    crate::webhook_fire::fire_webhooks(state.clone(), path.env_id.clone(), wh_payload);
+    crate::notify::notify(state.clone(), path.env_id.clone(), wh_payload);
 
     info!(env_id = %path.env_id, "Flag deleted");
     Ok(StatusCode::NO_CONTENT)
@@ -577,7 +577,7 @@ pub(super) async fn apply_patch(
         actor_email,
         None,
     );
-    crate::webhook_fire::fire_webhooks(state.clone(), env_id.to_string(), wh_payload);
+    crate::notify::notify(state.clone(), env_id.to_string(), wh_payload);
 
     info!(env_id = %env_id, "Flag patched");
     Ok(FlagWithMetadata {
@@ -647,6 +647,21 @@ async fn patch_flag(
         &requested_by,
     )
     .await?;
+
+    // A queued request is waiting on a human, so it's the event most worth
+    // surfacing in chat — nothing applies until someone reviews it.
+    crate::notify::notify(
+        state.clone(),
+        path.env_id.clone(),
+        crate::integrations::change_request_payload(
+            "change_request.opened",
+            &path.env_id,
+            &path.key,
+            cr.id,
+            Some(&requested_by),
+            None,
+        ),
+    );
 
     info!(env_id = %path.env_id, flag_key = %path.key, "Flag patch queued for approval");
     Ok((StatusCode::ACCEPTED, Json(cr)).into_response())
@@ -745,7 +760,7 @@ async fn promote_flag(
         actor_email.as_deref(),
         Some(&promote_meta),
     );
-    crate::webhook_fire::fire_webhooks(state.clone(), target_env_id.clone(), wh_payload);
+    crate::notify::notify(state.clone(), target_env_id.clone(), wh_payload);
 
     info!(
         from_env = %path.env_id,

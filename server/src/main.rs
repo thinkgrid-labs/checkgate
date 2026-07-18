@@ -1,5 +1,7 @@
 mod api;
 mod auth;
+mod integrations;
+mod notify;
 mod rate_limit;
 mod scheduler;
 mod state;

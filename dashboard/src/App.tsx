@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { ProjectProvider } from './context/ProjectContext'
 import { EnvironmentProvider } from './context/EnvironmentContext'
@@ -8,7 +8,6 @@ import Setup from './pages/Setup'
 import AuditLog from './pages/AuditLog'
 import Dashboard from './pages/Dashboard'
 import FlagList from './pages/FlagList'
-import FlagEditor from './pages/FlagEditor'
 import Scheduled from './pages/Scheduled'
 import SdkHealth from './pages/SdkHealth'
 import Segments from './pages/Segments'
@@ -23,6 +22,19 @@ import Experiments from './pages/Experiments'
 import Projects from './pages/Projects'
 import ProjectSettings from './pages/ProjectSettings'
 import Webhooks from './pages/Webhooks'
+import Integrations from './pages/Integrations'
+
+/**
+ * Flag create/edit moved from standalone pages into a slide-over on the list.
+ * These keep the old URLs working — bookmarks and links land on the list with
+ * the panel already open on the right flag.
+ */
+function RedirectToFlagPanel({ mode }: { readonly mode: 'new' | 'edit' }) {
+  const { key } = useParams<{ key?: string }>()
+  if (mode === 'new') return <Navigate to="/flags?new=1" replace />
+  if (!key) return <Navigate to="/flags" replace />
+  return <Navigate to={`/flags?edit=${encodeURIComponent(key)}`} replace />
+}
 
 function RequireAuth({ children }: { readonly children: React.ReactNode }) {
   const { session, sessionLoading, isSetupComplete, setupLoading } = useAuth()
@@ -85,8 +97,8 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/flags" element={<FlagList />} />
-                    <Route path="/flags/new" element={<FlagEditor />} />
-                    <Route path="/flags/:key/edit" element={<FlagEditor />} />
+                    <Route path="/flags/new" element={<RedirectToFlagPanel mode="new" />} />
+                    <Route path="/flags/:key/edit" element={<RedirectToFlagPanel mode="edit" />} />
                     <Route path="/segments" element={<Segments />} />
                     <Route path="/change-requests" element={<ChangeRequests />} />
                     <Route path="/schedule" element={<Scheduled />} />
@@ -96,6 +108,7 @@ export default function App() {
                     <Route path="/audit" element={<AuditLog />} />
                     <Route path="/sdk-health" element={<SdkHealth />} />
                     <Route path="/webhooks" element={<Webhooks />} />
+                    <Route path="/integrations" element={<Integrations />} />
                     <Route path="/environments" element={<Environments />} />
                     <Route path="/environments/diff" element={<EnvironmentDiff />} />
                     <Route path="/projects" element={<Projects />} />

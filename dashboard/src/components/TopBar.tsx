@@ -3,13 +3,13 @@ import { useLocation } from 'react-router-dom'
 const TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/flags': 'Feature Flags',
-  '/flags/new': 'New Flag',
   '/segments': 'Segments',
   '/schedule': 'Scheduled Changes',
   '/impressions': 'Impressions',
   '/audit': 'Audit Log',
   '/sdk-health': 'SDK Health',
   '/webhooks': 'Webhooks',
+  '/integrations': 'Chat Integrations',
   '/environments': 'Environments',
   '/projects': 'Projects',
   '/users': 'Users',
@@ -18,7 +18,6 @@ const TITLES: Record<string, string> = {
 
 function getTitle(pathname: string): string {
   if (TITLES[pathname]) return TITLES[pathname]
-  if (pathname.startsWith('/flags/') && pathname.endsWith('/edit')) return 'Edit Flag'
   if (pathname.startsWith('/projects/')) return 'Project Settings'
   return 'Checkgate'
 }

@@ -39,6 +39,10 @@ admin must review (self-approval is blocked).
 This gives you a pull-request-style gate on your highest-risk changes. See the
 [Change Requests API](/api-reference#change-requests).
 
+A queued request only helps if someone knows it's waiting — wire the environment up to
+[Slack or Teams alerts](/ecosystem/chat-alerts) so `change_request.opened` lands in the channel
+your reviewers already watch.
+
 ::: warning Automation & approvals
 If an environment requires approval, programmatic updates (Terraform, the operator, scripts) can't
 apply synchronously — the change is queued for review. Point infrastructure-as-code at a

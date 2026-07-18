@@ -6,6 +6,7 @@ pub mod experiments;
 pub mod flags;
 pub mod health;
 pub mod impressions;
+pub mod integrations;
 pub mod keys;
 pub mod projects;
 pub mod scheduled;
@@ -117,6 +118,7 @@ pub fn read_router() -> Router<AppState> {
         .merge(audit::read_router())
         .merge(segments::read_router())
         .merge(webhooks::read_router())
+        .merge(integrations::read_router())
         .merge(scheduled::read_router())
         .merge(health::read_router())
         .merge(tokens::read_router())
@@ -159,9 +161,10 @@ pub fn segment_write_router() -> Router<AppState> {
     segments::write_router()
 }
 
-/// Webhook write routes — admin only.
+/// Webhook write routes — admin only. Chat integrations ride along: they carry
+/// a channel-posting credential, so they belong at the same tier.
 pub fn webhook_write_router() -> Router<AppState> {
-    webhooks::write_router()
+    webhooks::write_router().merge(integrations::write_router())
 }
 
 /// Scheduled change write routes — require editor or admin role.

@@ -1,0 +1,650 @@
+name: Release
+
+# One workflow for the entire release, triggered by a version tag: v1.2.3
+#
+# It runs in two strict phases:
+#
+#   Phase 1 — VERIFY.  Every package is tested, every artifact is built, and
+#             every packaging step is dry-run. Nothing is published.
+#   Phase 2 — PUBLISH. Each publish job `needs` *all* of phase 1, so a single
+#             failing test or broken build anywhere stops the whole release
+#             before a single package reaches a registry.
+#
+# This replaces the previous eight independent tag-triggered workflows, which
+# each published on their own and could leave a version half-released.
+#
+# Note: registries have no cross-package transaction, so a failure *during*
+# phase 2 (a registry outage mid-publish) can still leave a partial release.
+# Phase 1 exists to make that the only remaining window.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+# Never let two releases run against each other.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  # ===========================================================================
+  # PHASE 1 — VERIFY. No publishing happens in any job below.
+  # ===========================================================================
+
+  # Zero-dependency JS packages: cli, edge, ssr (+ react-native packaging).
+  verify-js:
+    name: Verify — JS packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: CLI — tests
+        working-directory: cli
+        run: node --test
+
+      # End-to-end sanity: generate all three languages from the fixture so a
+      # broken generator can never ship.
+      - name: CLI — smoke-test codegen
+        working-directory: cli
+        run: node bin/checkgate.js typegen --lang ts,dart,rust --input test/fixtures/flags.json --out-dir /tmp/checkgate-gen
+
+      - name: Edge — tests
+        working-directory: edge
+        run: node --test
+
+      - name: SSR — tests
+        working-directory: ssr
+        run: node --test
+
+      - name: React Native — packaging integrity
+        working-directory: sdks/react-native
+        run: |
+          node scripts/bundle-rust.js
+          if [ ! -d "rust-core/src" ]; then echo "Error: rust-core source missing!"; exit 1; fi
+          if [ ! -f "Checkgate.podspec" ]; then echo "Error: Podspec missing!"; exit 1; fi
+          if [ ! -d "android/src/main" ]; then echo "Error: Android configuration missing!"; exit 1; fi
+          echo "Package integrity verified."
+
+  # Build the native .node binary for each platform in parallel.
+  build-native:
+    name: Verify — native ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Run every target to completion so one failure surfaces all of them.
+      # The job still fails, which is what gates phase 2.
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x64 (glibc)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: checkgate.linux-x64-gnu.node
+
+          # Linux arm64 (glibc) — cross-compile via napi-rs cross toolchain
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: checkgate.linux-arm64-gnu.node
+            cross: true
+
+          # Linux x64 (musl — Alpine) — cross-compile via napi-rs cross toolchain
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact: checkgate.linux-x64-musl.node
+            cross: true
+
+          # macOS x64 — cross-compile natively from arm64 runner
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: checkgate.darwin-x64.node
+
+          # macOS arm64 (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: checkgate.darwin-arm64.node
+
+          # Windows x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: checkgate.win32-x64-msvc.node
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: sdks/nodejs
+        run: npm install
+
+      - name: Build
+        working-directory: sdks/nodejs
+        shell: bash
+        run: |
+          JS_FLAGS="--js native-binding.js --dts native-binding.d.ts"
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            # Satisfy host-side NAPI-RS linker check (will use real linker inside Docker)
+            sudo ln -s /usr/bin/true /usr/bin/aarch64-linux-musl-gcc
+            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross $JS_FLAGS
+          elif [ "${{ matrix.cross }}" = "true" ]; then
+            npx napi build --platform --release --target ${{ matrix.target }} --use-napi-cross $JS_FLAGS
+          else
+            npx napi build --platform --release --target ${{ matrix.target }} $JS_FLAGS
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-${{ matrix.target }}
+          path: sdks/nodejs/${{ matrix.artifact }}
+          if-no-files-found: error
+
+      # The generated JS dispatch loader (native-binding.js/.d.ts) is
+      # platform-agnostic — it bundles runtime branches for every supported
+      # OS/arch/libc, not just the one that produced it. Upload it once for the
+      # publish job to assemble alongside all six `.node` binaries.
+      - name: Upload JS dispatch loader
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-js-binding
+          path: |
+            sdks/nodejs/native-binding.js
+            sdks/nodejs/native-binding.d.ts
+          if-no-files-found: error
+
+  # Build the WASM engine and prove it actually runs before anything publishes.
+  build-web:
+    name: Verify — web WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build WASM (web target)
+        working-directory: sdks/web
+        run: wasm-pack build --target web --out-name checkgate --out-dir dist --release
+
+      # wasm-pack drops a `*` .gitignore in dist/, which would exclude the whole
+      # directory from the published tarball.
+      - name: Remove wasm-pack ignore file
+        working-directory: sdks/web
+        run: rm -f dist/.gitignore
+
+      - name: Validate WASM package integrity
+        working-directory: sdks/web
+        run: |
+          if [ ! -f "dist/checkgate_bg.wasm" ]; then echo "Error: WASM binary missing!"; exit 1; fi
+          if [ ! -f "dist/checkgate.js" ]; then echo "Error: JS wrapper missing!"; exit 1; fi
+          if [ ! -f "core.js" ]; then echo "Error: server-side core export missing!"; exit 1; fi
+          echo "WASM package integrity verified."
+
+      # Actually run the engine — @checkgate/edge and @checkgate/ssr depend on
+      # this export, so a broken init path must never reach the registry.
+      - name: Smoke-test the server-side core export
+        working-directory: sdks/web
+        run: node scripts/smoke-core.mjs
+
+      - name: Upload built WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: sdks/web/dist
+          if-no-files-found: error
+
+  # pub.dev packaging is validated with a dry run — no credentials needed.
+  verify-flutter:
+    name: Verify — Flutter package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Dart dependencies
+        working-directory: sdks/flutter/dart
+        run: dart pub get
+
+      - name: Run Dart tests
+        working-directory: sdks/flutter/dart
+        run: flutter test
+
+      - name: Validate package integrity
+        working-directory: sdks/flutter/dart
+        run: |
+          node scripts/bundle-rust.js
+          if [ ! -d "rust-core/src" ]; then echo "Error: rust-core missing!"; exit 1; fi
+          if [ ! -d "rust/src" ]; then echo "Error: Bridge source missing!"; exit 1; fi
+          # Satisfy dart pub's "clean git state" requirement
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "chore: temporary commit for release packaging"
+          echo "Flutter package integrity and git state verified."
+
+      - name: Validate pub.dev score (dry run)
+        working-directory: sdks/flutter/dart
+        run: dart pub publish --dry-run
+
+  # Build the image without pushing, so a broken or vulnerable image blocks the
+  # release instead of being discovered after the npm packages are already live.
+  build-docker:
+    name: Verify — Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push) and load for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          # Single-arch for the scan — the multi-arch build/push happens in
+          # phase 2 and reuses this same GHA cache.
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+
+  # ===========================================================================
+  # PHASE 2 — PUBLISH. Every job below waits for *all* of phase 1.
+  # ===========================================================================
+
+  publish-node:
+    name: Publish — @checkgate/node
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: node-*
+          merge-multiple: true
+          path: sdks/nodejs/
+
+      - name: Validate native binaries count
+        working-directory: sdks/nodejs
+        run: |
+          COUNT=$(ls checkgate.*.node | wc -l)
+          echo "Found $COUNT labeled native binaries."
+          if [ "$COUNT" -ne 6 ]; then
+            echo "Error: Expected 6 labeled native binaries, found $COUNT."
+            ls -l *.node
+            exit 1
+          fi
+          if [ ! -f native-binding.js ] || [ ! -f native-binding.d.ts ]; then
+            echo "Error: native-binding.js/.d.ts missing — index.js requires these at runtime."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        working-directory: sdks/nodejs
+        run: npm install
+
+      # Actually require() the assembled package end to end — a missing
+      # native-binding.js or a renamed export is caught here instead of
+      # surfacing when a consumer runs `npm install @checkgate/node`.
+      - name: Smoke test the assembled package
+        working-directory: sdks/nodejs
+        run: |
+          node -e "
+            const { CheckgateClient } = require('./index.js');
+            if (typeof CheckgateClient !== 'function') throw new Error('CheckgateClient export missing');
+            const client = new CheckgateClient({ serverUrl: 'http://localhost:1' });
+            if (typeof client.isEnabled !== 'function') throw new Error('isEnabled method missing');
+            if (typeof client.connect !== 'function') throw new Error('connect method missing');
+            console.log('Smoke test passed — native binding resolved and CheckgateClient constructed.');
+          "
+
+      - name: Set version from tag
+        working-directory: sdks/nodejs
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish @checkgate/node
+        working-directory: sdks/nodejs
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-web:
+    name: Publish — @checkgate/web
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download built WASM
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: sdks/web/dist
+
+      - name: Set version from tag
+        working-directory: sdks/web
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Bundle Rust Core
+        working-directory: sdks/web
+        run: node scripts/bundle-rust.cjs
+
+      - name: Re-verify packaged artifacts
+        working-directory: sdks/web
+        run: |
+          rm -f dist/.gitignore
+          if [ ! -f "dist/checkgate_bg.wasm" ]; then echo "Error: WASM binary missing!"; exit 1; fi
+          if [ ! -f "core.js" ]; then echo "Error: server-side core export missing!"; exit 1; fi
+          node scripts/smoke-core.mjs
+
+      - name: Publish @checkgate/web
+        working-directory: sdks/web
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-cli:
+    name: Publish — @checkgate/cli
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Set version from tag
+        working-directory: cli
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish @checkgate/cli
+        working-directory: cli
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-edge:
+    name: Publish — @checkgate/edge
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Set version from tag
+        working-directory: edge
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish @checkgate/edge
+        working-directory: edge
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-ssr:
+    name: Publish — @checkgate/ssr
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Set version from tag
+        working-directory: ssr
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish @checkgate/ssr
+        working-directory: ssr
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-react-native:
+    name: Publish — @checkgate/react-native
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Set version from tag
+        working-directory: sdks/react-native
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Bundle Rust core into the package
+        working-directory: sdks/react-native
+        run: node scripts/bundle-rust.js
+
+      - name: Publish @checkgate/react-native
+        working-directory: sdks/react-native
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-flutter:
+    name: Publish — checkgate_flutter (pub.dev)
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Dart dependencies
+        working-directory: sdks/flutter/dart
+        run: dart pub get
+
+      - name: Prepare package
+        working-directory: sdks/flutter/dart
+        run: |
+          node scripts/bundle-rust.js
+          if [ ! -d "rust-core/src" ]; then echo "Error: rust-core missing!"; exit 1; fi
+          if [ ! -d "rust/src" ]; then echo "Error: Bridge source missing!"; exit 1; fi
+          # Satisfy dart pub's "clean git state" requirement
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "chore: temporary commit for release packaging"
+
+      - name: Set up pub.dev credentials
+        run: |
+          mkdir -p ~/.config/dart
+          echo '${{ secrets.PUB_CREDENTIALS }}' > ~/.config/dart/pub-credentials.json
+
+      - name: Publish to pub.dev
+        working-directory: sdks/flutter/dart
+        run: dart pub publish --force
+
+  publish-docker:
+    name: Publish — Docker image
+    needs: [verify-js, build-native, build-web, verify-flutter, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # Required for Cosign keyless signing
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.8.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push
+        id: build-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sign the image with Cosign
+        run: |
+          cosign sign --yes ${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+
+  # ===========================================================================
+  # Final status — one green check that means "the whole release succeeded".
+  # ===========================================================================
+  release-complete:
+    name: Release complete
+    needs:
+      - publish-node
+      - publish-web
+      - publish-cli
+      - publish-edge
+      - publish-ssr
+      - publish-react-native
+      - publish-flutter
+      - publish-docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "All packages published for ${{ github.ref_name }}:" >> $GITHUB_STEP_SUMMARY
+          echo "- npm: @checkgate/{node,web,cli,edge,ssr,react-native}" >> $GITHUB_STEP_SUMMARY
+          echo "- pub.dev: checkgate_flutter" >> $GITHUB_STEP_SUMMARY
+          echo "- ghcr.io: ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY

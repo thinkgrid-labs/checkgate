@@ -94,7 +94,7 @@ export default function Dashboard() {
           <div className="flex flex-col items-center justify-center h-32 gap-3">
             <p className="text-gray-400 text-sm">No flags yet.</p>
             <Link
-              to="/flags/new"
+              to="/flags?new=1"
               className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> Create your first flag
@@ -116,7 +116,7 @@ export default function Dashboard() {
                     <tr key={flag.key} className="hover:bg-emerald-50/20 transition-all">
                       <td className="px-8 py-5">
                       <Link
-                        to={`/flags/${encodeURIComponent(flag.key)}/edit`}
+                        to={`/flags?edit=${encodeURIComponent(flag.key)}`}
                         className="font-mono text-emerald-600 hover:text-emerald-700 transition-colors text-sm font-semibold"
                       >
                         {flag.key}

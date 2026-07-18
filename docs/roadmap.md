@@ -42,6 +42,8 @@ Every new SDK wraps the **same shared Rust evaluation core** in [`core/`](https:
 - [ ] **OpenTelemetry export**: Emit evaluation, impression, and experiment metrics/traces to any OTel backend (Grafana, Datadog, Honeycomb).
 - [ ] **Warehouse sync**: Stream impressions, goal events, and experiment results to BigQuery / Snowflake / Postgres for BI and data-science workflows.
 - [ ] **Slack / Teams approvals & alerts**: Review and approve change requests, and receive flag-change notifications, where teams already work.
+  - [x] **Alerts** — flag and change-request activity delivered to Slack (Block Kit) and Teams (MessageCard) via incoming webhooks, configured per environment with per-event filtering.
+  - [ ] **Approvals** — approve/reject a change request from the message itself. Needs a signed public interactions endpoint and a Slack↔Checkgate identity mapping to keep the "no self-approval" rule enforceable.
 
 ---
 

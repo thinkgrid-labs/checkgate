@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, ArrowLeft, Plus, Save, Trash2, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Archive, ArchiveRestore, Plus, Save, Trash2, X } from 'lucide-react'
 import { api, scheduledApi, segmentsApi } from '../api'
 import type { Flag, FlagType, FlagValue, Prerequisite, ScheduledChange, Segment, TargetingRule, WeightedVariant } from '../types'
-import RuleEditor from '../components/RuleEditor'
+import RuleEditor from './RuleEditor'
 import { useEnvironment } from '../context/EnvironmentContext'
 
 const EMPTY_FLAG: Flag = {
@@ -24,10 +24,10 @@ const EMPTY_FLAG: Flag = {
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="premium-card shadow-premium-lg border-none">
-      <div className="px-6 py-4 border-b border-gray-50 bg-white">
-        <h2 className="text-gray-900 font-display font-bold text-sm tracking-tight">{title}</h2>
+      <div className="px-5 py-3.5 border-b border-gray-50 bg-white">
+        <h3 className="text-gray-900 font-display font-bold text-sm tracking-tight">{title}</h3>
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   )
 }
@@ -373,10 +373,27 @@ function TagsInput({ tags, onChange }: { tags: string[]; onChange: (tags: string
   )
 }
 
-export default function FlagEditor() {
-  const { key } = useParams<{ key?: string }>()
-  const isEdit = Boolean(key)
-  const navigate = useNavigate()
+/**
+ * Create/edit form for a single flag, laid out as one scrolling column with a
+ * pinned action bar — sized for the slide-over panel rather than a full page.
+ *
+ * Fills its parent as a flex column, so it expects a `min-h-0` flex container.
+ */
+export default function FlagForm({
+  flagKey,
+  onSaved,
+  onFlagChanged,
+  onCancel,
+}: {
+  /** Key of the flag to edit; omit to create a new one. */
+  readonly flagKey?: string
+  /** The save landed and the panel is done — not called for queued approvals. */
+  readonly onSaved: (flag: Flag, mode: 'created' | 'updated') => void
+  /** A side-channel write (archive/unarchive) landed; the panel stays open. */
+  readonly onFlagChanged?: (flag: Flag) => void
+  readonly onCancel: () => void
+}) {
+  const isEdit = Boolean(flagKey)
   const { activeEnv } = useEnvironment()
 
   const [flag, setFlag] = useState<Flag>(EMPTY_FLAG)
@@ -393,37 +410,55 @@ export default function FlagEditor() {
   const [scheduleSaving, setScheduleSaving] = useState(false)
   const [archiving, setArchiving] = useState(false)
 
+  // The panel is reused across flags without unmounting, so every piece of
+  // per-flag state has to be reset when the target changes — otherwise the
+  // previous flag's values bleed into the next one.
+  useEffect(() => {
+    setFlag(EMPTY_FLAG)
+    setRolloutInput('')
+    setError(null)
+    setPendingApproval(false)
+    setScheduledChanges([])
+    setScheduleAt('')
+    setLoading(Boolean(flagKey))
+  }, [flagKey, activeEnv])
+
   useEffect(() => {
     if (!activeEnv) return
     segmentsApi.list(activeEnv.id).then(setSegments).catch(() => {/* non-fatal */})
     // Candidates for the Prerequisites picker — exclude the flag being edited
     // itself, since a self-referencing prerequisite is a trivial cycle.
     api.listFlags(activeEnv.id)
-      .then(list => setOtherFlags(list.filter(f => f.key !== key)))
+      .then(list => setOtherFlags(list.filter(f => f.key !== flagKey)))
       .catch(() => {/* non-fatal */})
-  }, [activeEnv, key])
+  }, [activeEnv, flagKey])
 
   useEffect(() => {
-    if (!key || !activeEnv) return
-    api.getFlag(activeEnv.id, key)
+    if (!flagKey || !activeEnv) return
+    let cancelled = false
+    api.getFlag(activeEnv.id, flagKey)
       .then(f => {
+        if (cancelled) return
         setFlag(f)
         setRolloutInput(f.rollout_percentage != null ? String(f.rollout_percentage) : '')
       })
-      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load flag'))
-      .finally(() => setLoading(false))
-    scheduledApi.listForFlag(activeEnv.id, key)
-      .then(setScheduledChanges)
+      .catch(e => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load flag')
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    scheduledApi.listForFlag(activeEnv.id, flagKey)
+      .then(cs => { if (!cancelled) setScheduledChanges(cs) })
       .catch(() => {/* non-fatal */})
-  }, [key, activeEnv])
+    return () => { cancelled = true }
+  }, [flagKey, activeEnv])
 
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault()
-    if (!activeEnv || !key) return
+    if (!activeEnv || !flagKey) return
     setScheduleSaving(true)
     try {
       const patch: Record<string, unknown> = { is_enabled: scheduleAction === 'enable' }
-      const created = await scheduledApi.create(activeEnv.id, key, {
+      const created = await scheduledApi.create(activeEnv.id, flagKey, {
         scheduled_at: new Date(scheduleAt).toISOString(),
         patch,
       })
@@ -447,15 +482,19 @@ export default function FlagEditor() {
   }
 
   async function handleArchiveToggle() {
-    if (!activeEnv || !key) return
+    if (!activeEnv || !flagKey) return
     const archiving_ = !flag.archived_at
-    if (archiving_ && !confirm(`Archive "${key}"? It will be hidden from the flag list, but keeps evaluating exactly as before.`)) return
+    if (archiving_ && !confirm(`Archive "${flagKey}"? It will be hidden from the flag list, but keeps evaluating exactly as before.`)) return
     setArchiving(true)
     try {
       const updated = archiving_
-        ? await api.archiveFlag(activeEnv.id, key)
-        : await api.unarchiveFlag(activeEnv.id, key)
+        ? await api.archiveFlag(activeEnv.id, flagKey)
+        : await api.unarchiveFlag(activeEnv.id, flagKey)
       setFlag(updated)
+      // Surface the archive/unarchive to the list behind the panel, which
+      // filters on exactly this field. The panel stays open — archiving is not
+      // "done editing".
+      onFlagChanged?.(updated)
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     } finally {
@@ -500,8 +539,8 @@ export default function FlagEditor() {
     }
 
     try {
-      if (isEdit && key) {
-        const result = await api.patchFlag(activeEnv.id, key, {
+      if (isEdit && flagKey) {
+        const result = await api.patchFlag(activeEnv.id, flagKey, {
           is_enabled: payload.is_enabled,
           rollout_percentage: payload.rollout_percentage,
           description: payload.description,
@@ -516,15 +555,16 @@ export default function FlagEditor() {
         })
         if (!result.applied) {
           // Environment requires approval — the patch was queued, not applied.
-          // Stay on the page rather than navigating away as if it took effect.
+          // Keep the panel open rather than closing it as if it took effect.
           setPendingApproval(true)
           setSaving(false)
           return
         }
+        onSaved(result.flag, 'updated')
       } else {
-        await api.createFlag(activeEnv.id, payload)
+        const created = await api.createFlag(activeEnv.id, payload)
+        onSaved(created, 'created')
       }
-      navigate('/flags')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
     } finally {
@@ -537,327 +577,306 @@ export default function FlagEditor() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+      <div className="flex flex-1 items-center justify-center text-gray-400 text-sm">
         Loading…
       </div>
     )
   }
 
   return (
-    <div className="w-full space-y-5">
-      <div className="flex items-center justify-between">
-        <Link
-          to="/flags"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to flags
-        </Link>
-        {flag.archived_at && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs font-medium">
-            <Archive className="w-3 h-3" /> Archived
-          </span>
+    <form onSubmit={e => void handleSubmit(e)} className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+        {error && (
+          <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+            {error}
+          </div>
+        )}
+
+        {pendingApproval && (
+          <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+            This environment requires approval — your change was queued instead of applied.{' '}
+            <Link to="/change-requests" className="font-bold underline">View change requests</Link>
+          </div>
+        )}
+
+        <SectionCard title="Basic info">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Key <span className="text-rose-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                disabled={isEdit}
+                value={flag.key}
+                onChange={e => setField('key', e.target.value)}
+                placeholder="e.g. dark_mode"
+                className={`${inputClass} font-mono`}
+              />
+              {!isEdit && (
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Immutable after creation. Use <code className="text-gray-600">snake_case</code>.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+              <input
+                type="text"
+                value={flag.description ?? ''}
+                onChange={e => setField('description', e.target.value || null)}
+                placeholder="What does this flag control?"
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
+              <select
+                value={flagType}
+                onChange={e => handleTypeChange(e.target.value as FlagType)}
+                disabled={isEdit}
+                className={selectClass}
+              >
+                {FLAG_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
+                ))}
+              </select>
+              {isEdit && (
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Flag type cannot be changed after creation.
+                </p>
+              )}
+            </div>
+
+            {isVariant && (
+              <>
+                <ValueInput
+                  label="Default value"
+                  hint="Returned when the flag is enabled and no targeting rule overrides it."
+                  value={flag.default_value ?? null}
+                  flagType={flagType}
+                  onChange={v => setField('default_value', v)}
+                />
+                <ValueInput
+                  label="Disabled value"
+                  hint="Returned when the flag is disabled or the user is outside the rollout."
+                  value={flag.disabled_value ?? null}
+                  flagType={flagType}
+                  onChange={v => setField('disabled_value', v)}
+                />
+              </>
+            )}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Rollout">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Enabled</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {isVariant
+                    ? 'When disabled, returns the disabled value.'
+                    : <>When disabled, always evaluates to <code className="text-gray-600">false</code>.</>}
+                </p>
+              </div>
+              <Toggle enabled={flag.is_enabled} onToggle={() => setField('is_enabled', !flag.is_enabled)} />
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Rollout percentage</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rolloutInput}
+                  onChange={e => setRolloutInput(e.target.value)}
+                  placeholder="100"
+                  className="w-28 bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
+                />
+                <span className="text-gray-400 text-sm">%</span>
+              </div>
+              <p className="mt-1.5 text-xs text-gray-400">
+                Leave empty for 100%. Users are bucketed deterministically by their key.
+              </p>
+            </div>
+          </div>
+        </SectionCard>
+
+        {isVariant && (
+          <SectionCard title="Weighted variants (A/B testing)">
+            <p className="text-xs text-gray-400 mb-4">
+              Split traffic across multiple values by weight (e.g. 60/30/10). Applies to users who
+              are enabled, inside the rollout percentage above, and don't match a targeting rule.
+              Weights don't need to sum to 100 — only their proportions matter. Leave empty to
+              always return the default value above.
+            </p>
+            <WeightedVariantsEditor
+              variants={flag.variants ?? []}
+              flagType={flagType}
+              onChange={variants => setField('variants', variants)}
+            />
+          </SectionCard>
+        )}
+
+        <SectionCard title="Targeting rules">
+          <p className="text-xs text-gray-400 mb-4">
+            {isVariant
+              ? 'Users matching a rule return that rule\'s value (or the default value if no per-rule value is set), bypassing the rollout cap.'
+              : 'Users matching any rule always see the flag as enabled, bypassing the rollout cap.'}
+          </p>
+          <RuleEditor
+            rules={flag.rules as TargetingRule[]}
+            onChange={rules => setField('rules', rules)}
+            flagType={flagType}
+            segments={segments}
+          />
+        </SectionCard>
+
+        <SectionCard title="Tags & ownership">
+          <div className="space-y-4">
+            <TagsInput tags={flag.tags ?? []} onChange={tags => setField('tags', tags)} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Owner</label>
+              <input
+                type="email"
+                value={flag.owner_email ?? ''}
+                onChange={e => setField('owner_email', e.target.value || null)}
+                placeholder="owner@example.com"
+                className={inputClass}
+              />
+              <p className="mt-1.5 text-xs text-gray-400">
+                Who's responsible for this flag — useful when deciding what's safe to clean up.
+              </p>
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Prerequisites">
+          <p className="text-xs text-gray-400 mb-4">
+            Require other flags to be enabled (or resolve to a specific value) before this flag's
+            own rules and rollout are even considered. Checked first — if any prerequisite fails,
+            this flag evaluates as disabled.
+          </p>
+          <PrerequisitesEditor
+            prerequisites={flag.prerequisites ?? []}
+            candidates={otherFlags}
+            onChange={prerequisites => setField('prerequisites', prerequisites)}
+          />
+        </SectionCard>
+
+        {isEdit && flagKey && (
+          <SectionCard title="Scheduled changes">
+            <div className="space-y-4">
+              {scheduledChanges.filter(c => !c.executed_at).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Pending
+                  </p>
+                  {scheduledChanges
+                    .filter(c => !c.executed_at)
+                    .map(sc => (
+                      <div
+                        key={sc.id}
+                        className="flex items-center justify-between gap-3 bg-indigo-50 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <span className="text-indigo-700">
+                          <strong>{sc.patch.is_enabled ? 'Enable' : 'Disable'}</strong>
+                          {' at '}
+                          {new Date(sc.scheduled_at).toLocaleString()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void cancelScheduledChange(sc.id)}
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* Scheduling posts on its own — nesting a <form> inside the flag
+                  form is invalid HTML, so this is a plain div and the button
+                  calls the handler directly. */}
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Action</label>
+                  <select
+                    value={scheduleAction}
+                    onChange={e => setScheduleAction(e.target.value as 'enable' | 'disable')}
+                    className={selectClass + ' w-auto'}
+                  >
+                    <option value="enable">Enable flag</option>
+                    <option value="disable">Disable flag</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    At (local time)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={e => setScheduleAt(e.target.value)}
+                    className={inputClass + ' w-auto'}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={e => void handleSchedule(e)}
+                  disabled={scheduleSaving || !scheduleAt}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-all"
+                >
+                  {scheduleSaving ? 'Scheduling…' : 'Schedule'}
+                </button>
+              </div>
+            </div>
+          </SectionCard>
         )}
       </div>
 
-      {error && (
-        <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
-          {error}
-        </div>
-      )}
-
-      {pendingApproval && (
-        <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
-          This environment requires approval — your change was queued instead of applied.{' '}
-          <Link to="/change-requests" className="font-bold underline">View change requests</Link>
-        </div>
-      )}
-
-      <form onSubmit={e => void handleSubmit(e)} className="space-y-5">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          {/* Main column — evaluation behavior */}
-          <div className="lg:col-span-2 space-y-5">
-            <SectionCard title="Flag type">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
-                  <select
-                    value={flagType}
-                    onChange={e => handleTypeChange(e.target.value as FlagType)}
-                    disabled={isEdit}
-                    className={selectClass}
-                  >
-                    {FLAG_TYPES.map(t => (
-                      <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
-                    ))}
-                  </select>
-                  {isEdit && (
-                    <p className="mt-1.5 text-xs text-gray-400">
-                      Flag type cannot be changed after creation.
-                    </p>
-                  )}
-                </div>
-
-                {isVariant && (
-                  <>
-                    <ValueInput
-                      label="Default value"
-                      hint="Returned when the flag is enabled and no targeting rule overrides it."
-                      value={flag.default_value ?? null}
-                      flagType={flagType}
-                      onChange={v => setField('default_value', v)}
-                    />
-                    <ValueInput
-                      label="Disabled value"
-                      hint="Returned when the flag is disabled or the user is outside the rollout."
-                      value={flag.disabled_value ?? null}
-                      flagType={flagType}
-                      onChange={v => setField('disabled_value', v)}
-                    />
-                  </>
-                )}
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Rollout">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Enabled</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {isVariant
-                        ? 'When disabled, returns the disabled value.'
-                        : <>When disabled, always evaluates to <code className="text-gray-600">false</code>.</>}
-                    </p>
-                  </div>
-                  <Toggle enabled={flag.is_enabled} onToggle={() => setField('is_enabled', !flag.is_enabled)} />
-                </div>
-
-                <div className="border-t border-gray-100 pt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Rollout percentage</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={rolloutInput}
-                      onChange={e => setRolloutInput(e.target.value)}
-                      placeholder="100"
-                      className="w-28 bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/30 transition-all shadow-premium"
-                    />
-                    <span className="text-gray-400 text-sm">%</span>
-                  </div>
-                  <p className="mt-1.5 text-xs text-gray-400">
-                    Leave empty for 100%. Users are bucketed deterministically by their key.
-                  </p>
-                </div>
-              </div>
-            </SectionCard>
-
-            {isVariant && (
-              <SectionCard title="Weighted variants (A/B testing)">
-                <p className="text-xs text-gray-400 mb-4">
-                  Split traffic across multiple values by weight (e.g. 60/30/10). Applies to users who
-                  are enabled, inside the rollout percentage above, and don't match a targeting rule.
-                  Weights don't need to sum to 100 — only their proportions matter. Leave empty to
-                  always return the default value above.
-                </p>
-                <WeightedVariantsEditor
-                  variants={flag.variants ?? []}
-                  flagType={flagType}
-                  onChange={variants => setField('variants', variants)}
-                />
-              </SectionCard>
-            )}
-
-            <SectionCard title="Targeting rules">
-              <p className="text-xs text-gray-400 mb-4">
-                {isVariant
-                  ? 'Users matching a rule return that rule\'s value (or the default value if no per-rule value is set), bypassing the rollout cap.'
-                  : 'Users matching any rule always see the flag as enabled, bypassing the rollout cap.'}
-              </p>
-              <RuleEditor
-                rules={flag.rules as TargetingRule[]}
-                onChange={rules => setField('rules', rules)}
-                flagType={flagType}
-                segments={segments}
-              />
-            </SectionCard>
-          </div>
-
-          {/* Sidebar — identity, ownership, dependencies */}
-          <div className="space-y-5">
-            <SectionCard title="Basic info">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Key <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={isEdit}
-                    value={flag.key}
-                    onChange={e => setField('key', e.target.value)}
-                    placeholder="e.g. dark_mode"
-                    className={`${inputClass} font-mono`}
-                  />
-                  {!isEdit && (
-                    <p className="mt-1.5 text-xs text-gray-400">
-                      Immutable after creation. Use <code className="text-gray-600">snake_case</code>.
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
-                  <input
-                    type="text"
-                    value={flag.description ?? ''}
-                    onChange={e => setField('description', e.target.value || null)}
-                    placeholder="What does this flag control?"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Tags & ownership">
-              <div className="space-y-4">
-                <TagsInput tags={flag.tags ?? []} onChange={tags => setField('tags', tags)} />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Owner</label>
-                  <input
-                    type="email"
-                    value={flag.owner_email ?? ''}
-                    onChange={e => setField('owner_email', e.target.value || null)}
-                    placeholder="owner@example.com"
-                    className={inputClass}
-                  />
-                  <p className="mt-1.5 text-xs text-gray-400">
-                    Who's responsible for this flag — useful when deciding what's safe to clean up.
-                  </p>
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Prerequisites">
-              <p className="text-xs text-gray-400 mb-4">
-                Require other flags to be enabled (or resolve to a specific value) before this flag's
-                own rules and rollout are even considered. Checked first — if any prerequisite fails,
-                this flag evaluates as disabled.
-              </p>
-              <PrerequisitesEditor
-                prerequisites={flag.prerequisites ?? []}
-                candidates={otherFlags}
-                onChange={prerequisites => setField('prerequisites', prerequisites)}
-              />
-            </SectionCard>
-
-            {isEdit && key && (
-              <SectionCard title="Scheduled changes">
-                <div className="space-y-4">
-                  {scheduledChanges.filter(c => !c.executed_at).length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Pending
-                      </p>
-                      {scheduledChanges
-                        .filter(c => !c.executed_at)
-                        .map(sc => (
-                          <div
-                            key={sc.id}
-                            className="flex items-center justify-between gap-3 bg-indigo-50 rounded-lg px-3 py-2 text-sm"
-                          >
-                            <span className="text-indigo-700">
-                              <strong>{sc.patch.is_enabled ? 'Enable' : 'Disable'}</strong>
-                              {' at '}
-                              {new Date(sc.scheduled_at).toLocaleString()}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => void cancelScheduledChange(sc.id)}
-                              className="text-red-400 hover:text-red-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-
-                  <form onSubmit={e => void handleSchedule(e)} className="flex items-end gap-3 flex-wrap">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Action</label>
-                      <select
-                        value={scheduleAction}
-                        onChange={e => setScheduleAction(e.target.value as 'enable' | 'disable')}
-                        className={selectClass + ' w-auto'}
-                      >
-                        <option value="enable">Enable flag</option>
-                        <option value="disable">Disable flag</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        At (local time)
-                      </label>
-                      <input
-                        type="datetime-local"
-                        required
-                        value={scheduleAt}
-                        onChange={e => setScheduleAt(e.target.value)}
-                        className={inputClass + ' w-auto'}
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={scheduleSaving || !scheduleAt}
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-all"
-                    >
-                      {scheduleSaving ? 'Scheduling…' : 'Schedule'}
-                    </button>
-                  </form>
-                </div>
-              </SectionCard>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5"
-          >
-            {saving ? (
-              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create flag'}
-          </button>
-          <Link
-            to="/flags"
-            className="px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors"
-          >
-            Cancel
-          </Link>
-          {isEdit && key && (
-            <button
-              type="button"
-              onClick={() => void handleArchiveToggle()}
-              disabled={archiving}
-              className="ml-auto flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {flag.archived_at ? (
-                <><ArchiveRestore className="w-4 h-4" /> {archiving ? 'Unarchiving…' : 'Unarchive'}</>
-              ) : (
-                <><Archive className="w-4 h-4" /> {archiving ? 'Archiving…' : 'Archive'}</>
-              )}
-            </button>
+      {/* Pinned action bar — stays reachable however long the form scrolls. */}
+      <div className="flex items-center gap-3 border-t border-gray-100 bg-white px-6 py-4">
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300"
+        >
+          {saving ? (
+            <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <Save className="w-4 h-4" />
           )}
-        </div>
-      </form>
-    </div>
+          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create flag'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          Cancel
+        </button>
+        {isEdit && flagKey && (
+          <button
+            type="button"
+            onClick={() => void handleArchiveToggle()}
+            disabled={archiving}
+            className="ml-auto flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {flag.archived_at ? (
+              <><ArchiveRestore className="w-4 h-4" /> {archiving ? 'Unarchiving…' : 'Unarchive'}</>
+            ) : (
+              <><Archive className="w-4 h-4" /> {archiving ? 'Archiving…' : 'Archive'}</>
+            )}
+          </button>
+        )}
+      </div>
+    </form>
   )
 }
