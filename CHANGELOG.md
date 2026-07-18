@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Infrastructure as code** — manage flags and segments outside the dashboard, all on one shared Go
+  API client (`integrations/checkgate-go`, dependency-free and unit-tested):
+  - **Terraform / OpenTofu provider** (`terraform-provider-checkgate`) with `checkgate_flag` and
+    `checkgate_segment` resources and a `checkgate_flag` data source. Polymorphic/nested fields
+    (`default_value`, `rules`, `variants`, `prerequisites`) use semantic-JSON equality so
+    re-serialisation never churns a plan; supports import and detects `require_approval`
+    environments (surfaces the queued change request instead of hanging). Built on
+    terraform-plugin-framework.
+  - **Kubernetes operator** (`checkgate-operator`) reconciling a `FeatureFlag` CRD
+    (`flags.checkgate.io/v1alpha1`) into Checkgate — create/update via the API, a finalizer that
+    deletes the remote flag with the CR, periodic drift correction, and status conditions. The token
+    is read from a referenced Secret. Reconcile logic is unit-tested with a fake client + fake server.
 - **Edge Side Evaluation** (`@checkgate/edge`) — a new, zero-dependency, runtime-agnostic edge
   evaluator that pulls a flag snapshot from `/flags/snapshot`, caches it with a TTL plus optional
   stale-while-revalidate, keeps the last-known-good snapshot through origin outages (fail-open), and

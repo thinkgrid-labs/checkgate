@@ -110,3 +110,36 @@ jobs:
       - name: Run tests
         working-directory: edge
         run: node --test
+
+  # ---------------------------------------------------------------------------
+  # Go integrations — shared client, Terraform provider, Kubernetes operator
+  # ---------------------------------------------------------------------------
+  integrations:
+    name: Go integrations
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - integrations/checkgate-go
+          - integrations/terraform-provider-checkgate
+          - integrations/kubernetes-operator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Build
+        working-directory: ${{ matrix.module }}
+        run: go build ./...
+
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+
+      - name: Test
+        working-directory: ${{ matrix.module }}
+        run: go test ./...

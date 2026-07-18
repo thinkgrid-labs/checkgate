@@ -1,0 +1,40 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: checkgate-operator-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - flags.checkgate.io
+  resources:
+  - featureflags
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flags.checkgate.io
+  resources:
+  - featureflags/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flags.checkgate.io
+  resources:
+  - featureflags/status
+  verbs:
+  - get
+  - patch
+  - update

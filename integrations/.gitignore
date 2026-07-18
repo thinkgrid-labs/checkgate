@@ -1,0 +1,6 @@
+# Compiled binaries produced by `go build -o`
+bin/
+terraform-provider-checkgate
+checkgate-operator
+*.test
+*.out

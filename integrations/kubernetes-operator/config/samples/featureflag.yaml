@@ -1,0 +1,49 @@
+# The Checkgate access token (a read_write personal access token), referenced by
+# the FeatureFlag below. Never commit a real token — create the Secret out of band:
+#   kubectl create secret generic checkgate-token --from-literal=token=cg_pat_xxx
+apiVersion: v1
+kind: Secret
+metadata:
+  name: checkgate-token
+  namespace: default
+type: Opaque
+stringData:
+  token: "REPLACE_WITH_A_READ_WRITE_TOKEN"
+---
+apiVersion: flags.checkgate.io/v1alpha1
+kind: FeatureFlag
+metadata:
+  name: new-homepage
+  namespace: default
+spec:
+  server:
+    url: https://flags.example.com
+    tokenSecretRef:
+      name: checkgate-token
+      key: token
+  environmentId: "00000000-0000-0000-0000-000000000000" # your environment id
+  key: new-homepage
+  enabled: true
+  rolloutPercentage: 25
+  description: Redesigned marketing homepage
+  flagType: boolean
+  defaultValue: true
+  tags: ["web", "growth"]
+---
+apiVersion: flags.checkgate.io/v1alpha1
+kind: FeatureFlag
+metadata:
+  name: checkout-button-color
+  namespace: default
+spec:
+  server:
+    url: https://flags.example.com
+    tokenSecretRef:
+      name: checkgate-token
+  environmentId: "00000000-0000-0000-0000-000000000000"
+  key: checkout-button-color
+  flagType: string
+  defaultValue: "blue"
+  variants:
+    - { weight: 50, value: "blue" }
+    - { weight: 50, value: "green" }
