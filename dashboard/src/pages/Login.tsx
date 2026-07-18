@@ -98,7 +98,7 @@ export default function Login() {
         </div>
 
         <div className="flex items-center gap-3 text-gray-400 text-sm font-medium">
-          <span className="px-2 py-1 bg-gray-50 rounded-md border border-gray-100">MIT Licensed</span>
+          <span className="px-2 py-1 bg-gray-50 rounded-md border border-gray-100">Apache 2.0 Licensed</span>
           <span className="w-1 h-1 bg-gray-300 rounded-full" />
           <span>ThinkGrid Labs</span>
         </div>

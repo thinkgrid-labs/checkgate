@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.1.22] - 2026-07-18
 
+### Changed — License
+
+- **Checkgate is now licensed under the Apache License 2.0** (previously MIT). Both are permissive
+  and neither restricts commercial or closed-source use; Apache 2.0 adds an **explicit patent grant**
+  from contributors to users, which MIT is silent on, plus a defensive patent-retaliation clause and
+  an explicit statement that trademark rights are not granted. The SPDX identifier on every crate
+  and npm package is now `Apache-2.0`, and a `NOTICE` file has been added.
+- Releases up to and including **`v0.1.21` remain MIT-licensed** — that grant is irrevocable for
+  those versions and for anyone who already received them.
+
 ### Added
 
 - **Slack & Microsoft Teams alerts** — flag and change-request activity can now be delivered straight

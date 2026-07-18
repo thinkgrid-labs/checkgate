@@ -21,7 +21,7 @@
   "bugs": {
     "url": "https://github.com/thinkgrid-labs/checkgate/issues"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "build": "wasm-pack build --target web --out-name checkgate --out-dir dist",
     "prepublishOnly": "node scripts/bundle-rust.cjs",

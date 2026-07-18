@@ -111,7 +111,7 @@ export default function Setup() {
           </div>
         </div>
 
-        <p className="text-gray-400 text-sm">MIT Licensed · Open Source</p>
+        <p className="text-gray-400 text-sm">Apache 2.0 Licensed · Open Source</p>
       </div>
 
       {/* Right panel */}

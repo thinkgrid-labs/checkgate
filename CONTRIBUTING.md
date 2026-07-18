@@ -100,4 +100,6 @@ Use the GitHub issue templates:
 
 ## License
 
-By contributing you agree that your changes will be licensed under the [MIT License](LICENSE).
+By contributing you agree that your changes will be licensed under the
+[Apache License 2.0](LICENSE), and that you have the right to grant that licence
+for the work you submit.
