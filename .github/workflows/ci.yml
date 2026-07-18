@@ -93,3 +93,70 @@ jobs:
       - name: Smoke-test codegen (ts, dart, rust)
         working-directory: cli
         run: node bin/checkgate.js typegen --lang ts,dart,rust --input test/fixtures/flags.json --out-dir /tmp/checkgate-gen
+
+  # ---------------------------------------------------------------------------
+  # Edge — @checkgate/edge evaluator tests (zero deps, Node's built-in runner)
+  # ---------------------------------------------------------------------------
+  edge:
+    name: Edge evaluator tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run tests
+        working-directory: edge
+        run: node --test
+
+  # ---------------------------------------------------------------------------
+  # SSR — @checkgate/ssr bootstrap helpers (zero deps, Node's built-in runner)
+  # ---------------------------------------------------------------------------
+  ssr:
+    name: SSR helpers tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run tests
+        working-directory: ssr
+        run: node --test
+
+  # ---------------------------------------------------------------------------
+  # Go integrations — shared client, Terraform provider, Kubernetes operator
+  # ---------------------------------------------------------------------------
+  integrations:
+    name: Go integrations
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - integrations/checkgate-go
+          - integrations/terraform-provider-checkgate
+          - integrations/kubernetes-operator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Build
+        working-directory: ${{ matrix.module }}
+        run: go build ./...
+
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+
+      - name: Test
+        working-directory: ${{ matrix.module }}
+        run: go test ./...

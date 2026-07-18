@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **SSR / bootstrap helpers** (`@checkgate/ssr`) — server-render initial flag state and hydrate the
+  client with zero flag flicker (Next.js, Remix, SvelteKit, any SSR framework). `buildBootstrap()`
+  evaluates a page's flags for the current user on the server; `bootstrapScriptTag()` embeds the
+  result as an XSS-safe `<script>` (escapes `</script>` and U+2028/U+2029, supports a CSP nonce);
+  `readBootstrap()` + `BootstrapValues` render the first client paint from the server-resolved values
+  (null-safe, version-checked). The Web SDK gained a `bootstrap` option that seeds its WASM core from
+  the embedded snapshot so the live client is ready without waiting for its stream, and
+  `@checkgate/edge` gained `snapshotFlags()` to expose the raw snapshot for embedding. Zero
+  dependencies; unit-tested with `node --test`.
+- **Infrastructure as code** — manage flags and segments outside the dashboard, all on one shared Go
+  API client (`integrations/checkgate-go`, dependency-free and unit-tested):
+  - **Terraform / OpenTofu provider** (`terraform-provider-checkgate`) with `checkgate_flag` and
+    `checkgate_segment` resources and a `checkgate_flag` data source. Polymorphic/nested fields
+    (`default_value`, `rules`, `variants`, `prerequisites`) use semantic-JSON equality so
+    re-serialisation never churns a plan; supports import and detects `require_approval`
+    environments (surfaces the queued change request instead of hanging). Built on
+    terraform-plugin-framework.
+  - **Kubernetes operator** (`checkgate-operator`) reconciling a `FeatureFlag` CRD
+    (`flags.checkgate.io/v1alpha1`) into Checkgate — create/update via the API, a finalizer that
+    deletes the remote flag with the CR, periodic drift correction, and status conditions. The token
+    is read from a referenced Secret. Reconcile logic is unit-tested with a fake client + fake server.
+- **Edge Side Evaluation** (`@checkgate/edge`) — a new, zero-dependency, runtime-agnostic edge
+  evaluator that pulls a flag snapshot from `/flags/snapshot`, caches it with a TTL plus optional
+  stale-while-revalidate, keeps the last-known-good snapshot through origin outages (fail-open), and
+  delegates evaluation to the shared `@checkgate/web` WASM engine — so edge results are identical to
+  every other SDK, with no re-implemented rule/rollout/segment logic. Ships with a **Cloudflare
+  Workers** example (per-request edge evaluation in a warm isolate + a Cron Trigger that keeps the
+  snapshot warm) and a **Fly.io** multi-region deploy recipe (`fly.toml` + guide). Lives in `edge/`
+  with a full `node --test` suite covering refresh de-duplication, TTL/SWR behavior, and fail-open
+  resilience.
 - **Type-Safe Schema CLI** (`@checkgate/cli`) — a new `checkgate typegen` command generates
   type-safe flag accessors for **TypeScript, Dart, and Rust** from your flag definitions, read
   either from a running server (`--url`/`--env`/`--token`, or the `CHECKGATE_*` env vars) or a local

@@ -1,0 +1,21 @@
+name = "checkgate-edge-worker"
+main = "src/worker.js"
+compatibility_date = "2026-01-01"
+# Node built-ins aren't needed, but this keeps `fetch`/URL/etc. modern.
+compatibility_flags = ["nodejs_compat"]
+
+# Bundle the .wasm shipped in @checkgate/web as a WebAssembly module.
+rules = [
+  { type = "CompiledWasm", globs = ["**/*.wasm"], fallthrough = true },
+]
+
+# Non-secret config. Set the SDK key as a secret instead (see README):
+#   npx wrangler secret put CHECKGATE_SDK_KEY
+[vars]
+CHECKGATE_URL = "https://flags.your-domain.com"
+CHECKGATE_TTL_SECONDS = "30"
+CHECKGATE_SWR_SECONDS = "60"
+
+# Keep the snapshot warm ahead of traffic — refresh every minute.
+[triggers]
+crons = ["* * * * *"]

@@ -1,0 +1,18 @@
+{
+  "name": "checkgate-edge-worker-example",
+  "version": "0.1.20",
+  "private": true,
+  "type": "module",
+  "description": "Example: evaluate Checkgate feature flags at the edge on Cloudflare Workers.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@checkgate/edge": "^0.1.20",
+    "@checkgate/web": "^0.1.20"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

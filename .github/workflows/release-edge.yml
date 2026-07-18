@@ -1,0 +1,39 @@
+name: Release Edge
+
+# Triggered by version tags: v1.2.3 (shared convention with the SDK releases).
+on:
+  push:
+    tags: ["v*.*.*"]
+
+jobs:
+  publish:
+    name: Publish @checkgate/edge to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # @checkgate/edge has zero runtime dependencies — no install step needed.
+      - name: Run tests
+        working-directory: edge
+        run: node --test
+
+      - name: Set version from tag
+        working-directory: edge
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish @checkgate/edge
+        working-directory: edge
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

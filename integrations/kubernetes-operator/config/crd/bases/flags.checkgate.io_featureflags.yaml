@@ -1,0 +1,217 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
+  name: featureflags.flags.checkgate.io
+spec:
+  group: flags.checkgate.io
+  names:
+    kind: FeatureFlag
+    listKind: FeatureFlagList
+    plural: featureflags
+    shortNames:
+    - ff
+    singular: featureflag
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.key
+      name: Key
+      type: string
+    - jsonPath: .spec.enabled
+      name: Enabled
+      type: boolean
+    - jsonPath: .status.synced
+      name: Synced
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: FeatureFlag is a Checkgate feature flag managed declaratively.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: FeatureFlagSpec is the desired state of a Checkgate flag.
+            properties:
+              defaultValue:
+                description: DefaultValue returned when enabled and no rule matches
+                  (raw JSON).
+                x-kubernetes-preserve-unknown-fields: true
+              description:
+                description: Description is a human-readable note.
+                type: string
+              enabled:
+                default: true
+                description: Enabled turns the flag on or off. Defaults to true.
+                type: boolean
+              environmentId:
+                description: EnvironmentID the flag belongs to.
+                minLength: 1
+                type: string
+              flagType:
+                default: boolean
+                description: FlagType is one of boolean, string, integer, json. Defaults
+                  to boolean.
+                enum:
+                - boolean
+                - string
+                - integer
+                - json
+                type: string
+              key:
+                description: Key is the flag's unique key within the environment.
+                  Immutable.
+                minLength: 1
+                type: string
+                x-kubernetes-validations:
+                - message: key is immutable
+                  rule: self == oldSelf
+              rolloutPercentage:
+                description: RolloutPercentage is a sticky percentage rollout (0–100).
+                maximum: 100
+                minimum: 0
+                type: integer
+              rules:
+                description: Rules is a raw-JSON array of targeting rules.
+                x-kubernetes-preserve-unknown-fields: true
+              server:
+                description: Server tells the operator which Checkgate instance to
+                  reconcile against.
+                properties:
+                  tokenSecretRef:
+                    description: TokenSecretRef references a read_write personal access
+                      token.
+                    properties:
+                      key:
+                        default: token
+                        description: Key within the Secret. Defaults to "token".
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: Namespace of the Secret. Defaults to the FeatureFlag's
+                          namespace.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  url:
+                    description: URL is the Checkgate server base URL, e.g. https://flags.example.com.
+                    minLength: 1
+                    type: string
+                required:
+                - tokenSecretRef
+                - url
+                type: object
+              tags:
+                description: Tags are dashboard-only labels.
+                items:
+                  type: string
+                type: array
+              variants:
+                description: Variants is a raw-JSON array of weighted variants.
+                x-kubernetes-preserve-unknown-fields: true
+            required:
+            - environmentId
+            - key
+            - server
+            type: object
+          status:
+            description: FeatureFlagStatus is the observed state of the flag.
+            properties:
+              conditions:
+                description: Conditions follow the standard Kubernetes condition convention.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the spec generation last reconciled.
+                format: int64
+                type: integer
+              synced:
+                description: Synced is true when the flag in Checkgate matches this
+                  spec.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
