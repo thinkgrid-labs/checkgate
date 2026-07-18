@@ -72,6 +72,7 @@ export class CheckgateEdge {
     this._loaded = false
     this._loadedAt = 0
     this._flagCount = 0
+    this._snapshot = [] // raw flag array from the last successful load
     this._refreshing = null // in-flight refresh promise, for de-duplication
   }
 
@@ -138,10 +139,20 @@ export class CheckgateEdge {
 
     this.core.clear()
     for (const flag of flags) this.core.upsertFlag(JSON.stringify(flag))
+    this._snapshot = flags
     this._flagCount = flags.length
     this._loadedAt = this._now()
     this._loaded = true
     return { count: flags.length, refreshed: true }
+  }
+
+  /**
+   * The raw flag array from the last successful load — useful for server-side
+   * rendering, where `@checkgate/ssr` embeds it in the HTML so the client SDK is
+   * live-ready without waiting for its stream. Returns a copy; empty if never loaded.
+   */
+  snapshotFlags() {
+    return this._snapshot.slice()
   }
 
   /**

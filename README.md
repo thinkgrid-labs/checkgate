@@ -82,6 +82,7 @@ It is proudly built in Rust and ships with native SDKs for Node.js (NAPI), brows
 | Flutter (FFI) SDK | [SDK: Flutter](docs/sdks/flutter.md) |
 | Type-safe codegen CLI | [`@checkgate/cli`](cli/README.md) |
 | Edge evaluation (Workers, Fly.io) | [`@checkgate/edge`](edge/README.md) |
+| SSR / bootstrap (Next.js, Remix, …) | [`@checkgate/ssr`](ssr/README.md) |
 | Terraform / OpenTofu provider | [terraform-provider-checkgate](integrations/terraform-provider-checkgate/README.md) |
 | Kubernetes operator | [checkgate-operator](integrations/kubernetes-operator/README.md) |
 | Docker, AWS, env vars | [Self-Hosting](docs/self-hosting.md) |

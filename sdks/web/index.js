@@ -15,6 +15,10 @@ export class CheckgateWeb {
      * @param {number} [options.impressionFlushIntervalMs=10000] - Periodic flush interval
      * @param {boolean} [options.sendEvaluationContext=false] - Include user attributes in
      *        reported impressions. Off by default so attributes never leave the browser.
+     * @param {Array<object>|{flags: Array<object>}} [options.bootstrap] - A flag snapshot to
+     *        load synchronously on connect, before the SSE stream is established — pass the
+     *        `flags` from a server-rendered `@checkgate/ssr` bootstrap payload so the client
+     *        evaluates correctly on first paint with zero flag flicker.
      */
     constructor({
         serverUrl,
@@ -28,6 +32,7 @@ export class CheckgateWeb {
         impressionFlushIntervalMs = 10000,
         sendEvaluationContext = false,
         storage = (typeof localStorage !== 'undefined' ? localStorage : null),
+        bootstrap = null,
     } = {}) {
         this.serverUrl = serverUrl;
         this.sdkKey = sdkKey;
@@ -48,6 +53,13 @@ export class CheckgateWeb {
         this._flagCache = new Map();
         this._hydrated = false;
         this._cacheKey = `checkgate:flags:${serverUrl}`;
+
+        // SSR bootstrap: a flag snapshot to seed the core on connect so the very
+        // first evaluation on the client matches what the server rendered.
+        // Accepts a raw flags array or a full @checkgate/ssr payload ({ flags }).
+        this._bootstrapFlags = Array.isArray(bootstrap)
+            ? bootstrap
+            : (bootstrap && Array.isArray(bootstrap.flags) ? bootstrap.flags : null);
 
         // Managed-reconnect state (exponential backoff with jitter)
         this._reconnectAttempts = 0;
@@ -90,9 +102,19 @@ export class CheckgateWeb {
         this._connectPromise = (async () => {
             await init();
             this.core = new CheckgateCoreWasm();
-            // Hydrate from the persisted snapshot so evaluations work offline
-            // immediately, then open the live stream.
-            await this._hydrateFromCache();
+            if (this._bootstrapFlags && this._bootstrapFlags.length > 0) {
+                // Prefer the SSR bootstrap (freshest — rendered for this request)
+                // over any stale persisted snapshot.
+                for (const flag of this._bootstrapFlags) {
+                    this._flagCache.set(flag.key, flag);
+                    this.core.upsert_flag_v2(JSON.stringify(flag));
+                }
+                this._hydrated = true;
+            } else {
+                // Hydrate from the persisted snapshot so evaluations work offline
+                // immediately, then open the live stream.
+                await this._hydrateFromCache();
+            }
             await new Promise((resolve) => {
                 this._resolveReady = resolve;
                 this._connectDeltas();

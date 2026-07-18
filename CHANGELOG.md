@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **SSR / bootstrap helpers** (`@checkgate/ssr`) — server-render initial flag state and hydrate the
+  client with zero flag flicker (Next.js, Remix, SvelteKit, any SSR framework). `buildBootstrap()`
+  evaluates a page's flags for the current user on the server; `bootstrapScriptTag()` embeds the
+  result as an XSS-safe `<script>` (escapes `</script>` and U+2028/U+2029, supports a CSP nonce);
+  `readBootstrap()` + `BootstrapValues` render the first client paint from the server-resolved values
+  (null-safe, version-checked). The Web SDK gained a `bootstrap` option that seeds its WASM core from
+  the embedded snapshot so the live client is ready without waiting for its stream, and
+  `@checkgate/edge` gained `snapshotFlags()` to expose the raw snapshot for embedding. Zero
+  dependencies; unit-tested with `node --test`.
 - **Infrastructure as code** — manage flags and segments outside the dashboard, all on one shared Go
   API client (`integrations/checkgate-go`, dependency-free and unit-tested):
   - **Terraform / OpenTofu provider** (`terraform-provider-checkgate`) with `checkgate_flag` and

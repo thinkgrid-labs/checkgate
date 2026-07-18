@@ -126,6 +126,16 @@ test('concurrent refresh() calls are de-duplicated into one fetch', async () => 
   assert.equal(fetchImpl.calls.length, 1)
 })
 
+test('snapshotFlags() exposes the raw snapshot for SSR (a copy)', async () => {
+  const { edge } = make()
+  assert.deepEqual(edge.snapshotFlags(), []) // empty before load
+  await edge.refresh()
+  const snap = edge.snapshotFlags()
+  assert.equal(snap.length, 2)
+  snap.push({ key: 'mutation' })
+  assert.equal(edge.snapshotFlags().length, 2) // internal state not mutated
+})
+
 // --- ensureFresh() TTL / SWR ----------------------------------------------
 
 test('ensureFresh() loads once, then serves from cache within the TTL', async () => {
