@@ -46,4 +46,4 @@ Every new SDK wraps the **same shared Rust evaluation core** in [`core/`](https:
 ---
 
 > [!TIP]
-> **Want to contribute?** We welcome ideas and pull requests! Check the [Contributing Guide](https://github.com/thinkgrid-labs/checkgate/blob/main/CONTRIBUTING.md) to get started.
+> **Want to contribute?** I welcome ideas and pull requests! Check the [Contributing Guide](https://github.com/thinkgrid-labs/checkgate/blob/main/CONTRIBUTING.md) to get started.

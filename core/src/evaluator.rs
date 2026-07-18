@@ -1076,4 +1076,201 @@ mod tests {
             &FlagStore::new()
         ));
     }
+
+    // --- Additional coverage: string operators, boundaries, value types ---
+
+    fn ctx_attr(key: &str, attr: &str, val: &str) -> UserContext {
+        let mut attributes = HashMap::new();
+        attributes.insert(attr.to_string(), val.to_string());
+        UserContext {
+            key: key.into(),
+            attributes,
+        }
+    }
+
+    fn string_rule(attribute: &str, operator: Operator, values: &[&str]) -> TargetingRule {
+        TargetingRule {
+            attribute: attribute.into(),
+            operator,
+            values: values.iter().map(|s| s.to_string()).collect(),
+            segment_key: None,
+            variant: None,
+        }
+    }
+
+    #[test]
+    fn test_operator_contains() {
+        let flag = bool_flag(
+            "f",
+            true,
+            Some(0), // rollout 0 → only a rule match can enable
+            vec![string_rule("email", Operator::Contains, &["@acme."])],
+        );
+        let store = FlagStore::new();
+        assert!(evaluate(
+            &flag,
+            &ctx_attr("u", "email", "bob@acme.com"),
+            &store
+        ));
+        assert!(!evaluate(
+            &flag,
+            &ctx_attr("u", "email", "bob@other.com"),
+            &store
+        ));
+    }
+
+    #[test]
+    fn test_operator_starts_with() {
+        let flag = bool_flag(
+            "f",
+            true,
+            Some(0),
+            vec![string_rule("region", Operator::StartsWith, &["eu-"])],
+        );
+        let store = FlagStore::new();
+        assert!(evaluate(
+            &flag,
+            &ctx_attr("u", "region", "eu-west-1"),
+            &store
+        ));
+        assert!(!evaluate(
+            &flag,
+            &ctx_attr("u", "region", "us-east-1"),
+            &store
+        ));
+    }
+
+    #[test]
+    fn test_equals_matches_any_value_in_list() {
+        let flag = bool_flag(
+            "f",
+            true,
+            Some(0),
+            vec![string_rule(
+                "plan",
+                Operator::Equals,
+                &["pro", "enterprise"],
+            )],
+        );
+        let store = FlagStore::new();
+        assert!(evaluate(
+            &flag,
+            &ctx_attr("u", "plan", "enterprise"),
+            &store
+        ));
+        assert!(evaluate(&flag, &ctx_attr("u", "plan", "pro"), &store));
+        assert!(!evaluate(&flag, &ctx_attr("u", "plan", "free"), &store));
+    }
+
+    #[test]
+    fn test_first_matching_rule_wins() {
+        // Two rules whose variants differ: the earlier match must be returned.
+        let mut flag = bool_flag("f", true, None, vec![]);
+        flag.flag_type = FlagType::String;
+        flag.rules = vec![
+            TargetingRule {
+                attribute: "plan".into(),
+                operator: Operator::Equals,
+                values: vec!["pro".into()],
+                segment_key: None,
+                variant: Some(FlagValue::Str("first".into())),
+            },
+            TargetingRule {
+                attribute: "plan".into(),
+                operator: Operator::Equals,
+                values: vec!["pro".into()],
+                segment_key: None,
+                variant: Some(FlagValue::Str("second".into())),
+            },
+        ];
+        let res = evaluate_variant(&flag, &ctx_attr("u", "plan", "pro"), &FlagStore::new());
+        assert_eq!(res.value, FlagValue::Str("first".into()));
+    }
+
+    #[test]
+    fn test_rollout_zero_disables_and_hundred_enables_all() {
+        let store = FlagStore::new();
+        let zero = bool_flag("z", true, Some(0), vec![]);
+        let hundred = bool_flag("h", true, Some(100), vec![]);
+        for i in 0..200 {
+            let ctx = UserContext {
+                key: format!("user{i}"),
+                attributes: HashMap::new(),
+            };
+            assert!(!evaluate(&zero, &ctx, &store), "0% must never enable");
+            assert!(evaluate(&hundred, &ctx, &store), "100% must always enable");
+        }
+    }
+
+    #[test]
+    fn test_enabled_boolean_default_is_true_nonbool_is_null() {
+        let store = FlagStore::new();
+        let ctx = UserContext {
+            key: "u".into(),
+            attributes: HashMap::new(),
+        };
+
+        // Boolean flag, enabled, no default_value → true (backward compatible).
+        let b = bool_flag("b", true, None, vec![]);
+        let rb = evaluate_variant(&b, &ctx, &store);
+        assert!(rb.enabled);
+        assert_eq!(rb.value, FlagValue::Bool(true));
+
+        // Non-boolean flag, enabled, no default_value/variants → Null value.
+        let mut s = bool_flag("s", true, None, vec![]);
+        s.flag_type = FlagType::String;
+        let rs = evaluate_variant(&s, &ctx, &store);
+        assert!(rs.enabled);
+        assert_eq!(rs.value, FlagValue::Null);
+    }
+
+    #[test]
+    fn test_disabled_flag_returns_disabled_value_or_false() {
+        let store = FlagStore::new();
+        let ctx = UserContext {
+            key: "u".into(),
+            attributes: HashMap::new(),
+        };
+
+        // No disabled_value → Bool(false).
+        let plain = bool_flag("p", false, None, vec![]);
+        assert_eq!(
+            evaluate_variant(&plain, &ctx, &store).value,
+            FlagValue::Bool(false)
+        );
+
+        // Explicit disabled_value is honored.
+        let mut custom = bool_flag("c", false, None, vec![]);
+        custom.flag_type = FlagType::String;
+        custom.disabled_value = Some(FlagValue::Str("off".into()));
+        let r = evaluate_variant(&custom, &ctx, &store);
+        assert!(!r.enabled);
+        assert_eq!(r.value, FlagValue::Str("off".into()));
+    }
+
+    #[test]
+    fn test_integer_and_json_default_values_resolve() {
+        let store = FlagStore::new();
+        let ctx = UserContext {
+            key: "u".into(),
+            attributes: HashMap::new(),
+        };
+
+        let mut int_flag = bool_flag("max", true, None, vec![]);
+        int_flag.flag_type = FlagType::Integer;
+        int_flag.default_value = Some(FlagValue::Int(42));
+        assert_eq!(
+            evaluate_variant(&int_flag, &ctx, &store).value,
+            FlagValue::Int(42)
+        );
+
+        let json = serde_json::json!({"mode": "dark"});
+        let mut json_flag = bool_flag("cfg", true, None, vec![]);
+        json_flag.flag_type = FlagType::Json;
+        json_flag.default_value = Some(FlagValue::Json(json.clone()));
+        assert_eq!(
+            evaluate_variant(&json_flag, &ctx, &store).value,
+            FlagValue::Json(json)
+        );
+    }
 }

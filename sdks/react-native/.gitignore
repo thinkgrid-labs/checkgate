@@ -9,3 +9,6 @@
 # includes the whole `android/` directory, shipped inside the published npm
 # tarball too (harmless but junk — see v0.1.18 postmortem).
 android/.gradle
+
+node_modules/
+coverage/
