@@ -47,6 +47,23 @@ async function init() {
 init()
 ```
 
+## A/B testing: track conversions
+
+Record goal events with `track()` to measure how each flag variant converts. Pair
+a flag with a goal event in an **Experiment** in the dashboard to see per-variant
+conversion rates and statistical significance.
+
+```javascript
+const variant = checkgate.getVariant('checkout-button-color', 'user_123')
+
+// …later, when the user converts:
+checkgate.track('checkout_complete', 'user_123', { value: 49.99 })
+```
+
+Events are buffered and reported asynchronously (best-effort), just like impressions.
+Use the **same `userKey`** you pass to `getVariant()`/`isEnabled()` so conversions
+attribute to the right variant.
+
 ## Why Checkgate WebAssembly?
 * **Zero Loading Screens:** By evaluating rule sets synchronously via WASM, UI components never have to wait or display spinners.
 * **Live SSE:** Toggling a flag on the dashboard natively updates the frontend without refreshing the browser tab.

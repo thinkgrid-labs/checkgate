@@ -1,6 +1,8 @@
 pub mod audit;
 pub mod change_requests;
 pub mod environments;
+pub mod events;
+pub mod experiments;
 pub mod flags;
 pub mod health;
 pub mod impressions;
@@ -106,6 +108,8 @@ pub async fn csrf_protection(req: Request<Body>, next: Next) -> Result<Response,
 pub fn read_router() -> Router<AppState> {
     flags::read_router()
         .merge(impressions::read_router())
+        .merge(events::read_router())
+        .merge(experiments::read_router())
         .merge(environments::read_router())
         .merge(keys::read_router())
         .merge(users::read_router())
@@ -129,12 +133,17 @@ pub fn self_service_router() -> Router<AppState> {
 /// SDK ingest routes — any authenticated client; not admin-gated.
 /// Placed separately so they can carry a higher body-size limit.
 pub fn ingest_router() -> Router<AppState> {
-    impressions::ingest_router()
+    impressions::ingest_router().merge(events::ingest_router())
 }
 
 /// Flag write routes — require editor or admin role (layer added in main.rs).
 pub fn editor_write_router() -> Router<AppState> {
     flags::write_router().merge(change_requests::write_router())
+}
+
+/// Experiment write routes — require editor or admin role.
+pub fn experiment_write_router() -> Router<AppState> {
+    experiments::write_router()
 }
 
 /// Admin-only write routes: environments, SDK keys, users, projects (layer added in main.rs).

@@ -69,6 +69,8 @@ export class CheckgateWeb {
         this.sendEvaluationContext = sendEvaluationContext;
         this._envId = null;
         this._impressions = [];
+        // Buffered goal/conversion events reported via track() (A/B testing).
+        this._events = [];
         this._flushTimer = null;
     }
 
@@ -472,8 +474,13 @@ export class CheckgateWeb {
     }
 
     _startImpressionTimer() {
-        if (!this.reportImpressions || this._flushTimer) return;
-        this._flushTimer = setInterval(() => this._flushImpressions(), this.impressionFlushIntervalMs);
+        // Not gated on reportImpressions: the timer also flushes track() events,
+        // and both flush methods no-op on empty buffers, so an idle timer is cheap.
+        if (this._flushTimer) return;
+        this._flushTimer = setInterval(() => {
+            this._flushImpressions();
+            this._flushEvents();
+        }, this.impressionFlushIntervalMs);
     }
 
     /** POST buffered impressions (up to the server's 500/batch limit). */
@@ -494,6 +501,65 @@ export class CheckgateWeb {
         });
     }
 
+    // ---------------------------------------------------------------------
+    // Goal event tracking (A/B testing conversions)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Records a goal/conversion event for A/B testing (e.g. "checkout_complete").
+     * Buffered and reported asynchronously, mirroring impression reporting.
+     *
+     * @param {string} eventKey - The goal event name (must match the experiment's goal).
+     * @param {string} userKey - The same user identifier passed to getVariant()/isEnabled().
+     * @param {object} [opts]
+     * @param {number} [opts.value] - Optional numeric payload (e.g. revenue).
+     * @param {object} [opts.context] - Optional metadata stored with the event.
+     */
+    track(eventKey, userKey, opts = {}) {
+        if (!eventKey || typeof eventKey !== 'string') {
+            console.warn('[Checkgate] track() called without a valid eventKey.');
+            return;
+        }
+        if (!this._envId) {
+            console.warn('[Checkgate] track() called before connect() resolved — event dropped.');
+            return;
+        }
+
+        this._events.push({
+            event_key: eventKey,
+            user_id: userKey,
+            ...(opts.value != null ? { value: opts.value } : {}),
+            ...(opts.context != null ? { context: opts.context } : {}),
+        });
+
+        if (this._events.length > 10000) {
+            this._events.splice(0, this._events.length - 10000);
+        }
+        // Ensure events flush even when impression auto-reporting is disabled.
+        this._startImpressionTimer();
+        if (this._events.length >= this.impressionBatchSize) {
+            this._flushEvents();
+        }
+    }
+
+    /** POST buffered goal events (up to the server's 500/batch limit). */
+    _flushEvents() {
+        if (!this._envId || this._events.length === 0) return;
+        const batch = this._events.splice(0, 500);
+
+        fetch(`${this.serverUrl}/api/environments/${this._envId}/events`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(this.sdkKey ? { 'Authorization': `Bearer ${this.sdkKey}` } : {}),
+            },
+            body: JSON.stringify(batch),
+            keepalive: true,
+        }).catch((err) => {
+            console.warn('[Checkgate] Failed to report events:', err && err.message);
+        });
+    }
+
     /**
      * Closes the SSE connection.
      */
@@ -506,6 +572,7 @@ export class CheckgateWeb {
         }
         this._stopPollFallback();
         this._flushImpressions();
+        this._flushEvents();
         if (this._flushTimer) {
             clearInterval(this._flushTimer);
             this._flushTimer = null;

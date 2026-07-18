@@ -126,6 +126,20 @@ export declare class CheckgateClient {
   ): FlagValue;
 
   /**
+   * Records a goal/conversion event for A/B testing (e.g. "checkout_complete").
+   * Buffered and reported asynchronously, mirroring impression reporting.
+   *
+   * @param eventKey The goal event name (must match the experiment's goal).
+   * @param userKey  The same user identifier passed to getVariant()/isEnabled().
+   * @param opts     Optional numeric `value` (e.g. revenue) and `context` metadata.
+   */
+  track(
+    eventKey: string,
+    userKey: string,
+    opts?: { value?: number; context?: Record<string, unknown> }
+  ): void;
+
+  /**
    * Closes the SSE connection and cleans up resources.
    * Call on graceful shutdown.
    */

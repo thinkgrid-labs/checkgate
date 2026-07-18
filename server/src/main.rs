@@ -425,6 +425,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let editor_write_api = api::editor_write_router()
         .merge(api::segment_write_router())
         .merge(api::scheduled_write_router())
+        .merge(api::experiment_write_router())
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             auth::require_editor,

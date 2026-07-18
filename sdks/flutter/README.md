@@ -55,6 +55,23 @@ class MyApp extends StatelessWidget {
 }
 ```
 
+## A/B testing: track conversions
+
+Record goal events with `track()` to measure how each flag variant converts. Pair
+a flag with a goal event in an **Experiment** in the dashboard to see per-variant
+conversion rates and statistical significance.
+
+```dart
+final variant = checkgate.getVariant('checkout-button-color', 'user_123');
+
+// …later, when the user converts:
+checkgate.track('checkout_complete', 'user_123', value: 49.99);
+```
+
+Events are buffered and reported asynchronously (best-effort), just like impressions.
+Use the **same `userKey`** you pass to `getVariant()`/`isEnabled()` so conversions
+attribute to the right variant.
+
 ## Why Checkgate FFI?
 * **Synchronous FFI Evaluation:** You do not need to `await` flag resolution ever. The evaluation runs in Rust natively in sub-microseconds avoiding Dart async blocking limits.
 * **Instant Propagation (0 to <50ms):** Leverages server-side SSE channels natively within the Rust binary so flag adjustments happen seamlessly within your app flow.

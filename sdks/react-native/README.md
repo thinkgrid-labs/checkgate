@@ -38,6 +38,23 @@ function CheckoutScreen({ user }) {
 }
 ```
 
+## A/B testing: track conversions
+
+Record goal events with `track()` to measure how each flag variant converts. Pair
+a flag with a goal event in an **Experiment** in the dashboard to see per-variant
+conversion rates and statistical significance.
+
+```javascript
+const variant = client.getVariant('checkout-button-color', user.id)
+
+// …later, when the user converts:
+client.track('checkout_complete', user.id, { value: 49.99 })
+```
+
+Events are buffered and reported asynchronously (best-effort), just like impressions.
+Use the **same `userKey`** you pass to `getVariant()`/`isEnabled()` so conversions
+attribute to the right variant.
+
 ## Why Checkgate JSI?
 * **Synchronous Native Bridge:** Unlike standard HTTP wrappers, Checkgate's JSI evaluates flag arrays in memory avoiding async JS bridge loading.
 * **Bandwidth Conscious:** Streamlined SSE prevents apps from polling the network heavily on metered mobile plans.

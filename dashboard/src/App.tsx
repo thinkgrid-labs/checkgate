@@ -18,6 +18,8 @@ import Environments from './pages/Environments'
 import EnvironmentDiff from './pages/EnvironmentDiff'
 import ChangeRequests from './pages/ChangeRequests'
 import Impressions from './pages/Impressions'
+import Exposure from './pages/Exposure'
+import Experiments from './pages/Experiments'
 import Projects from './pages/Projects'
 import ProjectSettings from './pages/ProjectSettings'
 import Webhooks from './pages/Webhooks'
@@ -89,6 +91,8 @@ export default function App() {
                     <Route path="/change-requests" element={<ChangeRequests />} />
                     <Route path="/schedule" element={<Scheduled />} />
                     <Route path="/impressions" element={<Impressions />} />
+                    <Route path="/exposure" element={<Exposure />} />
+                    <Route path="/experiments" element={<Experiments />} />
                     <Route path="/audit" element={<AuditLog />} />
                     <Route path="/sdk-health" element={<SdkHealth />} />
                     <Route path="/webhooks" element={<Webhooks />} />

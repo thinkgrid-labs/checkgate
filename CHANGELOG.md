@@ -5,6 +5,30 @@ All notable changes to Checkgate are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.20] - 2026-07-18
+
+### Added
+
+- **Exposure Dashboards** — a new **Exposure** page visualizes which users are being exposed to
+  which flag variant. Per-flag it shows the variant distribution (share of evaluations and unique
+  users) and a 14-day stacked timeline of evaluations per variant, all derived from existing
+  impression data. Backed by `GET /api/environments/{env}/impressions/exposure?flag_key=…`.
+- **A/B Testing (Beta)** — an end-to-end conversion-measurement pipeline:
+  - **Goal events**: SDKs gained a `track(eventKey, userKey, { value, context })` method that
+    batches and reports conversion events best-effort, mirroring impression reporting. Available in
+    all four SDKs — Node, Web (WASM), React Native (JSI), and Flutter (FFI). Events land via a new
+    `POST /api/environments/{env}/events` ingest endpoint (256 KB body limit, same as impressions).
+    Both impression and event ingest now clamp the client-supplied timestamp to the server clock
+    (`LEAST(_, NOW())`) so a future-fast client clock can't make a conversion sort ahead of the
+    exposure that caused it; genuinely-old (offline-queued) timestamps are preserved.
+  - **Experiments**: a new **Experiments** page (and full CRUD API) ties a flag (the variant source)
+    to a goal event. Its results view computes each variant's conversion rate, relative uplift vs.
+    the control, and a two-proportion z-test with p-value and a 95% significance verdict. Each user
+    enters the experiment at their first exposure to the flag and is bucketed into the variant seen
+    then; they count as converted only if they fired the goal at or after that exposure. The control
+    is the configured `control_variant` or, if unset, the highest-exposure variant.
+  - New tables: `events` and `experiments`. New sidebar entries: **Exposure** and **Experiments**.
+
 ## [0.1.19] - 2026-07-05
 
 ### Changed

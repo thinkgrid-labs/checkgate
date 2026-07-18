@@ -16,6 +16,8 @@ import {
   Wifi,
   CalendarClock,
   GitPullRequest,
+  PieChart,
+  FlaskConical,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react'
@@ -32,6 +34,8 @@ const NAV_ALL = [
   { to: '/change-requests', icon: GitPullRequest, label: 'Change Requests', end: false, adminOnly: false },
   { to: '/schedule', icon: CalendarClock, label: 'Scheduled', end: false, adminOnly: false },
   { to: '/impressions', icon: Activity, label: 'Impressions', end: false, adminOnly: false },
+  { to: '/exposure', icon: PieChart, label: 'Exposure', end: false, adminOnly: false },
+  { to: '/experiments', icon: FlaskConical, label: 'Experiments', end: false, adminOnly: false },
   { to: '/audit', icon: History, label: 'Audit Log', end: false, adminOnly: false },
   { to: '/sdk-health', icon: Wifi, label: 'SDK Health', end: false, adminOnly: false },
   { to: '/webhooks', icon: Webhook, label: 'Webhooks', end: false, adminOnly: true },
