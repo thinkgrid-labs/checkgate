@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "browser"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "checkgate-core",
  "console_error_panic_hook",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "checkgate-core"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "dashmap",
  "murmur3",
@@ -392,7 +392,7 @@ dependencies = [
  "base64",
  "hkdf",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.8.7",
  "sha2",
  "subtle",
  "time",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "flutter"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "checkgate-core",
  "serde_json",
@@ -848,7 +848,7 @@ dependencies = [
  "parking_lot",
  "portable-atomic",
  "quanta",
- "rand 0.9.4",
+ "rand 0.9.5",
  "smallvec",
  "spinning_top",
  "web-time",
@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "nodejs"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "checkgate-core",
  "napi",
@@ -1464,7 +1464,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.7",
  "smallvec",
  "zeroize",
 ]
@@ -1716,7 +1716,7 @@ dependencies = [
  "bytes",
  "getrandom 0.3.4",
  "lru-slab",
- "rand 0.9.4",
+ "rand 0.9.5",
  "ring",
  "rustc-hash",
  "rustls",
@@ -1765,9 +1765,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -1776,9 +1776,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea"
+checksum = "b9ef1d0d795eb7d84685bca4f72f3649f064e6641543d3a8c415898726a57b41"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.5",
@@ -1786,9 +1786,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
+checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
  "chacha20",
  "getrandom 0.4.2",
@@ -1850,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "react-native"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "checkgate-core",
  "serde_json",
@@ -2020,9 +2020,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -2132,7 +2132,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "argon2",
  "async-stream",
@@ -2145,7 +2145,7 @@ dependencies = [
  "futures-util",
  "governor",
  "hmac",
- "rand 0.10.1",
+ "rand 0.10.2",
  "redis",
  "reqwest",
  "serde",
@@ -2393,7 +2393,7 @@ dependencies = [
  "memchr",
  "once_cell",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.8.7",
  "rsa",
  "serde",
  "sha1",
@@ -2432,7 +2432,7 @@ dependencies = [
  "md-5",
  "memchr",
  "once_cell",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "serde_json",
  "sha2",

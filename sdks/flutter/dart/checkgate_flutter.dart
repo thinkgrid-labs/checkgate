@@ -98,6 +98,8 @@ class CheckgateClient {
   // Impression reporting state
   String? _envId;
   final List<Map<String, dynamic>> _impressions = [];
+  // Buffered goal/conversion events reported via track() (A/B testing).
+  final List<Map<String, dynamic>> _events = [];
   Timer? _flushTimer;
 
   CheckgateClient({
@@ -537,9 +539,13 @@ class CheckgateClient {
   }
 
   void _startImpressionTimer() {
-    if (!reportImpressions || _flushTimer != null) return;
-    _flushTimer =
-        Timer.periodic(impressionFlushInterval, (_) => _flushImpressions());
+    // Not gated on reportImpressions: the timer also flushes track() events, and
+    // both flush methods no-op on empty buffers, so an idle timer is cheap.
+    if (_flushTimer != null) return;
+    _flushTimer = Timer.periodic(impressionFlushInterval, (_) {
+      _flushImpressions();
+      _flushEvents();
+    });
   }
 
   /// POST buffered impressions (up to the server's 500/batch limit).
@@ -565,11 +571,72 @@ class CheckgateClient {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // Goal event tracking (A/B testing conversions)
+  // -------------------------------------------------------------------------
+
+  /// Records a goal/conversion event for A/B testing (e.g. "checkout_complete").
+  /// Buffered and reported asynchronously, mirroring impression reporting.
+  ///
+  /// [eventKey] is the goal event name (must match the experiment's goal).
+  /// [userKey] is the same identifier passed to [getVariant]/[isEnabled].
+  /// [value] is an optional numeric payload (e.g. revenue); [context] is
+  /// optional metadata stored with the event.
+  void track(
+    String eventKey,
+    String userKey, {
+    num? value,
+    Map<String, dynamic>? context,
+  }) {
+    if (eventKey.isEmpty) return;
+    if (_envId == null) return;
+
+    _events.add({
+      'event_key': eventKey,
+      'user_id': userKey,
+      if (value != null) 'value': value,
+      if (context != null) 'context': context,
+    });
+
+    if (_events.length > 10000) {
+      _events.removeRange(0, _events.length - 10000);
+    }
+    // Ensure events flush even when impression auto-reporting is disabled.
+    _startImpressionTimer();
+    if (_events.length >= impressionBatchSize) {
+      _flushEvents();
+    }
+  }
+
+  /// POST buffered goal events (up to the server's 500/batch limit).
+  void _flushEvents() {
+    final client = _httpClient;
+    if (client == null || _envId == null || _events.isEmpty) return;
+    final take = _events.length > 500 ? 500 : _events.length;
+    final batch = _events.sublist(0, take);
+    _events.removeRange(0, take);
+
+    client
+        .post(
+          Uri.parse('$serverUrl/api/environments/$_envId/events'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $sdkKey',
+          },
+          body: jsonEncode(batch),
+        )
+        .catchError((Object err) {
+      // Best-effort: analytics loss is acceptable, never surface to the caller.
+      return http.Response('', 599);
+    });
+  }
+
   /// Cancel the SSE stream and release the HTTP client.
   void close() {
     _closed = true;
     _stopPollFallback();
     _flushImpressions();
+    _flushEvents();
     _flushTimer?.cancel();
     _flushTimer = null;
     _httpClient?.close();

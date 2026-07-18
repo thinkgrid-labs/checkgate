@@ -89,6 +89,72 @@ export interface ImpressionStats {
   last_seen: string | null
 }
 
+// --- Exposure dashboards ---------------------------------------------------
+
+export interface ExposureVariant {
+  value: string
+  impressions: number
+  unique_users: number
+}
+
+export interface ExposurePoint {
+  day: string
+  value: string
+  count: number
+}
+
+export interface ExposureResponse {
+  flag_key: string
+  total_impressions: number
+  total_users: number
+  variants: ExposureVariant[]
+  timeline: ExposurePoint[]
+}
+
+// --- Events & experiments (A/B testing) ------------------------------------
+
+export interface EventKeyInfo {
+  event_key: string
+  total: number
+  unique_users: number
+  last_seen: string | null
+}
+
+export type ExperimentStatus = 'running' | 'paused' | 'completed'
+
+export interface Experiment {
+  id: string
+  environment_id: string
+  key: string
+  name: string
+  description: string | null
+  flag_key: string
+  goal_event_key: string
+  control_variant: string | null
+  status: ExperimentStatus
+  created_at: string
+}
+
+export interface VariantResult {
+  variant: string
+  exposed: number
+  converted: number
+  conversion_rate: number
+  is_control: boolean
+  uplift: number | null
+  z_score: number | null
+  p_value: number | null
+  significant: boolean
+}
+
+export interface ExperimentResults {
+  experiment: Experiment
+  control_variant: string | null
+  total_exposed: number
+  total_converted: number
+  variants: VariantResult[]
+}
+
 export interface AuditEntry {
   id: number
   environment_id: string

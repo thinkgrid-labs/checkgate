@@ -1,6 +1,11 @@
 import type {
   AuditEntry,
   ConnectedClient,
+  EventKeyInfo,
+  Experiment,
+  ExperimentResults,
+  ExperimentStatus,
+  ExposureResponse,
   Flag,
   FlagPatch,
   ImpressionListResponse,
@@ -147,6 +152,72 @@ export const api = {
 
   impressionStats(envId: string): Promise<ImpressionStats[]> {
     return request(`/api/environments/${envId}/impressions/stats`)
+  },
+
+  exposure(envId: string, flagKey: string, days?: number): Promise<ExposureResponse> {
+    const params = new URLSearchParams({ flag_key: flagKey })
+    if (days != null) params.set('days', String(days))
+    return request(`/api/environments/${envId}/impressions/exposure?${params.toString()}`)
+  },
+}
+
+export const eventsApi = {
+  keys(envId: string): Promise<EventKeyInfo[]> {
+    return request(`/api/environments/${envId}/events/keys`)
+  },
+}
+
+export const experimentsApi = {
+  list(envId: string): Promise<Experiment[]> {
+    return request(`/api/environments/${envId}/experiments`)
+  },
+
+  get(envId: string, key: string): Promise<Experiment> {
+    return request(`/api/environments/${envId}/experiments/${encodeURIComponent(key)}`)
+  },
+
+  create(
+    envId: string,
+    data: {
+      key: string
+      name: string
+      description?: string
+      flag_key: string
+      goal_event_key: string
+      control_variant?: string | null
+    },
+  ): Promise<Experiment> {
+    return request(`/api/environments/${envId}/experiments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  patch(
+    envId: string,
+    key: string,
+    patch: {
+      name?: string
+      description?: string
+      goal_event_key?: string
+      control_variant?: string | null
+      status?: ExperimentStatus
+    },
+  ): Promise<Experiment> {
+    return request(`/api/environments/${envId}/experiments/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  },
+
+  delete(envId: string, key: string): Promise<void> {
+    return request(`/api/environments/${envId}/experiments/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  results(envId: string, key: string): Promise<ExperimentResults> {
+    return request(`/api/environments/${envId}/experiments/${encodeURIComponent(key)}/results`)
   },
 }
 

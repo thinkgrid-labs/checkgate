@@ -59,6 +59,48 @@ pub struct ImpressionListResponse {
     pub total: i64,
 }
 
+// --- Exposure dashboard types ---------------------------------------------
+
+/// Per-variant exposure for a single flag: how many evaluations resolved to
+/// this value and how many distinct users saw it.
+#[derive(Debug, Serialize)]
+pub struct ExposureVariant {
+    pub value: String,
+    pub impressions: i64,
+    pub unique_users: i64,
+}
+
+/// One point on the daily exposure timeline: evaluations of `value` on `day`.
+#[derive(Debug, Serialize)]
+pub struct ExposurePoint {
+    pub day: String,
+    pub value: String,
+    pub count: i64,
+}
+
+/// Exposure breakdown for one flag — which users are being exposed to which
+/// variant, over the whole retained window plus a recent daily timeline.
+#[derive(Debug, Serialize)]
+pub struct ExposureResponse {
+    pub flag_key: String,
+    pub total_impressions: i64,
+    pub total_users: i64,
+    pub variants: Vec<ExposureVariant>,
+    pub timeline: Vec<ExposurePoint>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExposureQuery {
+    pub flag_key: String,
+    /// Number of trailing days to include in the daily timeline (1–90).
+    #[serde(default = "default_exposure_days")]
+    pub days: i64,
+}
+
+fn default_exposure_days() -> i64 {
+    14
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
     pub flag_key: Option<String>,
@@ -91,6 +133,7 @@ pub fn read_router() -> Router<AppState> {
             "/environments/{env_id}/impressions/stats",
             get(impression_stats),
         )
+        .route("/environments/{env_id}/impressions/exposure", get(exposure))
 }
 
 /// Impression ingest route — any authenticated client (including SDK Bearer keys).
@@ -156,10 +199,15 @@ async fn ingest_impressions(
             .evaluated_at
             .unwrap_or_else(time::OffsetDateTime::now_utc);
 
+        // Clamp the client-supplied time to the server clock (`LEAST(_, NOW())`):
+        // a future-fast client clock must never let an evaluation sort ahead of
+        // reality, which would corrupt experiment attribution (a conversion could
+        // appear to precede its exposure). Genuinely-old times — e.g. offline
+        // events queued while disconnected — are left untouched.
         sqlx::query(
             "INSERT INTO impressions \
              (environment_id, flag_key, user_id, value, context, evaluated_at) \
-             VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+             VALUES ($1::uuid, $2, $3, $4, $5, LEAST($6, NOW()))",
         )
         .bind(&env_id)
         .bind(&imp.flag_key)
@@ -306,4 +354,103 @@ async fn impression_stats(
         .collect();
 
     Ok(Json(stats))
+}
+
+/// GET /api/environments/{env_id}/impressions/exposure?flag_key=X&days=14
+///
+/// Exposure breakdown for a single flag: per-variant impression and unique-user
+/// counts, plus a daily timeline of evaluations per variant. Powers the
+/// Exposure dashboard ("which users are being exposed to which variant?").
+async fn exposure(
+    State(state): State<AppState>,
+    jar: AuthContext,
+    Path(env_id): Path<String>,
+    Query(q): Query<ExposureQuery>,
+) -> Result<Json<ExposureResponse>, StatusCode> {
+    super::flags::check_env_access(&state.db, &jar, &env_id).await?;
+
+    if q.flag_key.is_empty() || q.flag_key.len() > 100 {
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+    let days = q.days.clamp(1, 90);
+
+    // Per-variant totals across the whole retained window.
+    let variant_rows = sqlx::query(
+        "SELECT value, \
+                COUNT(*)                AS impressions, \
+                COUNT(DISTINCT user_id) AS unique_users \
+         FROM impressions \
+         WHERE environment_id = $1::uuid AND flag_key = $2 \
+         GROUP BY value \
+         ORDER BY impressions DESC",
+    )
+    .bind(&env_id)
+    .bind(&q.flag_key)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error computing exposure variants");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let variants: Vec<ExposureVariant> = variant_rows
+        .iter()
+        .map(|r| ExposureVariant {
+            value: r.get("value"),
+            impressions: r.get("impressions"),
+            unique_users: r.get("unique_users"),
+        })
+        .collect();
+
+    let total_impressions: i64 = variants.iter().map(|v| v.impressions).sum();
+
+    let total_users: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT user_id) FROM impressions \
+         WHERE environment_id = $1::uuid AND flag_key = $2",
+    )
+    .bind(&env_id)
+    .bind(&q.flag_key)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error computing exposure user total");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Daily timeline for the trailing `days` window.
+    let timeline_rows = sqlx::query(
+        "SELECT to_char(date_trunc('day', evaluated_at), 'YYYY-MM-DD') AS day, \
+                value, COUNT(*) AS count \
+         FROM impressions \
+         WHERE environment_id = $1::uuid AND flag_key = $2 \
+           AND evaluated_at >= NOW() - ($3 || ' days')::interval \
+         GROUP BY day, value \
+         ORDER BY day ASC",
+    )
+    .bind(&env_id)
+    .bind(&q.flag_key)
+    .bind(days.to_string())
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "DB error computing exposure timeline");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let timeline: Vec<ExposurePoint> = timeline_rows
+        .iter()
+        .map(|r| ExposurePoint {
+            day: r.get("day"),
+            value: r.get("value"),
+            count: r.get("count"),
+        })
+        .collect();
+
+    Ok(Json(ExposureResponse {
+        flag_key: q.flag_key,
+        total_impressions,
+        total_users,
+        variants,
+        timeline,
+    }))
 }
