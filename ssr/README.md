@@ -35,7 +35,7 @@ shared WASM evaluation engine both sides use, so server and client agree exactly
 // lib/checkgate-server.ts
 import { CheckgateEdge } from '@checkgate/edge'
 import { buildBootstrap } from '@checkgate/ssr'
-import { createWasmCore } from './wasm-core' // the adapter from @checkgate/edge's Cloudflare example
+import { createWasmCore } from '@checkgate/web/core'
 
 let edge: CheckgateEdge | null = null
 

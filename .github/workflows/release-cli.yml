@@ -12,6 +12,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write   # OIDC token for npm provenance
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +41,6 @@ jobs:
 
       - name: Publish @checkgate/cli
         working-directory: cli
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

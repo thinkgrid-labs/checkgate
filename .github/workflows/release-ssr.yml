@@ -1,4 +1,4 @@
-name: Release Edge
+name: Release SSR
 
 # Triggered by version tags: v1.2.3 (shared convention with the SDK releases).
 on:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   publish:
-    name: Publish @checkgate/edge to npm
+    name: Publish @checkgate/ssr to npm
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,20 +21,20 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      # @checkgate/edge has zero runtime dependencies — no install step needed.
+      # @checkgate/ssr has zero runtime dependencies — no install step needed.
       - name: Run tests
-        working-directory: edge
+        working-directory: ssr
         run: node --test
 
       - name: Set version from tag
-        working-directory: edge
+        working-directory: ssr
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Publish @checkgate/edge
-        working-directory: edge
+      - name: Publish @checkgate/ssr
+        working-directory: ssr
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

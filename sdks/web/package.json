@@ -1,18 +1,35 @@
 {
   "name": "@checkgate/web",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Checkgate feature-flag SDK for the web \u2014 local evaluation via WebAssembly.",
+  "type": "module",
   "main": "index.js",
   "module": "index.js",
   "types": "dist/checkgate.d.ts",
+  "exports": {
+    ".": "./index.js",
+    "./core": "./core.js",
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thinkgrid-labs/checkgate.git",
+    "directory": "sdks/web"
+  },
+  "homepage": "https://github.com/thinkgrid-labs/checkgate#readme",
+  "bugs": {
+    "url": "https://github.com/thinkgrid-labs/checkgate/issues"
+  },
   "license": "MIT",
   "scripts": {
     "build": "wasm-pack build --target web --out-name checkgate --out-dir dist",
-    "prepublishOnly": "node scripts/bundle-rust.js",
+    "prepublishOnly": "node scripts/bundle-rust.cjs",
     "test": "vitest run"
   },
   "files": [
     "index.js",
+    "core.js",
     "dist/",
     "rust-core/",
     "Cargo.toml"

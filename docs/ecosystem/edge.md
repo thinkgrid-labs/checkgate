@@ -21,12 +21,15 @@ npm install @checkgate/edge
 
 ```javascript
 import { CheckgateEdge } from '@checkgate/edge'
-import { createWasmCore } from './wasm-core.js' // adapter over @checkgate/web WASM
+import { createWasmCore } from '@checkgate/web/core'
+// Wrangler compiles a .wasm import into a WebAssembly.Module. On Node (Next.js
+// server) and in the browser, call createWasmCore() with no argument instead.
+import wasmModule from '@checkgate/web/dist/checkgate_bg.wasm'
 
 const edge = new CheckgateEdge({
   serverUrl: 'https://flags.your-domain.com',
   sdkKey: env.CHECKGATE_SDK_KEY,          // environment-scoped SDK key (Bearer)
-  core: await createWasmCore(),           // the WASM evaluation engine
+  core: await createWasmCore(wasmModule), // the WASM evaluation engine
   ttlSeconds: 30,                         // re-fetch the snapshot at most this often
   staleWhileRevalidateSeconds: 60,        // serve stale + refresh in background
 })

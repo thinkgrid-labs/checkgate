@@ -1,6 +1,6 @@
 {
   "name": "@checkgate/ssr",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Server-side rendering & bootstrap helpers for Checkgate — evaluate flags on the server, embed the result in the HTML, and hydrate the client with zero flag flicker (Next.js, Remix, SvelteKit, any SSR framework).",
   "type": "module",
   "main": "src/index.js",
@@ -27,5 +27,14 @@
     "sveltekit",
     "hydration"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thinkgrid-labs/checkgate.git",
+    "directory": "ssr"
+  },
+  "homepage": "https://github.com/thinkgrid-labs/checkgate#readme",
+  "bugs": {
+    "url": "https://github.com/thinkgrid-labs/checkgate/issues"
+  },
   "license": "MIT"
 }

@@ -35,6 +35,13 @@ for pkg in nodejs web react-native; do
   echo "  updated sdks/$pkg/package.json"
 done
 
+# --- Standalone published JS packages (each has its own release workflow) ---
+for pkg in cli edge ssr; do
+  FILE="$ROOT/$pkg/package.json"
+  SED_INPLACE "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$FILE"
+  echo "  updated $pkg/package.json"
+done
+
 # --- Dashboard ---
 SED_INPLACE "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$ROOT/dashboard/package.json"
 echo "  updated dashboard/package.json"
