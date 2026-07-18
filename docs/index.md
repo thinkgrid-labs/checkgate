@@ -32,11 +32,19 @@ features:
 
   - icon: 🎯
     title: Advanced Targeting Rules
-    details: Target users by any attribute — email domain, plan, region, custom properties. Combine targeting rules with percentage rollouts for fine-grained control.
+    details: Target users by any attribute — email domain, plan, region, custom properties. Reusable segments, string and numeric operators, prerequisite flags, and sticky percentage rollouts.
+
+  - icon: 🧪
+    title: A/B Testing & Analytics
+    details: Multivariate flags with weighted splits, impression tracking, exposure dashboards, and an experiments beta that measures conversion goals with statistical significance.
 
   - icon: 🦀
     title: Rust-Powered Core
-    details: The evaluation engine is written in Rust and compiled to native code (NAPI for Node.js, WASM for browsers, FFI for Flutter/React Native).
+    details: One evaluation engine written in Rust, compiled to native code (NAPI for Node.js, WASM for browsers, FFI for Flutter/React Native) — identical flag decisions everywhere.
+
+  - icon: 🧰
+    title: A Full Ecosystem
+    details: Native SDKs, a type-safe codegen CLI, edge evaluation (Cloudflare Workers, Fly.io), SSR/bootstrap helpers, and infrastructure-as-code via a Terraform provider and Kubernetes operator.
 
   - icon: 🔓
     title: Open Source & MIT Licensed

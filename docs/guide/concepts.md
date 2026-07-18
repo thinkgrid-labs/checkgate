@@ -125,6 +125,45 @@ Result:
 - `alice@yourcompany.com` → `true` (rule match)
 - `bob@customer.com` → 5% chance of `true` (rollout hash)
 
+## Segments
+
+A **segment** is a reusable, named set of targeting rules — define an audience like
+"Internal Employees" or "Beta Users" once, then reference it from any flag instead of
+copy-pasting the same rules everywhere.
+
+```json
+// Segment "internal-employees"
+{
+  "key": "internal-employees",
+  "name": "Internal employees",
+  "rules": [
+    { "attribute": "email", "operator": "ends_with", "values": ["@yourcompany.com"] }
+  ]
+}
+```
+
+```json
+// A flag referencing the segment by key
+{
+  "key": "ai-assistant",
+  "is_enabled": true,
+  "rollout_percentage": 5,
+  "rules": [
+    { "segment_key": "internal-employees" }
+  ]
+}
+```
+
+- Segments are **expanded server-side** into their concrete rules before flags are broadcast,
+  so SDKs stay simple — they never need to know segments exist.
+- Editing a segment automatically re-broadcasts every flag that references it, so audiences
+  update everywhere at once.
+- A rule that references a `segment_key` can also carry a `variant`, which propagates to the
+  segment's rules that don't specify their own.
+
+See the [Segments guide](/guide/segments) for full details, and the
+[API reference](/api-reference#segments) for the CRUD endpoints.
+
 ## Rollout Percentage
 
 The rollout percentage enables gradual feature releases. Checkgate uses **deterministic consistent hashing** (MurmurHash3) to assign users to buckets:
@@ -247,6 +286,18 @@ The Impressions page has two tabs:
 **Analytics** — aggregate statistics per flag: total evaluations, true/false split, unique user count, last seen timestamp.
 
 **Stream** — a live evaluation log that auto-refreshes every 3 seconds. Useful for debugging "why isn't this flag working for that user?". Filters by flag key, user ID, and evaluated value. Click any row to expand the full evaluation context JSON.
+
+Impressions also feed two higher-level analytics views:
+
+- **[Exposure dashboards](/guide/experimentation#exposure-dashboards)** — for a given flag, which users are being exposed to which variant, with a per-variant distribution and a daily timeline.
+- **[Experiments (A/B testing)](/guide/experimentation#a-b-testing)** — pair a flag with a conversion goal event and Checkgate computes each variant's conversion rate, uplift, and statistical significance.
+
+## Governance
+
+For larger teams, Checkgate adds a governance layer on top of flags — an **audit log** of every
+change, per-environment **change-request approvals**, **scheduled changes**, flag **lifecycle**
+metadata (tags, owner, archival), a **cross-environment diff**, and revocable **personal access
+tokens** for CI/CD. See the [Governance guide](/guide/governance) for the full picture.
 
 ## Users and Roles
 

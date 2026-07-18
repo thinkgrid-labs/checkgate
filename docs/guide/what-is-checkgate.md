@@ -27,26 +27,39 @@ Checkgate takes a different approach: **local evaluation**.
 
 The result: **sub-microsecond flag evaluation** with real-time updates and zero external dependencies at evaluation time.
 
+## What You Get
+
+Checkgate is a complete feature-flag platform, not just a toggle store:
+
+- **Multivariate flags** — boolean, string, integer, and JSON flags, with per-rule return values and weighted variant distributions (60/30/10 splits) for A/B/n tests.
+- **Targeting & rollouts** — attribute-based [targeting rules](/guide/concepts#targeting-rules) (string and numeric operators), reusable [segments](/guide/segments), sticky percentage rollouts, and [prerequisite flags](/guide/concepts#prerequisite-flags).
+- **Analytics & experimentation** — impression tracking, [exposure dashboards](/guide/experimentation#exposure-dashboards), and an [A/B testing beta](/guide/experimentation#a-b-testing) that measures conversion goals and reports statistical significance.
+- **Governance** — [RBAC](/guide/concepts#users-and-roles), an [audit log](/guide/governance#audit-log), [change-request approvals](/guide/governance#change-requests), [scheduled changes](/guide/governance#scheduled-changes), and personal access tokens.
+- **A full ecosystem** — native SDKs (Node.js, Web/WASM, React Native, Flutter), a [type-safe codegen CLI](/ecosystem/cli), [edge evaluation](/ecosystem/edge), [SSR/bootstrap helpers](/ecosystem/ssr), and infrastructure-as-code via a [Terraform provider](/ecosystem/terraform) and [Kubernetes operator](/ecosystem/kubernetes).
+
 ## How It Compares
 
-| Feature | Checkgate | LaunchDarkly / Statsig |
+| | Checkgate | LaunchDarkly / Statsig |
 |---|---|---|
-| Evaluation location | In-process (local) | Remote HTTP |
-| Evaluation latency | ~100ns | ~5–50ms |
-| Self-hosted | Yes | No (or limited) |
+| Evaluation location | In-process (local) | Remote HTTP / local with proprietary SDK |
+| Evaluation latency | ~100ns | ~5–50ms (remote) |
+| Update propagation | SSE push, <50ms | Polling / streaming |
+| Self-hosted | Yes | No (or enterprise-only) |
 | Open source | MIT | Closed source |
 | Vendor lock-in | None | High |
-| Pricing | Free | Usage-based |
+| A/B testing | Beta (goal events + significance) | Yes |
+| Infrastructure as code | Terraform + Kubernetes operator | Terraform (managed) |
+| Pricing | Free — your infra cost only | Per-seat / per-MAU |
 
 ## What Checkgate Is Not
 
-- **Not a A/B testing platform** — Checkgate focuses on feature flags and rollouts, not experiment analysis
-- **Not a managed service** — you operate the server yourself
-- **Not a data warehouse** — Checkgate stores flag evaluation impressions for basic analytics, but is not a replacement for a dedicated analytics platform
+- **Not a managed service** — you operate the server yourself (a single Docker image covers it).
+- **Not a full product-analytics warehouse** — Checkgate records evaluation impressions and conversion events for exposure and A/B analysis, but it is not a replacement for a dedicated BI/analytics stack. (Warehouse export is [on the roadmap](/roadmap).)
 
 ## Who Is It For?
 
-- Teams that want **full control** over their feature flag infrastructure
-- Applications where **flag evaluation latency matters** (hot paths, mobile apps, real-time systems)
-- Organizations with **data residency requirements** that prohibit sending user data to third parties
-- Developers who prefer **open source** and want to understand and extend the system
+- Teams that want **full control** over their feature-flag infrastructure.
+- Applications where **evaluation latency matters** — hot paths, mobile apps, edge/SSR, real-time systems.
+- Organizations with **data-residency requirements** that prohibit sending user data to third parties.
+- Companies replacing a **per-seat / per-MAU SaaS** flag vendor with a flat-cost, self-hosted alternative — see the [migration guide](/enterprise-setup).
+- Developers who prefer **open source** and want to read, extend, and own the system.
