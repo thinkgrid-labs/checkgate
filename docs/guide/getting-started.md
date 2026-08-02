@@ -17,7 +17,7 @@ This guide walks you through running Checkgate locally and evaluating your first
 Clone the repository and start the all-in-one container:
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/checkgate.git
+git clone https://github.com/checkgate-dev/checkgate.git
 cd checkgate
 docker compose up -d
 ```

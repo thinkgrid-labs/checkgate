@@ -134,4 +134,4 @@ it in a client component/store.
 
 ---
 
-Part of [Checkgate](https://github.com/thinkgrid-labs/checkgate) — the self-hosted feature-flag platform.
+Part of [Checkgate](https://github.com/checkgate-dev/checkgate) — the self-hosted feature-flag platform.

@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	checkgate "github.com/thinkgrid-labs/checkgate/integrations/checkgate-go"
+	checkgate "github.com/checkgate-dev/checkgate/integrations/checkgate-go"
 )
 
 // modelToFlag builds an API Flag from Terraform plan/state.

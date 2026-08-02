@@ -1,6 +1,6 @@
 {
   "name": "@checkgate/web",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Checkgate feature-flag SDK for the web \u2014 local evaluation via WebAssembly.",
   "type": "module",
   "main": "index.js",
@@ -14,12 +14,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thinkgrid-labs/checkgate.git",
+    "url": "git+https://github.com/checkgate-dev/checkgate.git",
     "directory": "sdks/web"
   },
-  "homepage": "https://github.com/thinkgrid-labs/checkgate#readme",
+  "homepage": "https://github.com/checkgate-dev/checkgate#readme",
   "bugs": {
-    "url": "https://github.com/thinkgrid-labs/checkgate/issues"
+    "url": "https://github.com/checkgate-dev/checkgate/issues"
   },
   "license": "Apache-2.0",
   "scripts": {
