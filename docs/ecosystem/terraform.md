@@ -13,7 +13,7 @@ description: "Manage Checkgate feature flags and segments as code with the terra
 terraform {
   required_providers {
     checkgate = {
-      source = "thinkgrid-labs/checkgate"
+      source = "checkgate-dev/checkgate"
     }
   }
 }
@@ -119,4 +119,4 @@ terraform import checkgate_segment.internal   <environment_id>/internal-employee
 ## See also
 
 - [Core Concepts](/guide/concepts) — flags, segments, targeting rules, variants, and prerequisites.
-- Source: [`integrations/terraform-provider-checkgate/`](https://github.com/thinkgrid-labs/checkgate/tree/main/integrations/terraform-provider-checkgate)
+- Source: [`integrations/terraform-provider-checkgate/`](https://github.com/checkgate-dev/checkgate/tree/main/integrations/terraform-provider-checkgate)

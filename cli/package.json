@@ -1,6 +1,6 @@
 {
   "name": "@checkgate/cli",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Checkgate command-line tools — generate type-safe flag accessors for TypeScript, Dart, and Rust from your flag definitions.",
   "type": "module",
   "bin": {
@@ -31,12 +31,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thinkgrid-labs/checkgate.git",
+    "url": "git+https://github.com/checkgate-dev/checkgate.git",
     "directory": "cli"
   },
-  "homepage": "https://github.com/thinkgrid-labs/checkgate#readme",
+  "homepage": "https://github.com/checkgate-dev/checkgate#readme",
   "bugs": {
-    "url": "https://github.com/thinkgrid-labs/checkgate/issues"
+    "url": "https://github.com/checkgate-dev/checkgate/issues"
   },
   "license": "Apache-2.0"
 }

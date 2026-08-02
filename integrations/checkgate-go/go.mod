@@ -1,3 +1,3 @@
-module github.com/thinkgrid-labs/checkgate/integrations/checkgate-go
+module github.com/checkgate-dev/checkgate/integrations/checkgate-go
 
 go 1.23

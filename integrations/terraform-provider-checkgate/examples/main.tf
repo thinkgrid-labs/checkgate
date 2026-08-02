@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     checkgate = {
-      source = "thinkgrid-labs/checkgate"
+      source = "checkgate-dev/checkgate"
     }
   }
 }

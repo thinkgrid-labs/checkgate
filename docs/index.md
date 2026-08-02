@@ -15,7 +15,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ThinkGrid-Labs/checkgate
+      link: https://github.com/checkgate-dev/checkgate
 
 features:
   - icon: ⚡
