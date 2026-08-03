@@ -111,7 +111,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0 — © 2026 ThinkGrid Labs
 
-Releases up to and including `v0.1.21` were published under the MIT License; that
-grant is irrevocable for those versions.
+
